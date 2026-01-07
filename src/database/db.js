@@ -21,6 +21,8 @@ class Database {
       : config.dbPath;
 
     this.db = new sqlite3.Database(dbPath);
+    // Сохраняем оригинальный метод run перед промисфикацией
+    this._originalRun = this.db.run.bind(this.db);
     // Для get и all используем promisify
     this.db.get = promisify(this.db.get.bind(this.db));
     this.db.all = promisify(this.db.all.bind(this.db));
@@ -30,7 +32,7 @@ class Database {
   // Метод run с сохранением lastID и changes
   async run(sql, params = []) {
     return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function (err) {
+      this._originalRun(sql, params, function (err) {
         if (err) {
           reject(err);
         } else {
