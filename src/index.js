@@ -56,9 +56,46 @@ async function startBot() {
 
     // Запуск бота
     console.log('[START] Шаг 6: Запуск бота...');
-    await bot.launch();
-    console.log('[START] ========== Бот успешно запущен! ==========');
-    console.log('[START] Бот готов к работе');
+    console.log('[START] Вызов bot.launch()...');
+    console.log('[START] Токен (первые 10 символов):', config.botToken.substring(0, 10) + '...');
+    try {
+      // Запускаем бота с опциями
+      const launchOptions = {
+        dropPendingUpdates: true, // Игнорировать обновления, полученные до запуска
+        allowedUpdates: ['message', 'callback_query'] // Только нужные типы обновлений
+      };
+      console.log('[START] Опции запуска:', JSON.stringify(launchOptions));
+
+      const launchPromise = bot.launch(launchOptions);
+      console.log('[START] bot.launch() вызван, ожидание...');
+
+      // Добавляем таймаут для диагностики
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Таймаут при запуске бота (30 секунд)'));
+        }, 30000);
+      });
+
+      await Promise.race([launchPromise, timeoutPromise]);
+      console.log('[START] ========== Бот успешно запущен! ==========');
+      console.log('[START] Бот готов к работе');
+      console.log('[START] Бот подключен к Telegram API');
+      console.log('[START] Бот слушает обновления...');
+    } catch (launchError) {
+      console.error('[START] ========== ОШИБКА при запуске бота! ==========');
+      console.error('[START] Ошибка launch:', launchError);
+      console.error('[START] Сообщение:', launchError.message);
+      console.error('[START] Stack:', launchError.stack);
+      console.error('[START] Тип ошибки:', launchError.constructor.name);
+      if (launchError.response) {
+        console.error('[START] Response:', launchError.response);
+      }
+      if (launchError.code) {
+        console.error('[START] Код ошибки:', launchError.code);
+      }
+      console.error('[START] ============================================');
+      throw launchError;
+    }
 
     // Graceful shutdown
     process.once('SIGINT', () => {
