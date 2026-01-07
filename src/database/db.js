@@ -21,25 +21,28 @@ class Database {
       : config.dbPath;
 
     this.db = new sqlite3.Database(dbPath);
-    // Сохраняем оригинальный метод run перед промисфикацией
-    this._originalRun = this.db.run.bind(this.db);
     // Для get и all используем promisify
     this.db.get = promisify(this.db.get.bind(this.db));
     this.db.all = promisify(this.db.all.bind(this.db));
-    // Для run создаем собственную обертку, чтобы сохранить lastID и changes
+    // Для run НЕ переопределяем, используем оригинальный метод напрямую
   }
 
   // Метод run с сохранением lastID и changes
   async run(sql, params = []) {
     return new Promise((resolve, reject) => {
-      this._originalRun(sql, params, function (err) {
+      // Используем оригинальный метод run напрямую (не через bind)
+      // В callback this указывает на Statement объект от sqlite3
+      this.db.run(sql, params, function (err) {
         if (err) {
           reject(err);
         } else {
-          resolve({
-            lastID: this.lastID,
-            changes: this.changes
-          });
+          // this здесь - это Statement объект от sqlite3
+          // lastID доступен через this.lastID
+          const result = {
+            lastID: this.lastID !== undefined ? this.lastID : 0,
+            changes: this.changes !== undefined ? this.changes : 0
+          };
+          resolve(result);
         }
       });
     });
