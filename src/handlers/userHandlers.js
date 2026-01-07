@@ -9,16 +9,34 @@ import { supportService } from '../services/supportService.js';
 const supportMode = new Map();
 
 export function setupUserHandlers(bot) {
+    console.log('[UserHandlers] Настройка пользовательских обработчиков...');
     // Главное меню - выбор города
     bot.start(async (ctx) => {
-        // Сохраняем пользователя в БД
-        await userService.saveOrUpdate(ctx.from.id, {
-            username: ctx.from.username,
-            first_name: ctx.from.first_name,
-            last_name: ctx.from.last_name
-        });
-        await showCitiesMenu(ctx);
+        console.log('[UserHandlers] ========== Команда /start получена ==========');
+        console.log('[UserHandlers] Пользователь ID:', ctx.from.id);
+        console.log('[UserHandlers] Username:', ctx.from.username);
+        console.log('[UserHandlers] Имя:', ctx.from.first_name);
+        try {
+            // Сохраняем пользователя в БД
+            console.log('[UserHandlers] Сохранение пользователя в БД...');
+            await userService.saveOrUpdate(ctx.from.id, {
+                username: ctx.from.username,
+                first_name: ctx.from.first_name,
+                last_name: ctx.from.last_name
+            });
+            console.log('[UserHandlers] Пользователь сохранен');
+            console.log('[UserHandlers] Показ меню городов...');
+            await showCitiesMenu(ctx);
+            console.log('[UserHandlers] Меню городов показано');
+        } catch (error) {
+            console.error('[UserHandlers] ОШИБКА в обработчике /start:', error);
+            console.error('[UserHandlers] Stack:', error.stack);
+            if (ctx.reply) {
+                await ctx.reply('Произошла ошибка при обработке команды. Попробуйте позже.');
+            }
+        }
     });
+    console.log('[UserHandlers] Обработчик /start зарегистрирован');
 
     // Обработка выбора города
     bot.action(/^city_(\d+)$/, async (ctx) => {

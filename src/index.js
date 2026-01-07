@@ -21,26 +21,44 @@ async function startBot() {
     console.log('[START] Шаг 2 завершен: Моковые данные инициализированы');
 
     // Проверка токена бота
+    console.log('[START] Шаг 3: Проверка токена бота...');
+    console.log('[START] Токен установлен?', !!config.botToken);
+    console.log('[START] Длина токена:', config.botToken ? config.botToken.length : 0);
     if (!config.botToken) {
       throw new Error('BOT_TOKEN не установлен в переменных окружения!');
     }
+    console.log('[START] Шаг 3 завершен: Токен проверен');
 
     // Создание экземпляра бота
+    console.log('[START] Шаг 4: Создание экземпляра бота...');
     const bot = new Telegraf(config.botToken);
+    console.log('[START] Шаг 4 завершен: Экземпляр бота создан');
 
     // Настройка обработчиков (сначала админ, чтобы его обработчики текста выполнялись первыми)
+    console.log('[START] Шаг 5: Настройка обработчиков...');
+    console.log('[START] Настройка админ-обработчиков...');
     setupAdminHandlers(bot);
+    console.log('[START] Админ-обработчики настроены');
+    console.log('[START] Настройка пользовательских обработчиков...');
     setupUserHandlers(bot);
+    console.log('[START] Пользовательские обработчики настроены');
+    console.log('[START] Шаг 5 завершен: Обработчики настроены');
 
     // Обработка ошибок
+    console.log('[START] Настройка обработчика ошибок...');
     bot.catch((err, ctx) => {
-      console.error('Ошибка в боте:', err);
-      ctx.reply('Произошла ошибка. Попробуйте позже.');
+      console.error('[BOT] Ошибка в боте:', err);
+      if (ctx && ctx.reply) {
+        ctx.reply('Произошла ошибка. Попробуйте позже.');
+      }
     });
+    console.log('[START] Обработчик ошибок настроен');
 
     // Запуск бота
+    console.log('[START] Шаг 6: Запуск бота...');
     await bot.launch();
-    console.log('Бот успешно запущен!');
+    console.log('[START] ========== Бот успешно запущен! ==========');
+    console.log('[START] Бот готов к работе');
 
     // Graceful shutdown
     process.once('SIGINT', () => {

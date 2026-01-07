@@ -18,6 +18,7 @@ const PRODUCT_TEMPLATES = [
 ];
 
 export function setupAdminHandlers(bot) {
+    console.log('[AdminHandlers] Настройка админ-обработчиков...');
     // Команда для входа в админ-панель
     bot.command('apanel', async (ctx) => {
         const args = ctx.message.text.split(' ');
