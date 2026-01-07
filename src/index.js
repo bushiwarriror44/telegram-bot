@@ -47,12 +47,36 @@ async function startBot() {
     // Обработка ошибок
     console.log('[START] Настройка обработчика ошибок...');
     bot.catch((err, ctx) => {
-      console.error('[BOT] Ошибка в боте:', err);
+      console.error('[BOT] ========== ОШИБКА В БОТЕ ==========');
+      console.error('[BOT] Ошибка:', err);
+      console.error('[BOT] Сообщение:', err.message);
+      console.error('[BOT] Stack:', err.stack);
+      console.error('[BOT] Context:', ctx ? 'есть' : 'нет');
+      if (ctx) {
+        console.error('[BOT] Update ID:', ctx.update?.update_id);
+        console.error('[BOT] Message:', ctx.message?.text);
+      }
       if (ctx && ctx.reply) {
         ctx.reply('Произошла ошибка. Попробуйте позже.');
       }
     });
     console.log('[START] Обработчик ошибок настроен');
+
+    // Логирование всех входящих обновлений для отладки
+    bot.use(async (ctx, next) => {
+      console.log('[BOT] ========== ВХОДЯЩЕЕ ОБНОВЛЕНИЕ ==========');
+      console.log('[BOT] Update ID:', ctx.update.update_id);
+      console.log('[BOT] Тип обновления:', ctx.update.message ? 'message' : ctx.update.callback_query ? 'callback_query' : 'other');
+      if (ctx.update.message) {
+        console.log('[BOT] Message ID:', ctx.update.message.message_id);
+        console.log('[BOT] Text:', ctx.update.message.text);
+        console.log('[BOT] From ID:', ctx.update.message.from?.id);
+        console.log('[BOT] From Username:', ctx.update.message.from?.username);
+      }
+      console.log('[BOT] ========================================');
+      return next();
+    });
+    console.log('[START] Middleware для логирования обновлений настроен');
 
     // Запуск бота
     console.log('[START] Шаг 6: Запуск бота...');
@@ -73,25 +97,30 @@ async function startBot() {
     }
 
     try {
-      // Запускаем бота - пробуем без опций сначала
-      console.log('[START] Вызов bot.launch() без опций...');
+      // Запускаем бота через bot.launch() с опциями
+      console.log('[START] Запуск бота через bot.launch()...');
 
-      // В Telegraf 4.x bot.launch() может не резолвиться сразу
-      // Используем startPolling как альтернативу
-      console.log('[START] Запуск polling...');
-      bot.startPolling({
+      const launchOptions = {
         dropPendingUpdates: true,
         allowedUpdates: ['message', 'callback_query']
-      });
+      };
+      console.log('[START] Опции запуска:', JSON.stringify(launchOptions));
+
+      // В Telegraf 4.x bot.launch() возвращает Promise, который резолвится после успешного запуска
+      // Но он может зависать, поэтому используем startPolling как альтернативу
+      console.log('[START] Использование bot.startPolling()...');
+      bot.startPolling(launchOptions);
 
       console.log('[START] ========== Бот успешно запущен! ==========');
       console.log('[START] Бот готов к работе');
       console.log('[START] Бот подключен к Telegram API');
       console.log('[START] Бот слушает обновления через polling...');
+      console.log('[START] Ожидание обновлений от Telegram...');
 
       // Даем боту немного времени на инициализацию
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('[START] Бот полностью инициализирован');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('[START] Бот полностью инициализирован и готов принимать команды');
+      console.log('[START] Попробуйте отправить /start боту в Telegram');
     } catch (launchError) {
       console.error('[START] ========== ОШИБКА при запуске бота! ==========');
       console.error('[START] Ошибка launch:', launchError);
