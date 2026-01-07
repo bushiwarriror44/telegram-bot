@@ -73,31 +73,25 @@ async function startBot() {
     }
 
     try {
-      // Запускаем бота с опциями
-      const launchOptions = {
-        dropPendingUpdates: true, // Игнорировать обновления, полученные до запуска
-        allowedUpdates: ['message', 'callback_query'] // Только нужные типы обновлений
-      };
-      console.log('[START] Опции запуска:', JSON.stringify(launchOptions));
+      // Запускаем бота - пробуем без опций сначала
+      console.log('[START] Вызов bot.launch() без опций...');
 
-      console.log('[START] Вызов bot.launch()...');
-      const launchPromise = bot.launch(launchOptions);
-      console.log('[START] bot.launch() вызван, Promise создан');
-
-      // Добавляем таймаут для диагностики
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          console.error('[START] ТАЙМАУТ: bot.launch() не завершился за 30 секунд');
-          reject(new Error('Таймаут при запуске бота (30 секунд)'));
-        }, 30000);
+      // В Telegraf 4.x bot.launch() может не резолвиться сразу
+      // Используем startPolling как альтернативу
+      console.log('[START] Запуск polling...');
+      bot.startPolling({
+        dropPendingUpdates: true,
+        allowedUpdates: ['message', 'callback_query']
       });
 
-      console.log('[START] Ожидание завершения bot.launch()...');
-      await Promise.race([launchPromise, timeoutPromise]);
       console.log('[START] ========== Бот успешно запущен! ==========');
       console.log('[START] Бот готов к работе');
       console.log('[START] Бот подключен к Telegram API');
-      console.log('[START] Бот слушает обновления...');
+      console.log('[START] Бот слушает обновления через polling...');
+
+      // Даем боту немного времени на инициализацию
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('[START] Бот полностью инициализирован');
     } catch (launchError) {
       console.error('[START] ========== ОШИБКА при запуске бота! ==========');
       console.error('[START] Ошибка launch:', launchError);
