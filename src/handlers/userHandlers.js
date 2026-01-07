@@ -1,0 +1,318 @@
+import { cityService } from '../services/cityService.js';
+import { productService } from '../services/productService.js';
+import { paymentService } from '../services/paymentService.js';
+import { cardAccountService } from '../services/cardAccountService.js';
+import { userService } from '../services/userService.js';
+import { supportService } from '../services/supportService.js';
+
+// Хранит пользователей, которые находятся в режиме поддержки
+const supportMode = new Map();
+
+export function setupUserHandlers(bot) {
+    // Главное меню - выбор города
+    bot.start(async (ctx) => {
+        // Сохраняем пользователя в БД
+        await userService.saveOrUpdate(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            last_name: ctx.from.last_name
+        });
+        await showCitiesMenu(ctx);
+    });
+
+    // Обработка выбора города
+    bot.action(/^city_(\d+)$/, async (ctx) => {
+        await userService.saveOrUpdate(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            last_name: ctx.from.last_name
+        });
+        const cityId = parseInt(ctx.match[1]);
+        await showProductsMenu(ctx, cityId);
+    });
+
+    // Обработка выбора товара
+    bot.action(/^product_(\d+)$/, async (ctx) => {
+        await userService.saveOrUpdate(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            last_name: ctx.from.last_name
+        });
+        const productId = parseInt(ctx.match[1]);
+        await showProductDetails(ctx, productId);
+    });
+
+    // Обработка выбора метода оплаты
+    bot.action(/^pay_(\d+)_(\d+)$/, async (ctx) => {
+        const productId = parseInt(ctx.match[1]);
+        const methodId = parseInt(ctx.match[2]);
+        await showPaymentAddress(ctx, productId, methodId);
+    });
+
+    // Вернуться к городам
+    bot.action('back_to_cities', async (ctx) => {
+        try {
+            await showCitiesMenu(ctx);
+        } catch (error) {
+            // Если не удалось изменить сообщение, отправляем новое
+            await ctx.reply('🏙️ Выберите город:', {
+                reply_markup: {
+                    inline_keyboard: (await cityService.getAll()).map(city => [
+                        { text: `📍 ${city.name}`, callback_data: `city_${city.id}` }
+                    ])
+                }
+            });
+        }
+    });
+
+    // Вернуться к товарам
+    bot.action(/^back_to_products_(\d+)$/, async (ctx) => {
+        const cityId = parseInt(ctx.match[1]);
+        try {
+            await showProductsMenu(ctx, cityId);
+        } catch (error) {
+            await ctx.reply('Ошибка при загрузке товаров. Попробуйте снова.');
+        }
+    });
+
+    // Вернуться к деталям товара
+    bot.action(/^back_to_product_(\d+)$/, async (ctx) => {
+        const productId = parseInt(ctx.match[1]);
+        try {
+            await showProductDetails(ctx, productId);
+        } catch (error) {
+            await ctx.reply('Ошибка при загрузке товара. Попробуйте снова.');
+        }
+    });
+
+    // Обработка кнопки "Помощь"
+    bot.action('help_support', async (ctx) => {
+        await showHelpMenu(ctx);
+    });
+
+    // Обработка текстовых сообщений от пользователей (когда они пишут в поддержку)
+    bot.on('text', async (ctx) => {
+        // Пропускаем команды
+        if (ctx.message.text.startsWith('/')) {
+            return;
+        }
+
+        // Проверяем, находится ли пользователь в режиме поддержки
+        if (supportMode.has(ctx.from.id)) {
+            // Сохраняем сообщение пользователя
+            await userService.saveOrUpdate(ctx.from.id, {
+                username: ctx.from.username,
+                first_name: ctx.from.first_name,
+                last_name: ctx.from.last_name
+            });
+
+            await supportService.saveUserMessage(ctx.from.id, ctx.message.text);
+            await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!');
+            supportMode.delete(ctx.from.id);
+            return;
+        }
+    });
+}
+
+async function showHelpMenu(ctx) {
+    await userService.saveOrUpdate(ctx.from.id, {
+        username: ctx.from.username,
+        first_name: ctx.from.first_name,
+        last_name: ctx.from.last_name
+    });
+
+    const text = `
+💬 <b>Служба поддержки</b>
+
+Напишите нам обращение, и мы свяжемся с вами как можно быстрее.
+
+Просто отправьте ваше сообщение текстом, и оно будет передано администратору.
+    `.trim();
+
+    // Устанавливаем пользователя в режим поддержки
+    supportMode.set(ctx.from.id, true);
+
+    await ctx.reply(text, {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '◀️ Назад', callback_data: 'back_to_cities' }]
+            ]
+        }
+    });
+}
+
+async function showCitiesMenu(ctx) {
+    const cities = await cityService.getAll();
+
+    if (cities.length === 0) {
+        await ctx.reply('Города пока не добавлены. Обратитесь к администратору.');
+        return;
+    }
+
+    const keyboard = cities.map(city => [
+        { text: `📍 ${city.name}`, callback_data: `city_${city.id}` }
+    ]);
+
+    // Добавляем кнопку "Помощь"
+    keyboard.push([{ text: '💬 Помощь', callback_data: 'help_support' }]);
+
+    await ctx.reply(
+        '🏙️ Выберите город:',
+        {
+            reply_markup: {
+                inline_keyboard: keyboard
+            }
+        }
+    );
+}
+
+async function showProductsMenu(ctx, cityId) {
+    const city = await cityService.getById(cityId);
+    if (!city) {
+        await ctx.reply('Город не найден.');
+        return;
+    }
+
+    const products = await productService.getByCityId(cityId);
+
+    if (products.length === 0) {
+        await ctx.reply(
+            `В городе ${city.name} пока нет товаров.`,
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]
+                    ]
+                }
+            }
+        );
+        return;
+    }
+
+    const keyboard = products.map(product => {
+        const packagingLabel = product.packaging_value
+            ? ` (${product.packaging_value} кг)`
+            : '';
+        return [
+            {
+                text: `${product.name}${packagingLabel} - ${product.price.toLocaleString('ru-RU')} ₽`,
+                callback_data: `product_${product.id}`
+            }
+        ];
+    });
+
+    keyboard.push([{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]);
+
+    await ctx.editMessageText(
+        `🛍️ Товары в городе ${city.name}:\n\nВыберите товар:`,
+        {
+            reply_markup: {
+                inline_keyboard: keyboard
+            }
+        }
+    );
+}
+
+async function showProductDetails(ctx, productId) {
+    const product = await productService.getById(productId);
+    if (!product) {
+        await ctx.reply('Товар не найден.');
+        return;
+    }
+
+    const city = await cityService.getById(product.city_id);
+    const paymentMethods = await paymentService.getAllMethods();
+
+    const packagingLine = product.packaging_value
+        ? `\n⚖️ Фасовка: <b>${product.packaging_value} кг</b>\n`
+        : '\n';
+
+    if (paymentMethods.length === 0) {
+        await ctx.editMessageText(
+            `📦 <b>${product.name}</b>\n\n${product.description || 'Описание отсутствует'}\n\n💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n📍 Город: ${city.name}${packagingLine}\n❌ Методы оплаты пока не настроены. Обратитесь к администратору.`,
+            {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${city.id}` }]
+                    ]
+                }
+            }
+        );
+        return;
+    }
+
+    const text = `
+📦 <b>${product.name}</b>
+
+${product.description || 'Описание отсутствует'}
+
+💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>
+📍 Город: ${city.name}${packagingLine}
+Выберите способ оплаты:
+  `.trim();
+
+    const keyboard = paymentMethods.map(method => [
+        { text: `💳 ${method.name}`, callback_data: `pay_${product.id}_${method.id}` }
+    ]);
+
+    keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${city.id}` }]);
+
+    await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: keyboard
+        }
+    });
+}
+
+async function showPaymentAddress(ctx, productId, methodId) {
+    const product = await productService.getById(productId);
+    const method = await paymentService.getMethodById(methodId);
+
+    if (!product || !method) {
+        await ctx.reply('Ошибка: товар или метод оплаты не найден.');
+        return;
+    }
+
+    // Обновляем активность пользователя
+    await userService.saveOrUpdate(ctx.from.id, {
+        username: ctx.from.username,
+        first_name: ctx.from.first_name,
+        last_name: ctx.from.last_name
+    });
+
+    let paymentText = '';
+    let paymentAddress = '';
+
+    // Если это карта, выбираем случайный карточный счет
+    if (method.type === 'card') {
+        const cardAccount = await cardAccountService.getRandom();
+        if (!cardAccount) {
+            await ctx.reply('Ошибка: карточные счета не настроены. Обратитесь к администратору.');
+            return;
+        }
+        paymentText = `💳 <b>Оплата картой</b>\n\n📦 Товар: ${product.name}\n💰 Сумма: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n\n💳 Карточный счет для оплаты:\n<b>${cardAccount.name}</b>\n<code>${cardAccount.account_number}</code>`;
+    } else {
+        // Для криптовалют получаем адрес
+        const address = await paymentService.getAddressForMethod(methodId);
+        if (!address) {
+            await ctx.reply('Ошибка: адрес для оплаты не найден. Обратитесь к администратору.');
+            return;
+        }
+        paymentText = `💳 <b>Оплата через ${method.name}</b>\n\n📦 Товар: ${product.name}\n💰 Сумма: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n\n🔐 Адрес для оплаты:\n<code>${address.address}</code>\n\n⚠️ <i>Внимание! Это тестовый адрес. В реальном приложении здесь будет настоящий адрес кошелька.</i>`;
+    }
+
+    const text = `${paymentText}\n\nПосле оплаты средства будут автоматически зачислены на ваш счет.`.trim();
+
+    await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '◀️ Назад к товару', callback_data: `back_to_product_${product.id}` }]
+            ]
+        }
+    });
+}
+
