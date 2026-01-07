@@ -7,13 +7,18 @@ import { initializeMockData } from './utils/mockData.js';
 
 async function startBot() {
   try {
+    console.log('[START] ========== Запуск бота ==========');
+    console.log('[START] Время:', new Date().toISOString());
+
     // Инициализация базы данных
-    console.log('Инициализация базы данных...');
+    console.log('[START] Шаг 1: Инициализация базы данных...');
     await database.init();
-    console.log('База данных инициализирована');
+    console.log('[START] Шаг 1 завершен: База данных инициализирована');
 
     // Инициализация моковых данных
+    console.log('[START] Шаг 2: Инициализация моковых данных...');
     await initializeMockData();
+    console.log('[START] Шаг 2 завершен: Моковые данные инициализированы');
 
     // Проверка токена бота
     if (!config.botToken) {
@@ -50,7 +55,14 @@ async function startBot() {
     });
 
   } catch (error) {
-    console.error('Критическая ошибка при запуске бота:', error);
+    console.error('[START] ========== КРИТИЧЕСКАЯ ОШИБКА ==========');
+    console.error('[START] Ошибка:', error);
+    console.error('[START] Stack:', error.stack);
+    console.error('[START] Тип ошибки:', error.constructor.name);
+    if (error.message) {
+      console.error('[START] Сообщение:', error.message);
+    }
+    console.error('[START] =========================================');
     process.exit(1);
   }
 }

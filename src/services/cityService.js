@@ -10,8 +10,23 @@ export class CityService {
   }
 
   async create(name) {
+    console.log('[CityService.create] Начало создания города, name:', name);
+    console.log('[CityService.create] Вызов database.run...');
     const result = await database.run('INSERT INTO cities (name) VALUES (?)', [name]);
-    return { id: result.lastID, name };
+    console.log('[CityService.create] database.run вернул результат:', JSON.stringify(result));
+    console.log('[CityService.create] Тип result:', typeof result);
+    console.log('[CityService.create] result.lastID:', result?.lastID);
+    console.log('[CityService.create] result:', result);
+    
+    if (!result || result.lastID === undefined) {
+      console.error('[CityService.create] ОШИБКА: result или result.lastID undefined!');
+      console.error('[CityService.create] Полный result:', result);
+      throw new Error(`Не удалось получить lastID после INSERT. Result: ${JSON.stringify(result)}`);
+    }
+    
+    const city = { id: result.lastID, name };
+    console.log('[CityService.create] Создан город:', JSON.stringify(city));
+    return city;
   }
 
   async update(id, name) {

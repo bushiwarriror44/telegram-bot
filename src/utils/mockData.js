@@ -66,19 +66,30 @@ const defaultPackagings = [
 ];
 
 export async function initializeMockData() {
-  console.log('Инициализация моковых данных...');
+  console.log('[MOCK] ========== Инициализация моковых данных ==========');
 
   // Проверяем, есть ли уже данные
+  console.log('[MOCK] Проверка существующих городов...');
   const existingCities = await cityService.getAll();
+  console.log('[MOCK] Найдено городов:', existingCities.length);
   if (existingCities.length > 0) {
-    console.log('Данные уже существуют, пропускаем инициализацию');
+    console.log('[MOCK] Данные уже существуют, пропускаем инициализацию');
     return;
   }
 
   // Создаем базовые фасовки
-  console.log('Создаем базовые фасовки...');
-  for (const value of defaultPackagings) {
-    await packagingService.getOrCreate(value);
+  console.log('[MOCK] Создание базовых фасовок...');
+  console.log('[MOCK] Количество фасовок для создания:', defaultPackagings.length);
+  for (let i = 0; i < defaultPackagings.length; i++) {
+    const value = defaultPackagings[i];
+    console.log(`[MOCK] Создание фасовки ${i + 1}/${defaultPackagings.length}:`, value);
+    try {
+      await packagingService.getOrCreate(value);
+      console.log(`[MOCK] Фасовка ${value} успешно создана/получена`);
+    } catch (error) {
+      console.error(`[MOCK] ОШИБКА при создании фасовки ${value}:`, error);
+      throw error;
+    }
   }
   const packagingList = await packagingService.getAll();
   const packagingByValue = new Map(
@@ -86,22 +97,40 @@ export async function initializeMockData() {
   );
 
   // Создаем города и товары
-  for (const cityName of mockCities) {
-    const city = await cityService.create(cityName);
-    console.log(`Создан город: ${cityName}`);
+  console.log('[MOCK] Создание городов и товаров...');
+  console.log('[MOCK] Количество городов для создания:', mockCities.length);
+  for (let i = 0; i < mockCities.length; i++) {
+    const cityName = mockCities[i];
+    console.log(`[MOCK] Создание города ${i + 1}/${mockCities.length}: ${cityName}`);
+    try {
+      const city = await cityService.create(cityName);
+      console.log(`[MOCK] Город создан: ${cityName}, ID:`, city?.id);
 
-    const products = mockProducts[cityName] || [];
-    for (const product of products) {
-      // Для примера всем товарам ставим фасовку 1 (можно легко поменять)
-      const packaging = packagingByValue.get(1);
-      await productService.create(
-        city.id,
-        product.name,
-        product.description,
-        product.price,
-        packaging ? packaging.id : null
-      );
-      console.log(`  - Создан товар: ${product.name}`);
+      const products = mockProducts[cityName] || [];
+      console.log(`[MOCK] Товаров для города ${cityName}:`, products.length);
+      for (let j = 0; j < products.length; j++) {
+        const product = products[j];
+        console.log(`[MOCK] Создание товара ${j + 1}/${products.length}: ${product.name}`);
+        // Для примера всем товарам ставим фасовку 1 (можно легко поменять)
+        const packaging = packagingByValue.get(1);
+        console.log(`[MOCK] Фасовка для товара:`, packaging ? packaging.id : 'null');
+        try {
+          await productService.create(
+            city.id,
+            product.name,
+            product.description,
+            product.price,
+            packaging ? packaging.id : null
+          );
+          console.log(`[MOCK] Товар создан: ${product.name}`);
+        } catch (error) {
+          console.error(`[MOCK] ОШИБКА при создании товара ${product.name}:`, error);
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.error(`[MOCK] ОШИБКА при создании города ${cityName}:`, error);
+      throw error;
     }
   }
 
