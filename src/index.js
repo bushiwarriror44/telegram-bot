@@ -58,6 +58,20 @@ async function startBot() {
     console.log('[START] Шаг 6: Запуск бота...');
     console.log('[START] Вызов bot.launch()...');
     console.log('[START] Токен (первые 10 символов):', config.botToken.substring(0, 10) + '...');
+
+    // Проверяем подключение к Telegram API перед запуском
+    console.log('[START] Проверка подключения к Telegram API...');
+    try {
+      const testResult = await bot.telegram.getMe();
+      console.log('[START] Подключение к Telegram API успешно!');
+      console.log('[START] Информация о боте:', JSON.stringify(testResult));
+    } catch (testError) {
+      console.error('[START] ОШИБКА при проверке подключения к Telegram API!');
+      console.error('[START] Ошибка:', testError.message);
+      console.error('[START] Stack:', testError.stack);
+      throw new Error(`Не удалось подключиться к Telegram API: ${testError.message}`);
+    }
+
     try {
       // Запускаем бота с опциями
       const launchOptions = {
@@ -66,16 +80,19 @@ async function startBot() {
       };
       console.log('[START] Опции запуска:', JSON.stringify(launchOptions));
 
+      console.log('[START] Вызов bot.launch()...');
       const launchPromise = bot.launch(launchOptions);
-      console.log('[START] bot.launch() вызван, ожидание...');
+      console.log('[START] bot.launch() вызван, Promise создан');
 
       // Добавляем таймаут для диагностики
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
+          console.error('[START] ТАЙМАУТ: bot.launch() не завершился за 30 секунд');
           reject(new Error('Таймаут при запуске бота (30 секунд)'));
         }, 30000);
       });
 
+      console.log('[START] Ожидание завершения bot.launch()...');
       await Promise.race([launchPromise, timeoutPromise]);
       console.log('[START] ========== Бот успешно запущен! ==========');
       console.log('[START] Бот готов к работе');
