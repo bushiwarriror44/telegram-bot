@@ -26,6 +26,19 @@ class Database {
     this.db.all = promisify(this.db.all.bind(this.db));
   }
 
+  // Методы для доступа к промисфицированным методам БД
+  async run(sql, params) {
+    return await this.db.run(sql, params);
+  }
+
+  async get(sql, params) {
+    return await this.db.get(sql, params);
+  }
+
+  async all(sql, params) {
+    return await this.db.all(sql, params);
+  }
+
   async init() {
     // Таблица городов
     await this.db.run(`
