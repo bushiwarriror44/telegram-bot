@@ -21,27 +21,39 @@ class Database {
       : config.dbPath;
 
     this.db = new sqlite3.Database(dbPath);
-    this.db.run = promisify(this.db.run.bind(this.db));
+    // Для get и all используем promisify
     this.db.get = promisify(this.db.get.bind(this.db));
     this.db.all = promisify(this.db.all.bind(this.db));
+    // Для run создаем собственную обертку, чтобы сохранить lastID и changes
   }
 
-  // Методы для доступа к промисфицированным методам БД
-  async run(sql, params) {
-    return await this.db.run(sql, params);
+  // Метод run с сохранением lastID и changes
+  async run(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, params, function (err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({
+            lastID: this.lastID,
+            changes: this.changes
+          });
+        }
+      });
+    });
   }
 
-  async get(sql, params) {
+  async get(sql, params = []) {
     return await this.db.get(sql, params);
   }
 
-  async all(sql, params) {
+  async all(sql, params = []) {
     return await this.db.all(sql, params);
   }
 
   async init() {
     // Таблица городов
-    await this.db.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS cities (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
@@ -50,7 +62,7 @@ class Database {
     `);
 
     // Таблица фасовок
-    await this.db.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS packagings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         value REAL NOT NULL UNIQUE,
@@ -59,7 +71,7 @@ class Database {
     `);
 
     // Таблица товаров
-    await this.db.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         city_id INTEGER NOT NULL,
@@ -73,7 +85,7 @@ class Database {
     `);
 
     // Таблица методов оплаты
-    await this.db.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS payment_methods (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
@@ -84,7 +96,7 @@ class Database {
     `);
 
     // Таблица реквизитов для оплаты
-    await this.db.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS payment_addresses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         payment_method_id INTEGER NOT NULL,
@@ -95,7 +107,7 @@ class Database {
     `);
 
     // Таблица пользователей для рассылки уведомлений
-    await this.db.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         chat_id INTEGER NOT NULL UNIQUE,
@@ -108,7 +120,7 @@ class Database {
     `);
 
     // Таблица карточных счетов
-    await this.db.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS card_accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -119,7 +131,7 @@ class Database {
     `);
 
     // Таблица сообщений поддержки
-    await this.db.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS support_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_chat_id INTEGER NOT NULL,
@@ -135,33 +147,33 @@ class Database {
     const productColumns = await this.db.all('PRAGMA table_info(products)');
     const hasPackagingId = productColumns.some((col) => col.name === 'packaging_id');
     if (!hasPackagingId) {
-      await this.db.run('ALTER TABLE products ADD COLUMN packaging_id INTEGER');
+      await this.run('ALTER TABLE products ADD COLUMN packaging_id INTEGER');
     }
 
     // Миграция: добавляем колонку type в существующую таблицу payment_methods при необходимости
     const paymentMethodColumns = await this.db.all('PRAGMA table_info(payment_methods)');
     const hasType = paymentMethodColumns.some((col) => col.name === 'type');
     if (!hasType) {
-      await this.db.run("ALTER TABLE payment_methods ADD COLUMN type TEXT DEFAULT 'crypto'");
+      await this.run("ALTER TABLE payment_methods ADD COLUMN type TEXT DEFAULT 'crypto'");
     }
 
     // Индексы для оптимизации
-    await this.db.run(
+    await this.run(
       'CREATE INDEX IF NOT EXISTS idx_products_city_id ON products(city_id)'
     );
-    await this.db.run(
+    await this.run(
       'CREATE INDEX IF NOT EXISTS idx_payment_addresses_method_id ON payment_addresses(payment_method_id)'
     );
-    await this.db.run(
+    await this.run(
       'CREATE INDEX IF NOT EXISTS idx_users_chat_id ON users(chat_id)'
     );
-    await this.db.run(
+    await this.run(
       'CREATE INDEX IF NOT EXISTS idx_card_accounts_enabled ON card_accounts(enabled)'
     );
-    await this.db.run(
+    await this.run(
       'CREATE INDEX IF NOT EXISTS idx_support_messages_user_chat_id ON support_messages(user_chat_id)'
     );
-    await this.db.run(
+    await this.run(
       'CREATE INDEX IF NOT EXISTS idx_support_messages_created_at ON support_messages(created_at)'
     );
   }
