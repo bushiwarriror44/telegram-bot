@@ -31,8 +31,10 @@ class Database {
     this.db.get = promisify(this.db.get.bind(this.db));
     this.db.all = promisify(this.db.all.bind(this.db));
     console.log('[DB] Методы get и all промисфицированы');
+    console.log('[DB] Проверка методов: get=', typeof this.db.get, 'all=', typeof this.db.all);
     // Для run НЕ переопределяем, используем оригинальный метод напрямую
     console.log('[DB] Конструктор Database: завершен');
+    console.log('[DB] Проверка методов класса: run=', typeof this.run, 'get=', typeof this.get, 'all=', typeof this.all);
   }
 
   // Метод run с сохранением lastID и changes
@@ -40,35 +42,45 @@ class Database {
     console.log('[DB.run] Начало выполнения SQL');
     console.log('[DB.run] SQL:', sql.substring(0, 100) + (sql.length > 100 ? '...' : ''));
     console.log('[DB.run] Параметры:', JSON.stringify(params));
+    const isInsert = sql.trim().toUpperCase().startsWith('INSERT');
+    console.log('[DB.run] Это INSERT операция?', isInsert);
 
     return new Promise((resolve, reject) => {
       try {
-        // Используем prepare для получения Statement объекта
-        console.log('[DB.run] Подготовка statement...');
-        const stmt = this.db.prepare(sql);
-        console.log('[DB.run] Statement создан:', typeof stmt);
-
-        stmt.run(params, function (err) {
+        // Используем db.run напрямую - callback получает Statement в this
+        console.log('[DB.run] Вызов db.run...');
+        this.db.run(sql, params, function (err) {
           console.log('[DB.run] Callback вызван');
           console.log('[DB.run] Ошибка:', err ? err.message : 'нет');
           console.log('[DB.run] this:', typeof this);
+          console.log('[DB.run] this.constructor.name:', this?.constructor?.name);
           console.log('[DB.run] this.lastID:', this?.lastID);
           console.log('[DB.run] this.changes:', this?.changes);
           console.log('[DB.run] this.lastInsertRowid:', this?.lastInsertRowid);
 
+          // Проверяем все возможные свойства
+          console.log('[DB.run] Все свойства this:', Object.keys(this || {}));
+
           if (err) {
             console.error('[DB.run] ОШИБКА при выполнении:', err);
-            stmt.finalize();
             reject(err);
             return;
           }
 
           // this здесь - это Statement объект от sqlite3
-          // lastID доступен через this.lastID
-          const lastID = this.lastID !== undefined ? this.lastID : 0;
-          const changes = this.changes !== undefined ? this.changes : 0;
+          // lastID доступен через this.lastID для INSERT операций
+          // Для других операций (CREATE, UPDATE, DELETE) lastID будет 0 или undefined
+          let lastID = 0;
+          if (this && this.lastID !== undefined && this.lastID !== null) {
+            lastID = this.lastID;
+          } else if (this && this.lastInsertRowid !== undefined && this.lastInsertRowid !== null) {
+            lastID = this.lastInsertRowid;
+          }
 
-          console.log('[DB.run] Результат - lastID:', lastID, 'changes:', changes);
+          const changes = (this && this.changes !== undefined) ? this.changes : 0;
+
+          console.log('[DB.run] Финальный результат - lastID:', lastID, 'changes:', changes);
+          console.log('[DB.run] Тип lastID:', typeof lastID, 'Значение:', lastID);
 
           const result = {
             lastID: lastID,
@@ -76,11 +88,13 @@ class Database {
           };
 
           console.log('[DB.run] Возвращаемый результат:', JSON.stringify(result));
-          stmt.finalize();
           resolve(result);
         });
+
+        console.log('[DB.run] db.run вызван');
       } catch (error) {
-        console.error('[DB.run] ИСКЛЮЧЕНИЕ при подготовке statement:', error);
+        console.error('[DB.run] ИСКЛЮЧЕНИЕ при вызове db.run:', error);
+        console.error('[DB.run] Stack:', error.stack);
         reject(error);
       }
     });
