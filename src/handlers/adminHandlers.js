@@ -9,6 +9,8 @@ import { supportService } from '../services/supportService.js';
 
 const adminSessions = new Map(); // Хранит активные сессии админов
 const notificationSessions = new Map(); // Хранит сессии создания уведомлений (userId -> true)
+const importPaymentMode = new Map(); // userId -> true (режим загрузки платежных данных)
+const importProductMode = new Map(); // userId -> true (режим загрузки товаров)
 
 // Шаблоны товаров по умолчанию
 const PRODUCT_TEMPLATES = [
@@ -163,6 +165,7 @@ ${addressesText}
                     [{ text: '💳 Управление карточными счетами', callback_data: 'admin_cards' }],
                     [{ text: '💬 Чаты', callback_data: 'admin_chats' }],
                     [{ text: '📢 Создать уведомление', callback_data: 'admin_notification' }],
+                    [{ text: '💾 Данные', callback_data: 'admin_data' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
             }
@@ -197,6 +200,11 @@ ${addressesText}
     bot.action('admin_chats', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showChatsMenu(ctx);
+    });
+
+    bot.action('admin_data', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showDataMenu(ctx);
     });
 
     bot.action('admin_logout', async (ctx) => {
@@ -1001,15 +1009,138 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         );
     });
 
-    // Обработка ответов администратора
+    // Обработка ответов администратора и загрузки данных
     bot.on('text', async (ctx) => {
-        // Пропускаем все команды (включая /start, /reply и другие)
+        if (!isAdmin(ctx.from.id)) return;
+
+        // Пропускаем команды
         if (ctx.message.text.startsWith('/')) {
+            if (ctx.message.text === '/cancel') {
+                importPaymentMode.delete(ctx.from.id);
+                importProductMode.delete(ctx.from.id);
+                adminReplyMode.delete(ctx.from.id);
+                await ctx.reply('❌ Операция отменена.');
+                await showDataMenu(ctx);
+            }
+            return;
+        }
+
+        // Обработка загрузки платежных адресов
+        if (importPaymentMode.has(ctx.from.id)) {
+            try {
+                const jsonText = ctx.message.text;
+                const data = JSON.parse(jsonText);
+
+                if (!Array.isArray(data)) {
+                    await ctx.reply('❌ Ошибка: JSON должен быть массивом объектов.');
+                    return;
+                }
+
+                // Удаляем все существующие методы оплаты
+                const existingMethods = await paymentService.getAllMethods(true);
+                for (const method of existingMethods) {
+                    await paymentService.deleteMethod(method.id);
+                }
+
+                // Создаем новые методы оплаты
+                for (const item of data) {
+                    if (!item.name || !item.network) {
+                        await ctx.reply(`❌ Ошибка: Пропущены обязательные поля (name, network) в элементе: ${JSON.stringify(item)}`);
+                        continue;
+                    }
+
+                    const method = await paymentService.createMethod(
+                        item.name,
+                        item.network,
+                        item.type || 'crypto'
+                    );
+
+                    if (item.enabled === false) {
+                        await paymentService.enableMethod(method.id, false);
+                    }
+
+                    if (item.address) {
+                        await paymentService.setAddressForMethod(method.id, item.address);
+                    }
+                }
+
+                importPaymentMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Успешно загружено ${data.length} платежных методов!`);
+                await showDataMenu(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при загрузке платежных данных:', error);
+                await ctx.reply('❌ Ошибка при загрузке платежных данных: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка загрузки товаров
+        if (importProductMode.has(ctx.from.id)) {
+            try {
+                const jsonText = ctx.message.text;
+                const data = JSON.parse(jsonText);
+
+                if (!Array.isArray(data)) {
+                    await ctx.reply('❌ Ошибка: JSON должен быть массивом объектов.');
+                    return;
+                }
+
+                // Удаляем все существующие товары
+                const cities = await cityService.getAll();
+                for (const city of cities) {
+                    const products = await productService.getByCityId(city.id);
+                    for (const product of products) {
+                        await productService.delete(product.id);
+                    }
+                }
+
+                // Создаем новые товары
+                let createdCount = 0;
+                for (const item of data) {
+                    if (!item.city_name || !item.name || item.price === undefined) {
+                        await ctx.reply(`❌ Ошибка: Пропущены обязательные поля (city_name, name, price) в элементе: ${JSON.stringify(item)}`);
+                        continue;
+                    }
+
+                    // Находим или создаем город
+                    const allCities = await cityService.getAll();
+                    let city = allCities.find(c => c.name === item.city_name);
+                    if (!city) {
+                        city = await cityService.create(item.city_name);
+                    }
+
+                    // Находим или создаем фасовку, если указана
+                    let packagingId = null;
+                    if (item.packaging_value !== null && item.packaging_value !== undefined) {
+                        let packaging = await packagingService.getByValue(item.packaging_value);
+                        if (!packaging) {
+                            packaging = await packagingService.create(item.packaging_value);
+                        }
+                        packagingId = packaging.id;
+                    }
+
+                    await productService.create(
+                        city.id,
+                        item.name,
+                        item.description || '',
+                        item.price,
+                        packagingId
+                    );
+                    createdCount++;
+                }
+
+                importProductMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Успешно загружено ${createdCount} товаров!`);
+                await showDataMenu(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при загрузке товаров:', error);
+                await ctx.reply('❌ Ошибка при загрузке товаров: ' + error.message);
+            }
             return;
         }
 
         // Проверяем, находится ли администратор в режиме ответа
-        if (adminReplyMode.has(ctx.from.id) && isAdmin(ctx.from.id)) {
+        if (adminReplyMode.has(ctx.from.id)) {
             const userChatId = adminReplyMode.get(ctx.from.id);
             let messageText = ctx.message.text;
 
@@ -1047,6 +1178,190 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             return; // Явно указываем, что сообщение обработано
         }
     });
+
+    // Меню работы с данными
+    async function showDataMenu(ctx) {
+        if (!isAdmin(ctx.from.id)) {
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
+            } else {
+                await ctx.reply('❌ У вас нет доступа к админ-панели.');
+            }
+            return;
+        }
+
+        const text = `
+💾 <b>Управление данными</b>
+
+Данная настройка дает вам возможность загружать и выгружать все данные.
+
+⚠️ <b>ВНИМАНИЕ! Осторожно!</b> При загрузке новых данных, все предыдущие данные будут стерты!
+
+Выберите действие:
+        `.trim();
+
+        const keyboard = {
+            inline_keyboard: [
+                [{ text: '📥 Выгрузить все товары', callback_data: 'export_products' }],
+                [{ text: '📥 Выгрузить все платежные данные', callback_data: 'export_payments' }],
+                [{ text: '📥 Выгрузить все фасовки', callback_data: 'export_packagings' }],
+                [{ text: '📤 Загрузить готовые платежные адреса', callback_data: 'import_payments' }],
+                [{ text: '📤 Загрузить готовые товары', callback_data: 'import_products' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    }
+
+    // Выгрузка всех товаров в JSON
+    async function exportProducts(ctx) {
+        try {
+            const cities = await cityService.getAll();
+            const productsData = [];
+
+            for (const city of cities) {
+                const products = await productService.getByCityId(city.id);
+                for (const product of products) {
+                    productsData.push({
+                        city_name: city.name,
+                        name: product.name,
+                        description: product.description || '',
+                        price: product.price,
+                        packaging_value: product.packaging_value || null
+                    });
+                }
+            }
+
+            const jsonData = JSON.stringify(productsData, null, 2);
+            await ctx.reply('📥 <b>Выгрузка всех товаров</b>', { parse_mode: 'HTML' });
+            await ctx.reply(`<pre>${jsonData}</pre>`, { parse_mode: 'HTML' });
+            await showDataMenu(ctx);
+        } catch (error) {
+            console.error('[AdminHandlers] Ошибка при выгрузке товаров:', error);
+            await ctx.reply('❌ Ошибка при выгрузке товаров: ' + error.message);
+        }
+    }
+
+    // Выгрузка всех платежных данных в JSON
+    async function exportPayments(ctx) {
+        try {
+            const methods = await paymentService.getAllMethods(true);
+            const paymentsData = [];
+
+            for (const method of methods) {
+                const address = await paymentService.getAddressForMethod(method.id);
+                paymentsData.push({
+                    name: method.name,
+                    network: method.network,
+                    type: method.type || 'crypto',
+                    enabled: method.enabled === 1,
+                    address: address ? address.address : null
+                });
+            }
+
+            const jsonData = JSON.stringify(paymentsData, null, 2);
+            await ctx.reply('📥 <b>Выгрузка всех платежных данных</b>', { parse_mode: 'HTML' });
+            await ctx.reply(`<pre>${jsonData}</pre>`, { parse_mode: 'HTML' });
+            await showDataMenu(ctx);
+        } catch (error) {
+            console.error('[AdminHandlers] Ошибка при выгрузке платежных данных:', error);
+            await ctx.reply('❌ Ошибка при выгрузке платежных данных: ' + error.message);
+        }
+    }
+
+    // Выгрузка всех фасовок в JSON
+    async function exportPackagings(ctx) {
+        try {
+            const packagings = await packagingService.getAll();
+            const packagingsData = packagings.map(p => ({
+                value: p.value
+            }));
+
+            const jsonData = JSON.stringify(packagingsData, null, 2);
+            await ctx.reply('📥 <b>Выгрузка всех фасовок</b>', { parse_mode: 'HTML' });
+            await ctx.reply(`<pre>${jsonData}</pre>`, { parse_mode: 'HTML' });
+            await showDataMenu(ctx);
+        } catch (error) {
+            console.error('[AdminHandlers] Ошибка при выгрузке фасовок:', error);
+            await ctx.reply('❌ Ошибка при выгрузке фасовок: ' + error.message);
+        }
+    }
+
+    // Загрузка платежных адресов из JSON
+    const importPaymentMode = new Map(); // userId -> true
+
+    bot.action('import_payments', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        importPaymentMode.set(ctx.from.id, true);
+        await ctx.reply(
+            '📤 <b>Загрузка платежных адресов</b>\n\n' +
+            '⚠️ <b>ВНИМАНИЕ!</b> Все существующие платежные методы и адреса будут удалены!\n\n' +
+            'Отправьте JSON файл или текст в формате JSON.\n' +
+            'Формат:\n' +
+            '<pre>[\n' +
+            '  {\n' +
+            '    "name": "Bitcoin",\n' +
+            '    "network": "BTC",\n' +
+            '    "type": "crypto",\n' +
+            '    "enabled": true,\n' +
+            '    "address": "1c2b3a4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"\n' +
+            '  }\n' +
+            ']</pre>\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    // Загрузка товаров из JSON
+    bot.action('import_products', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        importProductMode.set(ctx.from.id, true);
+        await ctx.reply(
+            '📤 <b>Загрузка товаров</b>\n\n' +
+            '⚠️ <b>ВНИМАНИЕ!</b> Все существующие товары будут удалены!\n\n' +
+            'Отправьте JSON файл или текст в формате JSON.\n' +
+            'Формат:\n' +
+            '<pre>[\n' +
+            '  {\n' +
+            '    "city_name": "Москва",\n' +
+            '    "name": "Товар 1",\n' +
+            '    "description": "Описание",\n' +
+            '    "price": 1000,\n' +
+            '    "packaging_value": 1\n' +
+            '  }\n' +
+            ']</pre>\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    // Обработка выгрузки данных
+    bot.action('export_products', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await exportProducts(ctx);
+    });
+
+    bot.action('export_payments', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await exportPayments(ctx);
+    });
+
+    bot.action('export_packagings', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await exportPackagings(ctx);
+    });
+
 
     console.log('[AdminHandlers] Админ-обработчики успешно настроены');
     console.log('[AdminHandlers] Зарегистрированы команды: /apanel и другие админ-команды');
