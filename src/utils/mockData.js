@@ -4,6 +4,7 @@ import { paymentService } from '../services/paymentService.js';
 import { packagingService } from '../services/packagingService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
 import { menuButtonService } from '../services/menuButtonService.js';
+import { menuButtonService } from '../services/menuButtonService.js';
 
 const mockCities = [
   'Москва',
@@ -66,6 +67,47 @@ const defaultPackagings = [
   50
 ];
 
+// Предустановленные нижние кнопки меню
+const defaultMenuButtons = [
+  { name: 'Оператор', message: 'Свяжитесь с оператором: @operator' },
+  { name: 'Сайт', message: 'Наш сайт: https://example.com' },
+  { name: 'Сайт автопродаж', message: 'Сайт автопродаж: https://autosales.example.com' },
+  { name: 'Трудоустройство', message: 'Информация о трудоустройстве: @hr' },
+  { name: 'Инфо-канал', message: 'Наш информационный канал: @info_channel' }
+];
+
+async function initializeDefaultMenuButtons() {
+  console.log('[MOCK] Инициализация предустановленных кнопок меню...');
+
+  const existingButtons = await menuButtonService.getAll(false);
+
+  // Начальный order_index — максимум из существующих + 1
+  let currentMaxOrder =
+    existingButtons.length > 0
+      ? Math.max(...existingButtons.map((b) => b.order_index || 0))
+      : -1;
+
+  for (const defaultBtn of defaultMenuButtons) {
+    const existing = existingButtons.find((b) => b.name === defaultBtn.name);
+    if (!existing) {
+      currentMaxOrder += 1;
+      await menuButtonService.create(
+        defaultBtn.name,
+        defaultBtn.message,
+        currentMaxOrder
+      );
+      console.log(`[MOCK] Создана кнопка меню: ${defaultBtn.name}`);
+      existingButtons.push({
+        name: defaultBtn.name,
+        message: defaultBtn.message,
+        order_index: currentMaxOrder
+      });
+    } else {
+      console.log(`[MOCK] Кнопка меню уже существует: ${defaultBtn.name}`);
+    }
+  }
+}
+
 export async function initializeMockData() {
   console.log('[MOCK] ========== Инициализация моковых данных ==========');
 
@@ -84,9 +126,12 @@ export async function initializeMockData() {
   }
   console.log('[MOCK] Всего товаров:', totalProducts);
   
-  // Если есть и города, и товары - пропускаем инициализацию
+  // Если есть и города, и товары - пропускаем создание городов/товаров,
+  // но ВСЁ РАВНО инициализируем кнопки меню
   if (existingCities.length > 0 && totalProducts > 0) {
-    console.log('[MOCK] Данные уже существуют, пропускаем инициализацию');
+    console.log('[MOCK] Данные уже существуют, пропускаем создание городов/товаров');
+    await initializeDefaultMenuButtons();
+    console.log('[MOCK] Моковые данные (кнопки меню) инициализированы при существующей БД');
     return;
   }
   
@@ -157,6 +202,10 @@ export async function initializeMockData() {
     }
     
     console.log('[MOCK] Товары для существующих городов созданы!');
+
+    // Инициализируем кнопки меню и выходим
+    await initializeDefaultMenuButtons();
+    console.log('[MOCK] Моковые данные (кнопки меню) инициализированы при существующих городах');
     return;
   }
 
@@ -241,29 +290,8 @@ export async function initializeMockData() {
     console.log(`Создан карточный счет: ${card.name} - ${card.accountNumber}`);
   }
 
-  // Инициализация предустановленных кнопок меню
-  console.log('[MOCK] Инициализация предустановленных кнопок меню...');
-  const existingButtons = await menuButtonService.getAll(false);
-  
-  const defaultButtons = [
-    { name: 'Оператор', message: 'Свяжитесь с оператором: @operator' },
-    { name: 'Сайт', message: 'Наш сайт: https://example.com' },
-    { name: 'Сайт автопродаж', message: 'Сайт автопродаж: https://autosales.example.com' },
-    { name: 'Трудоустройство', message: 'Информация о трудоустройстве: @hr' },
-    { name: 'Инфо-канал', message: 'Наш информационный канал: @info_channel' }
-  ];
-
-  for (const defaultBtn of defaultButtons) {
-    const existing = existingButtons.find(b => b.name === defaultBtn.name);
-    if (!existing) {
-      await menuButtonService.create(defaultBtn.name, defaultBtn.message, existingButtons.length);
-      console.log(`[MOCK] Создана кнопка меню: ${defaultBtn.name}`);
-      existingButtons.push({ name: defaultBtn.name, message: defaultBtn.message });
-    } else {
-      console.log(`[MOCK] Кнопка меню уже существует: ${defaultBtn.name}`);
-    }
-  }
-
+  // Инициализируем кнопки меню и завершаем
+  await initializeDefaultMenuButtons();
   console.log('Моковые данные успешно инициализированы!');
 }
 

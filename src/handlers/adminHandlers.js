@@ -1079,7 +1079,12 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         }
 
         // Далее обрабатываем только для админов
-        if (!isAdmin(ctx.from.id)) return;
+        // ВАЖНО: для обычных пользователей обязательно вызываем next(),
+        // чтобы их текстовые сообщения (в том числе нажатия на reply‑кнопки)
+        // обрабатывались в userHandlers (bot.hears и bot.on('text'))
+        if (!isAdmin(ctx.from.id)) {
+            return next();
+        }
 
         // Обработка редактирования приветственного сообщения
         if (welcomeEditMode.has(ctx.from.id)) {
