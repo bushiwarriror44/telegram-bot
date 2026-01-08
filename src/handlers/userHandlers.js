@@ -38,6 +38,60 @@ export function setupUserHandlers(bot) {
     });
     console.log('[UserHandlers] Обработчик /start зарегистрирован');
 
+    // Команда /catalog - каталог товаров (показ меню городов)
+    bot.command('catalog', async (ctx) => {
+        console.log('[UserHandlers] Команда /catalog получена');
+        try {
+            await userService.saveOrUpdate(ctx.from.id, {
+                username: ctx.from.username,
+                first_name: ctx.from.first_name,
+                last_name: ctx.from.last_name
+            });
+            await showCitiesMenu(ctx);
+        } catch (error) {
+            console.error('[UserHandlers] ОШИБКА в обработчике /catalog:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.');
+        }
+    });
+    console.log('[UserHandlers] Обработчик /catalog зарегистрирован');
+
+    // Команда /cabinet - личный кабинет
+    bot.command('cabinet', async (ctx) => {
+        console.log('[UserHandlers] Команда /cabinet получена');
+        try {
+            await userService.saveOrUpdate(ctx.from.id, {
+                username: ctx.from.username,
+                first_name: ctx.from.first_name,
+                last_name: ctx.from.last_name
+            });
+            
+            const user = await userService.getByChatId(ctx.from.id);
+            const text = `
+👤 <b>Личный кабинет</b>
+
+🆔 ID: <code>${ctx.from.id}</code>
+👤 Имя: ${ctx.from.first_name || 'Не указано'} ${ctx.from.last_name || ''}
+📱 Username: ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
+
+📅 Дата регистрации: ${user?.created_at ? new Date(user.created_at).toLocaleDateString('ru-RU') : 'Неизвестно'}
+🕐 Последняя активность: ${user?.last_active ? new Date(user.last_active).toLocaleDateString('ru-RU') : 'Неизвестно'}
+            `.trim();
+
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '🏠 Главное меню', callback_data: 'back_to_cities' }]
+                    ]
+                }
+            });
+        } catch (error) {
+            console.error('[UserHandlers] ОШИБКА в обработчике /cabinet:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.');
+        }
+    });
+    console.log('[UserHandlers] Обработчик /cabinet зарегистрирован');
+
     // Обработка выбора города
     bot.action(/^city_(\d+)$/, async (ctx) => {
         await userService.saveOrUpdate(ctx.from.id, {

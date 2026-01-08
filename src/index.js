@@ -44,6 +44,19 @@ async function startBot() {
     console.log('[START] Админ-обработчики настроены');
     console.log('[START] Шаг 5 завершен: Обработчики настроены');
 
+    // Настройка меню команд для пользователей
+    console.log('[START] Настройка меню команд...');
+    try {
+      await bot.telegram.setMyCommands([
+        { command: 'start', description: 'Главное меню' },
+        { command: 'catalog', description: 'Каталог товаров' },
+        { command: 'cabinet', description: 'Личный кабинет' }
+      ]);
+      console.log('[START] Меню команд успешно настроено');
+    } catch (commandsError) {
+      console.error('[START] Ошибка при настройке меню команд:', commandsError);
+    }
+
     // Обработка ошибок
     console.log('[START] Настройка обработчика ошибок...');
     bot.catch((err, ctx) => {
