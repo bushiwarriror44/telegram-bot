@@ -282,6 +282,33 @@ class Database {
       )
     `);
 
+    // Таблица промокодов
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS promocodes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL UNIQUE,
+        discount_percent INTEGER NOT NULL CHECK(discount_percent >= 1 AND discount_percent <= 99),
+        enabled INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME,
+        created_by_admin_id INTEGER
+      )
+    `);
+
+    // Таблица связи пользователей и промокодов
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS user_promocodes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_chat_id INTEGER NOT NULL,
+        promocode_id INTEGER NOT NULL,
+        used INTEGER DEFAULT 0,
+        used_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_chat_id) REFERENCES users(chat_id) ON DELETE CASCADE,
+        FOREIGN KEY (promocode_id) REFERENCES promocodes(id) ON DELETE CASCADE
+      )
+    `);
+
     // Миграция: добавляем колонку packaging_id в существующую таблицу products при необходимости
     const productColumns = await this.db.all('PRAGMA table_info(products)');
     const hasPackagingId = productColumns.some((col) => col.name === 'packaging_id');
@@ -341,6 +368,21 @@ class Database {
     );
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_menu_buttons_order ON menu_buttons(order_index)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_promocodes_code ON promocodes(code)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_promocodes_enabled ON promocodes(enabled)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_user_promocodes_user_chat_id ON user_promocodes(user_chat_id)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_user_promocodes_promocode_id ON user_promocodes(promocode_id)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_user_promocodes_used ON user_promocodes(used)'
     );
 
     console.log('[DB.init] Все индексы созданы');

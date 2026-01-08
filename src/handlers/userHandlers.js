@@ -6,9 +6,12 @@ import { userService } from '../services/userService.js';
 import { supportService } from '../services/supportService.js';
 import { settingsService } from '../services/settingsService.js';
 import { menuButtonService } from '../services/menuButtonService.js';
+import { promocodeService } from '../services/promocodeService.js';
 
 // Хранит пользователей, которые находятся в режиме поддержки
 const supportMode = new Map();
+// Хранит пользователей, которые вводят промокод (userId -> productId)
+const promocodeInputMode = new Map();
 
 // Импортируем adminSessions для проверки, является ли пользователь админом
 let adminSessions = null;
@@ -167,11 +170,32 @@ export function setupUserHandlers(bot) {
         await showProductDetails(ctx, productId);
     });
 
+    // Обработка использования промокода
+    bot.action(/^use_promocode_(\d+)$/, async (ctx) => {
+        const productId = parseInt(ctx.match[1]);
+        await showPromocodeInput(ctx, productId);
+    });
+
+    // Обработка применения промокода
+    bot.action(/^apply_promocode_(\d+)_(.+)$/, async (ctx) => {
+        const productId = parseInt(ctx.match[1]);
+        const promocode = ctx.match[2];
+        await applyPromocode(ctx, productId, promocode);
+    });
+
     // Обработка выбора метода оплаты
     bot.action(/^pay_(\d+)_(\d+)$/, async (ctx) => {
         const productId = parseInt(ctx.match[1]);
         const methodId = parseInt(ctx.match[2]);
         await showPaymentAddress(ctx, productId, methodId);
+    });
+
+    // Обработка выбора метода оплаты с промокодом
+    bot.action(/^pay_with_promo_(\d+)_(\d+)_(\d+)$/, async (ctx) => {
+        const productId = parseInt(ctx.match[1]);
+        const methodId = parseInt(ctx.match[2]);
+        const promocodeId = parseInt(ctx.match[3]);
+        await showPaymentAddress(ctx, productId, methodId, promocodeId);
     });
 
     // Вернуться к городам
@@ -259,6 +283,24 @@ export function setupUserHandlers(bot) {
             await supportService.saveUserMessage(ctx.from.id, ctx.message.text);
             await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!');
             supportMode.delete(ctx.from.id);
+            return;
+        }
+
+        // Обработка ввода промокода
+        if (promocodeInputMode.has(ctx.from.id)) {
+            const productId = promocodeInputMode.get(ctx.from.id);
+            const promocodeText = ctx.message.text.trim().toUpperCase();
+            await applyPromocode(ctx, productId, promocodeText);
+            promocodeInputMode.delete(ctx.from.id);
+            return;
+        }
+
+        // Обработка ввода промокода
+        if (promocodeInputMode.has(ctx.from.id)) {
+            const productId = promocodeInputMode.get(ctx.from.id);
+            const promocodeText = ctx.message.text.trim().toUpperCase();
+            await applyPromocode(ctx, productId, promocodeText);
+            promocodeInputMode.delete(ctx.from.id);
             return;
         }
 
@@ -648,6 +690,8 @@ ${product.description || 'Описание отсутствует'}
         { text: `💳 ${method.name}`, callback_data: `pay_${product.id}_${method.id}` }
     ]);
 
+    // Добавляем кнопку "Использовать промокод"
+    keyboard.push([{ text: '🎁 Использовать промокод', callback_data: `use_promocode_${product.id}` }]);
     keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${city.id}` }]);
 
     await ctx.editMessageText(text, {
@@ -658,7 +702,7 @@ ${product.description || 'Описание отсутствует'}
     });
 }
 
-async function showPaymentAddress(ctx, productId, methodId) {
+async function showPaymentAddress(ctx, productId, methodId, promocodeId = null) {
     const product = await productService.getById(productId);
     const method = await paymentService.getMethodById(methodId);
 
@@ -674,8 +718,20 @@ async function showPaymentAddress(ctx, productId, methodId) {
         last_name: ctx.from.last_name
     });
 
+    // Рассчитываем цену с учетом промокода
+    let finalPrice = product.price;
+    let discountText = '';
+    
+    if (promocodeId) {
+        const promocode = await promocodeService.getById(promocodeId);
+        if (promocode) {
+            const discount = (product.price * promocode.discount_percent) / 100;
+            finalPrice = product.price - discount;
+            discountText = `\n🎁 Промокод <b>${promocode.code}</b>: -${promocode.discount_percent}%\n💰 Скидка: <b>${discount.toLocaleString('ru-RU')} ₽</b>\n`;
+        }
+    }
+
     let paymentText = '';
-    let paymentAddress = '';
 
     // Если это карта, выбираем случайный карточный счет
     if (method.type === 'card') {
@@ -684,7 +740,7 @@ async function showPaymentAddress(ctx, productId, methodId) {
             await ctx.reply('Ошибка: карточные счета не настроены. Обратитесь к администратору.');
             return;
         }
-        paymentText = `💳 <b>Оплата картой</b>\n\n📦 Товар: ${product.name}\n💰 Сумма: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n\n💳 Карточный счет для оплаты:\n<b>${cardAccount.name}</b>\n<code>${cardAccount.account_number}</code>`;
+        paymentText = `💳 <b>Оплата картой</b>\n\n📦 Товар: ${product.name}\n💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>${discountText}💰 Итого к оплате: <b>${finalPrice.toLocaleString('ru-RU')} ₽</b>\n\n💳 Карточный счет для оплаты:\n<b>${cardAccount.name}</b>\n<code>${cardAccount.account_number}</code>`;
     } else {
         // Для криптовалют получаем адрес
         const address = await paymentService.getAddressForMethod(methodId);
@@ -692,10 +748,15 @@ async function showPaymentAddress(ctx, productId, methodId) {
             await ctx.reply('Ошибка: адрес для оплаты не найден. Обратитесь к администратору.');
             return;
         }
-        paymentText = `💳 <b>Оплата через ${method.name}</b>\n\n📦 Товар: ${product.name}\n💰 Сумма: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n\n🔐 Адрес для оплаты:\n<code>${address.address}</code>\n\n⚠️ <i>Внимание! Это тестовый адрес. В реальном приложении здесь будет настоящий адрес кошелька.</i>`;
+        paymentText = `💳 <b>Оплата через ${method.name}</b>\n\n📦 Товар: ${product.name}\n💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>${discountText}💰 Итого к оплате: <b>${finalPrice.toLocaleString('ru-RU')} ₽</b>\n\n🔐 Адрес для оплаты:\n<code>${address.address}</code>\n\n⚠️ <i>Внимание! Это тестовый адрес. В реальном приложении здесь будет настоящий адрес кошелька.</i>`;
     }
 
     const text = `${paymentText}\n\nПосле оплаты средства будут автоматически зачислены на ваш счет.`.trim();
+
+    // Если использован промокод, помечаем его как использованный
+    if (promocodeId) {
+        await promocodeService.markAsUsed(ctx.from.id, promocodeId);
+    }
 
     await ctx.editMessageText(text, {
         parse_mode: 'HTML',
@@ -707,3 +768,83 @@ async function showPaymentAddress(ctx, productId, methodId) {
     });
 }
 
+// Функция для показа интерфейса ввода промокода
+async function showPromocodeInput(ctx, productId) {
+    const product = await productService.getById(productId);
+    if (!product) {
+        await ctx.reply('Товар не найден.');
+        return;
+    }
+
+    promocodeInputMode.set(ctx.from.id, productId);
+
+    await ctx.editMessageText(
+        `🎁 <b>Использование промокода</b>\n\n` +
+        `📦 Товар: <b>${product.name}</b>\n` +
+        `💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n\n` +
+        `Введите код промокода:`,
+        {
+            parse_mode: 'HTML',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '◀️ Назад к товару', callback_data: `back_to_product_${productId}` }]
+                ]
+            }
+        }
+    );
+}
+
+// Функция для применения промокода
+async function applyPromocode(ctx, productId, promocodeText) {
+    const product = await productService.getById(productId);
+    if (!product) {
+        await ctx.reply('Товар не найден.');
+        return;
+    }
+
+    // Валидация промокода
+    const validation = await promocodeService.validatePromocodeForUser(ctx.from.id, promocodeText);
+    
+    if (!validation.valid) {
+        await ctx.reply(`❌ ${validation.reason}`);
+        await showProductDetails(ctx, productId);
+        return;
+    }
+
+    const promocode = validation.promocode;
+    const discount = (product.price * promocode.discount_percent) / 100;
+    const finalPrice = product.price - discount;
+
+    const city = await cityService.getById(product.city_id);
+    const paymentMethods = await paymentService.getAllMethods();
+
+    const packagingLine = product.packaging_value
+        ? `\n⚖️ Фасовка: <b>${product.packaging_value} кг</b>\n`
+        : '\n';
+
+    const text = `
+📦 <b>${product.name}</b>
+
+${product.description || 'Описание отсутствует'}
+
+💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>
+🎁 Промокод <b>${promocode.code}</b>: -${promocode.discount_percent}%
+💰 Скидка: <b>${discount.toLocaleString('ru-RU')} ₽</b>
+💰 Итого: <b>${finalPrice.toLocaleString('ru-RU')} ₽</b>
+📍 Город: ${city.name}${packagingLine}
+Выберите способ оплаты:
+  `.trim();
+
+    const keyboard = paymentMethods.map(method => [
+        { text: `💳 ${method.name}`, callback_data: `pay_with_promo_${product.id}_${method.id}_${promocode.id}` }
+    ]);
+
+    keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${city.id}` }]);
+
+    await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: keyboard
+        }
+    });
+}
