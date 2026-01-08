@@ -4,7 +4,6 @@ import { paymentService } from '../services/paymentService.js';
 import { packagingService } from '../services/packagingService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
 import { menuButtonService } from '../services/menuButtonService.js';
-import { menuButtonService } from '../services/menuButtonService.js';
 
 const mockCities = [
   'Москва',
