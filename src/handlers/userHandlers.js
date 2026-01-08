@@ -58,39 +58,29 @@ export function setupUserHandlers(bot) {
     // Команда /cabinet - личный кабинет
     bot.command('cabinet', async (ctx) => {
         console.log('[UserHandlers] Команда /cabinet получена');
-        try {
-            await userService.saveOrUpdate(ctx.from.id, {
-                username: ctx.from.username,
-                first_name: ctx.from.first_name,
-                last_name: ctx.from.last_name
-            });
-            
-            const user = await userService.getByChatId(ctx.from.id);
-            const text = `
-👤 <b>Личный кабинет</b>
-
-🆔 ID: <code>${ctx.from.id}</code>
-👤 Имя: ${ctx.from.first_name || 'Не указано'} ${ctx.from.last_name || ''}
-📱 Username: ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
-
-📅 Дата регистрации: ${user?.created_at ? new Date(user.created_at).toLocaleDateString('ru-RU') : 'Неизвестно'}
-🕐 Последняя активность: ${user?.last_active ? new Date(user.last_active).toLocaleDateString('ru-RU') : 'Неизвестно'}
-            `.trim();
-
-            await ctx.reply(text, {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '🏠 Главное меню', callback_data: 'back_to_cities' }]
-                    ]
-                }
-            });
-        } catch (error) {
-            console.error('[UserHandlers] ОШИБКА в обработчике /cabinet:', error);
-            await ctx.reply('Произошла ошибка. Попробуйте позже.');
-        }
+        await showCabinetMenu(ctx);
     });
     console.log('[UserHandlers] Обработчик /cabinet зарегистрирован');
+
+    // Обработчик кнопки личного кабинета
+    bot.action('cabinet_menu', async (ctx) => {
+        await showCabinetMenu(ctx);
+    });
+
+    // Обработчик кнопки "Пополнить"
+    bot.action('topup_balance', async (ctx) => {
+        await showTopupMenu(ctx);
+    });
+
+    // Обработчик кнопки "Мои заказы"
+    bot.action('my_orders', async (ctx) => {
+        await showMyOrders(ctx);
+    });
+
+    // Обработчик кнопки "История пополнений"
+    bot.action('topup_history', async (ctx) => {
+        await showTopupHistory(ctx);
+    });
 
     // Обработка выбора города
     bot.action(/^city_(\d+)$/, async (ctx) => {
@@ -184,6 +174,213 @@ export function setupUserHandlers(bot) {
             return;
         }
     });
+}
+
+async function showCabinetMenu(ctx) {
+    try {
+        await userService.saveOrUpdate(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            last_name: ctx.from.last_name
+        });
+        
+        const user = await userService.getByChatId(ctx.from.id);
+        const balance = user?.balance || 0;
+        
+        const text = `
+👤 <b>Личный кабинет</b>
+
+👤 ${ctx.from.first_name || 'Пользователь'} ${ctx.from.last_name || ''}
+📱 @${ctx.from.username || 'не указан'}
+
+💰 <b>Баланс: ${balance.toFixed(2)} ₽</b>
+        `.trim();
+
+        const keyboard = {
+            inline_keyboard: [
+                [{ text: '💳 Пополнить', callback_data: 'topup_balance' }],
+                [{ text: '📦 Мои заказы', callback_data: 'my_orders' }],
+                [{ text: '💵 История пополнений', callback_data: 'topup_history' }],
+                [{ text: '🏠 Главное меню', callback_data: 'back_to_cities' }]
+            ]
+        };
+
+        // Если это callback (кнопка), используем editMessageText
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        } else {
+            // Если это команда, используем reply
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    } catch (error) {
+        console.error('[UserHandlers] ОШИБКА в showCabinetMenu:', error);
+        try {
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+            } else {
+                await ctx.reply('Произошла ошибка. Попробуйте позже.');
+            }
+        } catch (e) {
+            console.error('[UserHandlers] Ошибка при отправке сообщения об ошибке:', e);
+        }
+    }
+}
+
+async function showTopupMenu(ctx) {
+    try {
+        const paymentMethods = await paymentService.getAllMethods();
+        
+        if (paymentMethods.length === 0) {
+            await ctx.editMessageText('❌ Методы оплаты пока не настроены. Обратитесь к администратору.');
+            return;
+        }
+
+        const text = `
+💳 <b>Пополнение баланса</b>
+
+Выберите способ пополнения:
+        `.trim();
+
+        const keyboard = [];
+        for (const method of paymentMethods) {
+            keyboard.push([{ 
+                text: `${method.name} (${method.network})`, 
+                callback_data: `topup_method_${method.id}` 
+            }]);
+        }
+        keyboard.push([{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]);
+
+        await ctx.editMessageText(text, {
+            parse_mode: 'HTML',
+            reply_markup: {
+                inline_keyboard: keyboard
+            }
+        });
+    } catch (error) {
+        console.error('[UserHandlers] ОШИБКА в showTopupMenu:', error);
+        await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+    }
+}
+
+async function showMyOrders(ctx) {
+    try {
+        const orders = await getOrdersByUser(ctx.from.id);
+        
+        if (orders.length === 0) {
+            const text = `
+📦 <b>Мои заказы</b>
+
+У вас пока нет заказов.
+            `.trim();
+            
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                    ]
+                }
+            });
+            return;
+        }
+
+        let text = `<b>📦 Мои заказы</b>\n\n`;
+        for (let i = 0; i < Math.min(orders.length, 10); i++) {
+            const order = orders[i];
+            const status = order.status === 'completed' ? '✅' : order.status === 'pending' ? '⏳' : '❌';
+            text += `${status} Заказ #${order.id}\n`;
+            text += `💰 ${order.total_price} ₽\n`;
+            text += `📅 ${new Date(order.created_at).toLocaleDateString('ru-RU')}\n\n`;
+        }
+
+        await ctx.editMessageText(text, {
+            parse_mode: 'HTML',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                ]
+            }
+        });
+    } catch (error) {
+        console.error('[UserHandlers] ОШИБКА в showMyOrders:', error);
+        await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+    }
+}
+
+async function showTopupHistory(ctx) {
+    try {
+        const topups = await getTopupsByUser(ctx.from.id);
+        
+        if (topups.length === 0) {
+            const text = `
+💵 <b>История пополнений</b>
+
+У вас пока нет пополнений.
+            `.trim();
+            
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                    ]
+                }
+            });
+            return;
+        }
+
+        let text = `<b>💵 История пополнений</b>\n\n`;
+        for (let i = 0; i < Math.min(topups.length, 10); i++) {
+            const topup = topups[i];
+            const status = topup.status === 'completed' ? '✅' : topup.status === 'pending' ? '⏳' : '❌';
+            text += `${status} ${topup.amount} ₽\n`;
+            text += `📅 ${new Date(topup.created_at).toLocaleDateString('ru-RU')}\n\n`;
+        }
+
+        await ctx.editMessageText(text, {
+            parse_mode: 'HTML',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                ]
+            }
+        });
+    } catch (error) {
+        console.error('[UserHandlers] ОШИБКА в showTopupHistory:', error);
+        await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+    }
+}
+
+async function getOrdersByUser(chatId) {
+    const { database } = await import('../database/db.js');
+    try {
+        return await database.all(
+            'SELECT * FROM orders WHERE user_chat_id = ? ORDER BY created_at DESC LIMIT 20',
+            [chatId]
+        );
+    } catch (error) {
+        console.error('[UserHandlers] Ошибка при получении заказов:', error);
+        return [];
+    }
+}
+
+async function getTopupsByUser(chatId) {
+    const { database } = await import('../database/db.js');
+    try {
+        return await database.all(
+            'SELECT * FROM topups WHERE user_chat_id = ? ORDER BY created_at DESC LIMIT 20',
+            [chatId]
+        );
+    } catch (error) {
+        console.error('[UserHandlers] Ошибка при получении истории пополнений:', error);
+        return [];
+    }
 }
 
 async function showHelpMenu(ctx) {

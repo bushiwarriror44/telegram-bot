@@ -173,8 +173,41 @@ class Database {
         username TEXT,
         first_name TEXT,
         last_name TEXT,
+        balance REAL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_active DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Таблица заказов
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_chat_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        city_id INTEGER NOT NULL,
+        quantity REAL DEFAULT 1,
+        total_price REAL NOT NULL,
+        payment_method_id INTEGER,
+        status TEXT DEFAULT 'pending',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_chat_id) REFERENCES users(chat_id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Таблица истории пополнений
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS topups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_chat_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        payment_method_id INTEGER,
+        status TEXT DEFAULT 'pending',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_chat_id) REFERENCES users(chat_id) ON DELETE CASCADE,
+        FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id) ON DELETE CASCADE
       )
     `);
 
@@ -216,6 +249,13 @@ class Database {
       await this.run("ALTER TABLE payment_methods ADD COLUMN type TEXT DEFAULT 'crypto'");
     }
 
+    // Миграция: добавляем колонку balance в существующую таблицу users при необходимости
+    const userColumns = await this.db.all('PRAGMA table_info(users)');
+    const hasBalance = userColumns.some((col) => col.name === 'balance');
+    if (!hasBalance) {
+      await this.run('ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0');
+    }
+
     // Индексы для оптимизации
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_products_city_id ON products(city_id)'
@@ -235,6 +275,21 @@ class Database {
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_support_messages_created_at ON support_messages(created_at)'
     );
+    
+    // Индексы для новых таблиц
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_orders_user_chat_id ON orders(user_chat_id)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_topups_user_chat_id ON topups(user_chat_id)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_topups_created_at ON topups(created_at)'
+    );
+    
     console.log('[DB.init] Все индексы созданы');
     console.log('[DB.init] Инициализация БД завершена успешно');
   }
