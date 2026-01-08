@@ -186,6 +186,7 @@ ${addressesText}
                     [{ text: '💾 Данные', callback_data: 'admin_data' }],
                     [{ text: '👋 Настройка приветственного сообщения', callback_data: 'admin_welcome' }],
                     [{ text: '🔘 Настройка кнопок', callback_data: 'admin_menu_buttons' }],
+                    [{ text: '🎁 Бонусы и промокоды', callback_data: 'admin_promocodes' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
             }
