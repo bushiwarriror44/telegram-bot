@@ -167,13 +167,11 @@ export function setupUserHandlers(bot) {
     // Обработка текстовых сообщений от пользователей (когда они пишут в поддержку)
     // ВАЖНО: Этот обработчик должен регистрироваться ПОСЛЕ всех bot.command(),
     // чтобы команды обрабатывались первыми
-    bot.on('text', async (ctx) => {
+    bot.on('text', async (ctx, next) => {
         // Пропускаем команды - они должны обрабатываться через bot.command()
         if (ctx.message.text && ctx.message.text.startsWith('/')) {
-            console.log('[UserHandlers] bot.on(text): Пропуск команды:', ctx.message.text);
-            // В Telegraf, если мы делаем return, обновление продолжает обрабатываться другими обработчиками
-            // Но лучше явно не обрабатывать команды здесь
-            return;
+            console.log('[UserHandlers] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
+            return next(); // позволяем другим middleware (командам) обработать
         }
 
         // Проверяем, находится ли пользователь в режиме поддержки

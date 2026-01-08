@@ -1024,7 +1024,7 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
     });
 
     // Обработка ответов администратора и загрузки данных
-    bot.on('text', async (ctx) => {
+    bot.on('text', async (ctx, next) => {
         // ВАЖНО: Пропускаем команды для ВСЕХ пользователей, чтобы они обрабатывались через bot.command()
         if (ctx.message.text && ctx.message.text.startsWith('/')) {
             // Обрабатываем только /cancel для админов
@@ -1036,9 +1036,11 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 databaseImportMode.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showAdminPanel(ctx);
+                return; // Не передаем дальше, так как команда обработана
             }
-            // Для всех остальных команд просто возвращаемся, чтобы они обрабатывались другими обработчиками
-            return;
+            // Для всех остальных команд передаем управление дальше через next()
+            console.log('[AdminHandlers] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
+            return next(); // Позволяем другим обработчикам (bot.command()) обработать команду
         }
 
         // Далее обрабатываем только для админов
