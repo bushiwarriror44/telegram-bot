@@ -97,19 +97,29 @@ async function startBot() {
     }
 
     try {
-      // Запускаем бота через bot.launch() с опциями
+      // Запускаем бота через bot.launch()
       console.log('[START] Запуск бота через bot.launch()...');
 
-      const launchOptions = {
+      // В Telegraf 4.x bot.launch() запускает polling и возвращает Promise
+      // Но он может не резолвиться, поэтому запускаем его без await
+      console.log('[START] Вызов bot.launch() без опций...');
+
+      // Запускаем launch без await, чтобы не блокировать
+      const launchPromise = bot.launch({
         dropPendingUpdates: true,
         allowedUpdates: ['message', 'callback_query']
-      };
-      console.log('[START] Опции запуска:', JSON.stringify(launchOptions));
+      });
 
-      // В Telegraf 4.x bot.launch() возвращает Promise, который резолвится после успешного запуска
-      // Но он может зависать, поэтому используем startPolling как альтернативу
-      console.log('[START] Использование bot.startPolling()...');
-      bot.startPolling(launchOptions);
+      console.log('[START] bot.launch() вызван');
+
+      // Обрабатываем Promise в фоне
+      launchPromise.then(() => {
+        console.log('[START] bot.launch() успешно завершен');
+      }).catch((err) => {
+        console.error('[START] ОШИБКА в bot.launch():', err);
+        console.error('[START] Сообщение:', err.message);
+        console.error('[START] Stack:', err.stack);
+      });
 
       console.log('[START] ========== Бот успешно запущен! ==========');
       console.log('[START] Бот готов к работе');
@@ -117,10 +127,11 @@ async function startBot() {
       console.log('[START] Бот слушает обновления через polling...');
       console.log('[START] Ожидание обновлений от Telegram...');
 
-      // Даем боту немного времени на инициализацию
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Даем боту время на инициализацию polling
+      await new Promise(resolve => setTimeout(resolve, 3000));
       console.log('[START] Бот полностью инициализирован и готов принимать команды');
       console.log('[START] Попробуйте отправить /start боту в Telegram');
+      console.log('[START] Если обновления не приходят, проверьте логи выше');
     } catch (launchError) {
       console.error('[START] ========== ОШИБКА при запуске бота! ==========');
       console.error('[START] Ошибка launch:', launchError);
