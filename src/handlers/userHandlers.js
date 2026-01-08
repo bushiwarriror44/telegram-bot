@@ -178,6 +178,7 @@ export function setupUserHandlers(bot) {
 
 async function showCabinetMenu(ctx) {
     try {
+        console.log('[UserHandlers] showCabinetMenu вызван');
         await userService.saveOrUpdate(ctx.from.id, {
             username: ctx.from.username,
             first_name: ctx.from.first_name,
@@ -187,39 +188,58 @@ async function showCabinetMenu(ctx) {
         const user = await userService.getByChatId(ctx.from.id);
         const balance = user?.balance || 0;
         
-        const text = `
-👤 <b>Личный кабинет</b>
+        const text = `👤 <b>Личный кабинет</b>
 
-👤 ${ctx.from.first_name || 'Пользователь'} ${ctx.from.last_name || ''}
-📱 @${ctx.from.username || 'не указан'}
+🆔 ID: <code>${ctx.from.id}</code>
+👤 Имя: ${ctx.from.first_name || 'Не указано'} ${ctx.from.last_name || ''}
+📱 Username: ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
+📅 Дата регистрации: ${user?.created_at ? new Date(user.created_at).toLocaleDateString('ru-RU') : 'Неизвестно'}
+🕐 Последняя активность: ${user?.last_active ? new Date(user.last_active).toLocaleDateString('ru-RU') + ' ' + new Date(user.last_active).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Неизвестно'}
 
-💰 <b>Баланс: ${balance.toFixed(2)} ₽</b>
-        `.trim();
+💰 <b>Баланс: ${balance.toFixed(2)} ₽</b>`;
 
-        const keyboard = {
-            inline_keyboard: [
-                [{ text: '💳 Пополнить', callback_data: 'topup_balance' }],
-                [{ text: '📦 Мои заказы', callback_data: 'my_orders' }],
-                [{ text: '💵 История пополнений', callback_data: 'topup_history' }],
-                [{ text: '🏠 Главное меню', callback_data: 'back_to_cities' }]
-            ]
+        const keyboard = [
+            [{ text: '💳 Пополнить', callback_data: 'topup_balance' }],
+            [{ text: '📦 Мои заказы', callback_data: 'my_orders' }],
+            [{ text: '💵 История пополнений', callback_data: 'topup_history' }],
+            [{ text: '🏠 Главное меню', callback_data: 'back_to_cities' }]
+        ];
+
+        const replyMarkup = {
+            inline_keyboard: keyboard
         };
+
+        console.log('[UserHandlers] Отправка меню кабинета, keyboard:', JSON.stringify(keyboard));
+        console.log('[UserHandlers] Это callback?', !!ctx.callbackQuery);
 
         // Если это callback (кнопка), используем editMessageText
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(text, {
-                parse_mode: 'HTML',
-                reply_markup: keyboard
-            });
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+                console.log('[UserHandlers] Меню кабинета отправлено через editMessageText');
+            } catch (error) {
+                console.error('[UserHandlers] Ошибка при editMessageText:', error);
+                // Если не удалось изменить, отправляем новое сообщение
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+                console.log('[UserHandlers] Меню кабинета отправлено через reply (fallback)');
+            }
         } else {
             // Если это команда, используем reply
             await ctx.reply(text, {
                 parse_mode: 'HTML',
-                reply_markup: keyboard
+                reply_markup: replyMarkup
             });
+            console.log('[UserHandlers] Меню кабинета отправлено через reply');
         }
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showCabinetMenu:', error);
+        console.error('[UserHandlers] Stack:', error.stack);
         try {
             if (ctx.callbackQuery) {
                 await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
