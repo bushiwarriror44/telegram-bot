@@ -904,10 +904,10 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         );
     });
 
-    // Обработка ответов администратора (должен быть зарегистрирован первым)
+    // Обработка ответов администратора
     bot.on('text', async (ctx) => {
-        // Пропускаем команды (кроме /reply)
-        if (ctx.message.text.startsWith('/') && !ctx.message.text.startsWith('/reply')) {
+        // Пропускаем все команды (включая /start, /reply и другие)
+        if (ctx.message.text.startsWith('/')) {
             return;
         }
 

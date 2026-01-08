@@ -84,7 +84,7 @@ export async function initializeMockData() {
     const value = defaultPackagings[i];
     console.log(`[MOCK] Создание фасовки ${i + 1}/${defaultPackagings.length}:`, value);
     try {
-      await packagingService.getOrCreate(value);
+    await packagingService.getOrCreate(value);
       console.log(`[MOCK] Фасовка ${value} успешно создана/получена`);
     } catch (error) {
       console.error(`[MOCK] ОШИБКА при создании фасовки ${value}:`, error);
@@ -103,25 +103,25 @@ export async function initializeMockData() {
     const cityName = mockCities[i];
     console.log(`[MOCK] Создание города ${i + 1}/${mockCities.length}: ${cityName}`);
     try {
-      const city = await cityService.create(cityName);
+    const city = await cityService.create(cityName);
       console.log(`[MOCK] Город создан: ${cityName}, ID:`, city?.id);
 
-      const products = mockProducts[cityName] || [];
+    const products = mockProducts[cityName] || [];
       console.log(`[MOCK] Товаров для города ${cityName}:`, products.length);
       for (let j = 0; j < products.length; j++) {
         const product = products[j];
         console.log(`[MOCK] Создание товара ${j + 1}/${products.length}: ${product.name}`);
-        // Для примера всем товарам ставим фасовку 1 (можно легко поменять)
-        const packaging = packagingByValue.get(1);
+      // Для примера всем товарам ставим фасовку 1 (можно легко поменять)
+      const packaging = packagingByValue.get(1);
         console.log(`[MOCK] Фасовка для товара:`, packaging ? packaging.id : 'null');
         try {
-          await productService.create(
-            city.id,
-            product.name,
-            product.description,
-            product.price,
-            packaging ? packaging.id : null
-          );
+      await productService.create(
+        city.id,
+        product.name,
+        product.description,
+        product.price,
+        packaging ? packaging.id : null
+      );
           console.log(`[MOCK] Товар создан: ${product.name}`);
         } catch (error) {
           console.error(`[MOCK] ОШИБКА при создании товара ${product.name}:`, error);

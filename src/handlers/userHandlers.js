@@ -17,16 +17,16 @@ export function setupUserHandlers(bot) {
         console.log('[UserHandlers] Username:', ctx.from.username);
         console.log('[UserHandlers] Имя:', ctx.from.first_name);
         try {
-            // Сохраняем пользователя в БД
+        // Сохраняем пользователя в БД
             console.log('[UserHandlers] Сохранение пользователя в БД...');
-            await userService.saveOrUpdate(ctx.from.id, {
-                username: ctx.from.username,
-                first_name: ctx.from.first_name,
-                last_name: ctx.from.last_name
-            });
+        await userService.saveOrUpdate(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            last_name: ctx.from.last_name
+        });
             console.log('[UserHandlers] Пользователь сохранен');
             console.log('[UserHandlers] Показ меню городов...');
-            await showCitiesMenu(ctx);
+        await showCitiesMenu(ctx);
             console.log('[UserHandlers] Меню городов показано');
         } catch (error) {
             console.error('[UserHandlers] ОШИБКА в обработчике /start:', error);
