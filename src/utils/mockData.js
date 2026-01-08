@@ -72,8 +72,90 @@ export async function initializeMockData() {
   console.log('[MOCK] Проверка существующих городов...');
   const existingCities = await cityService.getAll();
   console.log('[MOCK] Найдено городов:', existingCities.length);
-  if (existingCities.length > 0) {
+  
+  // Проверяем наличие товаров
+  console.log('[MOCK] Проверка существующих товаров...');
+  let totalProducts = 0;
+  for (const city of existingCities) {
+    const cityProducts = await productService.getByCityId(city.id);
+    totalProducts += cityProducts.length;
+    console.log(`[MOCK] В городе ${city.name} товаров:`, cityProducts.length);
+  }
+  console.log('[MOCK] Всего товаров:', totalProducts);
+  
+  // Если есть и города, и товары - пропускаем инициализацию
+  if (existingCities.length > 0 && totalProducts > 0) {
     console.log('[MOCK] Данные уже существуют, пропускаем инициализацию');
+    return;
+  }
+  
+  // Если есть города, но нет товаров - создаем только товары
+  if (existingCities.length > 0 && totalProducts === 0) {
+    console.log('[MOCK] Города есть, но товаров нет. Создаем товары для существующих городов...');
+    
+    // Создаем базовые фасовки если их нет
+    const packagingList = await packagingService.getAll();
+    if (packagingList.length === 0) {
+      console.log('[MOCK] Создание базовых фасовок...');
+      for (const value of defaultPackagings) {
+        await packagingService.getOrCreate(value);
+      }
+    }
+    const packagingListAfter = await packagingService.getAll();
+    const packagingByValue = new Map(
+      packagingListAfter.map((p) => [p.value, p])
+    );
+    
+    // Создаем товары для существующих городов
+    for (const city of existingCities) {
+      const products = mockProducts[city.name] || [];
+      if (products.length > 0) {
+        console.log(`[MOCK] Создание товаров для города ${city.name}...`);
+        const packaging = packagingByValue.get(1);
+        for (const product of products) {
+          try {
+            await productService.create(
+              city.id,
+              product.name,
+              product.description,
+              product.price,
+              packaging ? packaging.id : null
+            );
+            console.log(`[MOCK] Товар создан: ${product.name} для города ${city.name}`);
+          } catch (error) {
+            console.error(`[MOCK] ОШИБКА при создании товара ${product.name}:`, error);
+          }
+        }
+      }
+    }
+    
+    // Создаем методы оплаты если их нет
+    const existingPayments = await paymentService.getAllMethods(true);
+    if (existingPayments.length === 0) {
+      console.log('[MOCK] Создание методов оплаты...');
+      for (const method of paymentMethods) {
+        await paymentService.createMethod(method.name, method.network, 'crypto');
+      }
+      await paymentService.createMethod('Карта', 'CARD', 'card');
+    }
+    
+    // Создаем карточные счета если их нет
+    const existingCards = await cardAccountService.getAll(false);
+    if (existingCards.length === 0) {
+      console.log('[MOCK] Создание карточных счетов...');
+      const mockCardAccounts = [
+        { name: 'Альфа-Банк', accountNumber: '5536 9141 2345 6789' },
+        { name: 'Т-Банк', accountNumber: '4111 1111 1111 1111' },
+        { name: 'СБП', accountNumber: '+7 900 123-45-67' },
+        { name: 'Visa', accountNumber: '4532 1234 5678 9010' },
+        { name: 'Mastercard', accountNumber: '5555 5555 5555 4444' }
+      ];
+      for (const card of mockCardAccounts) {
+        await cardAccountService.create(card.name, card.accountNumber);
+      }
+    }
+    
+    console.log('[MOCK] Товары для существующих городов созданы!');
     return;
   }
 
