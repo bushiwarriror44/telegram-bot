@@ -1,9 +1,10 @@
 import { Telegraf } from 'telegraf';
 import { config } from './config/index.js';
 import { database } from './database/db.js';
-import { setupUserHandlers } from './handlers/userHandlers.js';
-import { setupAdminHandlers } from './handlers/adminHandlers.js';
+import { setupUserHandlers, setAdminSessions } from './handlers/userHandlers.js';
+import { setupAdminHandlers, adminSessions } from './handlers/adminHandlers.js';
 import { initializeMockData } from './utils/mockData.js';
+import { menuButtonService } from './services/menuButtonService.js';
 
 async function startBot() {
   try {
@@ -80,6 +81,11 @@ async function startBot() {
     console.log('[START] Настройка админ-обработчиков (ПЕРВЫМИ, чтобы команды /apanel обрабатывались)...');
     setupAdminHandlers(bot);
     console.log('[START] Админ-обработчики настроены');
+    
+    // Передаем adminSessions в userHandlers для проверки админов
+    setAdminSessions(adminSessions);
+    console.log('[START] adminSessions переданы в userHandlers');
+    
     console.log('[START] Настройка пользовательских обработчиков...');
     setupUserHandlers(bot);
     console.log('[START] Пользовательские обработчики настроены');

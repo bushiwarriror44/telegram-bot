@@ -7,6 +7,7 @@ import { userService } from '../services/userService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
 import { supportService } from '../services/supportService.js';
 import { settingsService } from '../services/settingsService.js';
+import { menuButtonService } from '../services/menuButtonService.js';
 import { database } from '../database/db.js';
 import { readFileSync, writeFileSync, existsSync, copyFileSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
@@ -14,6 +15,9 @@ import { fileURLToPath } from 'url';
 import sqlite3 from 'sqlite3';
 
 const adminSessions = new Map(); // Хранит активные сессии админов
+
+// Экспортируем adminSessions для использования в userHandlers
+export { adminSessions };
 const notificationSessions = new Map(); // Хранит сессии создания уведомлений (userId -> true)
 const importPaymentMode = new Map(); // userId -> true (режим загрузки платежных данных)
 const importProductMode = new Map(); // userId -> true (режим загрузки товаров)
@@ -92,6 +96,13 @@ export function setupAdminHandlers(bot) {
                     console.error('[AdminHandlers] Критическая ошибка при настройке меню команд:', error);
                     // Продолжаем выполнение даже если меню не установилось
                 }
+
+                // Скрываем reply keyboard для админа
+                await ctx.reply('Кнопки меню скрыты для администратора.', {
+                    reply_markup: {
+                        remove_keyboard: true
+                    }
+                });
 
                 // Показываем админ-панель
                 console.log('[AdminHandlers] Показ админ-панели...');
@@ -173,6 +184,7 @@ ${addressesText}
                     [{ text: '📢 Создать уведомление', callback_data: 'admin_notification' }],
                     [{ text: '💾 Данные', callback_data: 'admin_data' }],
                     [{ text: '👋 Настройка приветственного сообщения', callback_data: 'admin_welcome' }],
+                    [{ text: '🔘 Настройка кнопок', callback_data: 'admin_menu_buttons' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
             }
@@ -219,6 +231,11 @@ ${addressesText}
         await showWelcomeSettings(ctx);
     });
 
+    bot.action('admin_menu_buttons', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showMenuButtonsAdmin(ctx);
+    });
+
     bot.action('admin_logout', async (ctx) => {
         adminSessions.delete(ctx.from.id);
         notificationSessions.delete(ctx.from.id);
@@ -246,6 +263,23 @@ ${addressesText}
         }
 
         await ctx.editMessageText('✅ Вы вышли из админ-панели. Пользовательское меню восстановлено.');
+
+        // Показываем reply keyboard снова
+        const topButtons = [
+            ['Каталог', 'Мой кабинет'],
+            ['Помощь', 'Отзывы']
+        ];
+        const menuButtons = await menuButtonService.getAll(true);
+        const dynamicButtons = menuButtons.map(btn => [btn.name]);
+        const keyboard = [...topButtons, ...dynamicButtons];
+
+        await ctx.reply('Выберите действие:', {
+            reply_markup: {
+                keyboard: keyboard,
+                resize_keyboard: true,
+                one_time_keyboard: false
+            }
+        });
     });
 
     // Управление уведомлениями
@@ -1034,6 +1068,7 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 adminReplyMode.delete(ctx.from.id);
                 welcomeEditMode.delete(ctx.from.id);
                 databaseImportMode.delete(ctx.from.id);
+                menuButtonEditMode.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showAdminPanel(ctx);
                 return; // Не передаем дальше, так как команда обработана
@@ -1057,6 +1092,52 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             } catch (error) {
                 console.error('[AdminHandlers] Ошибка при сохранении приветственного сообщения:', error);
                 await ctx.reply('❌ Ошибка при сохранении приветственного сообщения: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка добавления/редактирования кнопок меню
+        if (menuButtonEditMode.has(ctx.from.id)) {
+            try {
+                const editData = menuButtonEditMode.get(ctx.from.id);
+                const text = ctx.message.text;
+
+                // Парсим формат: "Название|Сообщение"
+                const parts = text.split('|');
+                if (parts.length !== 2) {
+                    await ctx.reply('❌ Неверный формат. Используйте: <code>Название кнопки|Текст сообщения</code>', { parse_mode: 'HTML' });
+                    return;
+                }
+
+                const name = parts[0].trim();
+                const message = parts[1].trim();
+
+                if (!name || !message) {
+                    await ctx.reply('❌ Название и сообщение не могут быть пустыми.');
+                    return;
+                }
+
+                if (editData.mode === 'add') {
+                    // Добавляем новую кнопку
+                    const buttons = await menuButtonService.getAll(false);
+                    const maxOrder = buttons.length > 0
+                        ? Math.max(...buttons.map(b => b.order_index || 0))
+                        : -1;
+
+                    await menuButtonService.create(name, message, maxOrder + 1);
+                    menuButtonEditMode.delete(ctx.from.id);
+                    await ctx.reply('✅ Кнопка успешно добавлена!');
+                    await showMenuButtonsAdmin(ctx);
+                } else if (editData.mode === 'edit' && editData.id) {
+                    // Редактируем существующую кнопку
+                    await menuButtonService.update(editData.id, { name, message });
+                    menuButtonEditMode.delete(ctx.from.id);
+                    await ctx.reply('✅ Кнопка успешно обновлена!');
+                    await showMenuButtonsAdmin(ctx);
+                }
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении кнопки меню:', error);
+                await ctx.reply('❌ Ошибка при сохранении кнопки: ' + error.message);
             }
             return;
         }
@@ -1740,6 +1821,156 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             'Для отмены отправьте /cancel',
             { parse_mode: 'HTML' }
         );
+    });
+
+    // Управление кнопками меню
+    const menuButtonEditMode = new Map(); // userId -> { mode: 'add'|'edit', id?: number }
+    const menuButtonDeleteMode = new Map(); // userId -> true
+
+    async function showMenuButtonsAdmin(ctx) {
+        if (!isAdmin(ctx.from.id)) {
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
+            } else {
+                await ctx.reply('❌ У вас нет доступа к админ-панели.');
+            }
+            return;
+        }
+
+        const buttons = await menuButtonService.getAll(false);
+        const enabledButtons = buttons.filter(b => b.enabled === 1);
+        const disabledButtons = buttons.filter(b => b.enabled === 0);
+
+        let text = '🔘 <b>Настройка кнопок меню</b>\n\n';
+
+        if (enabledButtons.length > 0) {
+            text += '<b>Активные кнопки:</b>\n';
+            enabledButtons.forEach((btn, index) => {
+                text += `${index + 1}. ${btn.name}\n`;
+            });
+            text += '\n';
+        }
+
+        if (disabledButtons.length > 0) {
+            text += '<b>Отключенные кнопки:</b>\n';
+            disabledButtons.forEach((btn, index) => {
+                text += `${index + 1}. ${btn.name} (отключена)\n`;
+            });
+            text += '\n';
+        }
+
+        if (buttons.length === 0) {
+            text += 'Кнопок пока нет.\n\n';
+        }
+
+        const keyboard = {
+            inline_keyboard: [
+                [{ text: '➕ Добавить кнопку', callback_data: 'admin_menu_button_add' }],
+                [{ text: '✏️ Редактировать кнопку', callback_data: 'admin_menu_button_edit' }],
+                [{ text: '🗑️ Удалить кнопку', callback_data: 'admin_menu_button_delete' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    }
+
+    bot.action('admin_menu_button_add', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        menuButtonEditMode.set(ctx.from.id, { mode: 'add' });
+        await ctx.reply(
+            '➕ <b>Добавление новой кнопки</b>\n\n' +
+            'Отправьте данные в формате:\n' +
+            '<code>Название кнопки|Текст сообщения</code>\n\n' +
+            'Пример:\n' +
+            '<code>Оператор|Свяжитесь с оператором: @operator</code>\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    bot.action('admin_menu_button_edit', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const buttons = await menuButtonService.getAll(false);
+
+        if (buttons.length === 0) {
+            await ctx.editMessageText('Нет кнопок для редактирования.');
+            return;
+        }
+
+        const keyboard = buttons.map(btn => [
+            { text: `${btn.name}${btn.enabled === 0 ? ' (отключена)' : ''}`, callback_data: `admin_menu_button_edit_${btn.id}` }
+        ]);
+        keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_menu_buttons' }]);
+
+        await ctx.editMessageText('Выберите кнопку для редактирования:', {
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    });
+
+    bot.action(/^admin_menu_button_edit_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const buttonId = parseInt(ctx.match[1]);
+        const button = await menuButtonService.getById(buttonId);
+
+        if (!button) {
+            await ctx.editMessageText('Кнопка не найдена.');
+            return;
+        }
+
+        menuButtonEditMode.set(ctx.from.id, { mode: 'edit', id: buttonId });
+        await ctx.reply(
+            `✏️ <b>Редактирование кнопки: ${button.name}</b>\n\n` +
+            'Отправьте новые данные в формате:\n' +
+            '<code>Название кнопки|Текст сообщения</code>\n\n' +
+            `Текущие данные:\n` +
+            `Название: ${button.name}\n` +
+            `Сообщение: ${button.message.substring(0, 50)}${button.message.length > 50 ? '...' : ''}\n\n` +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    bot.action('admin_menu_button_delete', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const buttons = await menuButtonService.getAll(false);
+
+        if (buttons.length === 0) {
+            await ctx.editMessageText('Нет кнопок для удаления.');
+            return;
+        }
+
+        const keyboard = buttons.map(btn => [
+            { text: `🗑️ ${btn.name}`, callback_data: `admin_menu_button_del_${btn.id}` }
+        ]);
+        keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_menu_buttons' }]);
+
+        await ctx.editMessageText('Выберите кнопку для удаления:', {
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    });
+
+    bot.action(/^admin_menu_button_del_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const buttonId = parseInt(ctx.match[1]);
+
+        try {
+            await menuButtonService.delete(buttonId);
+            await ctx.editMessageText('✅ Кнопка успешно удалена!');
+            await showMenuButtonsAdmin(ctx);
+        } catch (error) {
+            await ctx.editMessageText(`❌ Ошибка: ${error.message}`);
+        }
     });
 
     console.log('[AdminHandlers] Админ-обработчики успешно настроены');

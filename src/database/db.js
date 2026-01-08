@@ -269,6 +269,19 @@ class Database {
       )
     `);
 
+    // Таблица кнопок меню
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS menu_buttons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        message TEXT NOT NULL,
+        order_index INTEGER DEFAULT 0,
+        enabled INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Миграция: добавляем колонку packaging_id в существующую таблицу products при необходимости
     const productColumns = await this.db.all('PRAGMA table_info(products)');
     const hasPackagingId = productColumns.some((col) => col.name === 'packaging_id');
@@ -322,6 +335,12 @@ class Database {
     );
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_topups_created_at ON topups(created_at)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_menu_buttons_enabled ON menu_buttons(enabled)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_menu_buttons_order ON menu_buttons(order_index)'
     );
 
     console.log('[DB.init] Все индексы созданы');

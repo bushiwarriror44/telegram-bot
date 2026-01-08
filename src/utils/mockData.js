@@ -3,6 +3,7 @@ import { productService } from '../services/productService.js';
 import { paymentService } from '../services/paymentService.js';
 import { packagingService } from '../services/packagingService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
+import { menuButtonService } from '../services/menuButtonService.js';
 
 const mockCities = [
   'Москва',
@@ -238,6 +239,29 @@ export async function initializeMockData() {
   for (const card of mockCardAccounts) {
     await cardAccountService.create(card.name, card.accountNumber);
     console.log(`Создан карточный счет: ${card.name} - ${card.accountNumber}`);
+  }
+
+  // Инициализация предустановленных кнопок меню
+  console.log('[MOCK] Инициализация предустановленных кнопок меню...');
+  const existingButtons = await menuButtonService.getAll(false);
+  
+  const defaultButtons = [
+    { name: 'Оператор', message: 'Свяжитесь с оператором: @operator' },
+    { name: 'Сайт', message: 'Наш сайт: https://example.com' },
+    { name: 'Сайт автопродаж', message: 'Сайт автопродаж: https://autosales.example.com' },
+    { name: 'Трудоустройство', message: 'Информация о трудоустройстве: @hr' },
+    { name: 'Инфо-канал', message: 'Наш информационный канал: @info_channel' }
+  ];
+
+  for (const defaultBtn of defaultButtons) {
+    const existing = existingButtons.find(b => b.name === defaultBtn.name);
+    if (!existing) {
+      await menuButtonService.create(defaultBtn.name, defaultBtn.message, existingButtons.length);
+      console.log(`[MOCK] Создана кнопка меню: ${defaultBtn.name}`);
+      existingButtons.push({ name: defaultBtn.name, message: defaultBtn.message });
+    } else {
+      console.log(`[MOCK] Кнопка меню уже существует: ${defaultBtn.name}`);
+    }
   }
 
   console.log('Моковые данные успешно инициализированы!');

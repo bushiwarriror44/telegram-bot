@@ -5,9 +5,57 @@ import { cardAccountService } from '../services/cardAccountService.js';
 import { userService } from '../services/userService.js';
 import { supportService } from '../services/supportService.js';
 import { settingsService } from '../services/settingsService.js';
+import { menuButtonService } from '../services/menuButtonService.js';
 
 // Хранит пользователей, которые находятся в режиме поддержки
 const supportMode = new Map();
+
+// Импортируем adminSessions для проверки, является ли пользователь админом
+let adminSessions = null;
+
+// Функция для установки adminSessions (вызывается из adminHandlers)
+export function setAdminSessions(sessions) {
+    adminSessions = sessions;
+}
+
+// Функция для проверки, является ли пользователь админом
+function isAdmin(userId) {
+    return adminSessions && adminSessions.has(userId);
+}
+
+// Функция для получения reply keyboard с кнопками меню
+async function getMenuKeyboard() {
+    const topButtons = [
+        ['Каталог', 'Мой кабинет'],
+        ['Помощь', 'Отзывы']
+    ];
+    
+    // Получаем динамические кнопки из БД
+    const menuButtons = await menuButtonService.getAll(true);
+    const dynamicButtons = menuButtons.map(btn => [btn.name]);
+    
+    // Объединяем верхние кнопки и динамические
+    const keyboard = [...topButtons, ...dynamicButtons];
+    
+    return {
+        keyboard: keyboard,
+        resize_keyboard: true,
+        one_time_keyboard: false
+    };
+}
+
+// Функция для показа reply keyboard (скрывает для админов)
+async function showMenuKeyboard(ctx) {
+    // Если пользователь админ, не показываем кнопки меню
+    if (isAdmin(ctx.from.id)) {
+        return;
+    }
+    
+    const keyboard = await getMenuKeyboard();
+    await ctx.reply('Выберите действие:', {
+        reply_markup: keyboard
+    });
+}
 
 export function setupUserHandlers(bot) {
     console.log('[UserHandlers] Настройка пользовательских обработчиков...');
@@ -37,6 +85,9 @@ export function setupUserHandlers(bot) {
                 disable_web_page_preview: false
             });
 
+            // Показываем reply keyboard с кнопками меню (если пользователь не админ)
+            await showMenuKeyboard(ctx);
+            
             console.log('[UserHandlers] Показ меню городов...');
             await showCitiesMenu(ctx);
             console.log('[UserHandlers] Меню городов показано');
@@ -164,6 +215,28 @@ export function setupUserHandlers(bot) {
         await showHelpMenu(ctx);
     });
 
+    // Обработчики для текстовых кнопок меню
+    bot.hears('Каталог', async (ctx) => {
+        await userService.saveOrUpdate(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            last_name: ctx.from.last_name
+        });
+        await showCitiesMenu(ctx);
+    });
+
+    bot.hears('Мой кабинет', async (ctx) => {
+        await showCabinetMenu(ctx);
+    });
+
+    bot.hears('Помощь', async (ctx) => {
+        await showHelpMenu(ctx);
+    });
+
+    bot.hears('Отзывы', async (ctx) => {
+        await ctx.reply('📝 Отзывы:\n\n(Здесь будет информация об отзывах)');
+    });
+
     // Обработка текстовых сообщений от пользователей (когда они пишут в поддержку)
     // ВАЖНО: Этот обработчик должен регистрироваться ПОСЛЕ всех bot.command(),
     // чтобы команды обрабатывались первыми
@@ -186,6 +259,20 @@ export function setupUserHandlers(bot) {
             await supportService.saveUserMessage(ctx.from.id, ctx.message.text);
             await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!');
             supportMode.delete(ctx.from.id);
+            return;
+        }
+
+        // Обработка динамических кнопок меню
+        const menuButtons = await menuButtonService.getAll(true);
+        const clickedButton = menuButtons.find(btn => btn.name === ctx.message.text);
+        
+        if (clickedButton) {
+            await userService.saveOrUpdate(ctx.from.id, {
+                username: ctx.from.username,
+                first_name: ctx.from.first_name,
+                last_name: ctx.from.last_name
+            });
+            await ctx.reply(clickedButton.message, { parse_mode: 'HTML' });
             return;
         }
     });
