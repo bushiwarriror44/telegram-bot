@@ -211,6 +211,40 @@ class Database {
       )
     `);
 
+    // Таблица настроек бота
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT NOT NULL UNIQUE,
+        value TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Инициализация приветственного сообщения по умолчанию
+    const defaultWelcomeMessage = `💎 Добро пожаловать 🎯 TEST BOT 🎯
+Наши актуальные контакты: @testbot
+‼️‼️‼️ Внимание‼️‼️‼️
+🌟🌟🌟 Уважаемые покупатели! 🌟🌟🌟
+
+✅ В боте и на сайте доступны удобные способы оплаты на карту!
+• Для успешных покупок выберите в боте метод оплаты ТРАНСГРАН и используйте одно из приложений:
+🏧 KwikPay, 〽️ Sendy, 👑 Золотая Корона.
+
+✅ Оплата через криптовалюту доступна круглосуточно, без сбоев.
+
+Если у вас есть вопросы, не стесняйтесь обращаться в 🔝 техподдержку 🔝 – мы всегда готовы помочь!
+❣️ Мы рады помочь вам! ❣️
+@testbot`;
+
+    const existingWelcome = await this.get('SELECT * FROM settings WHERE key = ?', ['welcome_message']);
+    if (!existingWelcome) {
+      await this.run(
+        'INSERT INTO settings (key, value) VALUES (?, ?)',
+        ['welcome_message', defaultWelcomeMessage]
+      );
+    }
+
     // Таблица карточных счетов
     await this.run(`
       CREATE TABLE IF NOT EXISTS card_accounts (
@@ -275,7 +309,7 @@ class Database {
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_support_messages_created_at ON support_messages(created_at)'
     );
-    
+
     // Индексы для новых таблиц
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_orders_user_chat_id ON orders(user_chat_id)'
@@ -289,7 +323,7 @@ class Database {
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_topups_created_at ON topups(created_at)'
     );
-    
+
     console.log('[DB.init] Все индексы созданы');
     console.log('[DB.init] Инициализация БД завершена успешно');
   }
@@ -301,6 +335,23 @@ class Database {
         else resolve();
       });
     });
+  }
+
+  async reconnect() {
+    // Закрываем текущее подключение
+    await this.close();
+
+    // Пересоздаем подключение
+    const dbPath = config.dbPath.startsWith('./') || config.dbPath.startsWith('../')
+      ? join(__dirname, '../..', config.dbPath)
+      : config.dbPath;
+
+    this.db = new sqlite3.Database(dbPath);
+    this.db.get = promisify(this.db.get.bind(this.db));
+    this.db.all = promisify(this.db.all.bind(this.db));
+
+    // Инициализируем БД (создаем таблицы если их нет)
+    await this.init();
   }
 }
 

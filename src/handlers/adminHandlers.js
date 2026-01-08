@@ -6,6 +6,12 @@ import { packagingService } from '../services/packagingService.js';
 import { userService } from '../services/userService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
 import { supportService } from '../services/supportService.js';
+import { settingsService } from '../services/settingsService.js';
+import { database } from '../database/db.js';
+import { readFileSync, writeFileSync, existsSync, copyFileSync, unlinkSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import sqlite3 from 'sqlite3';
 
 const adminSessions = new Map(); // Хранит активные сессии админов
 const notificationSessions = new Map(); // Хранит сессии создания уведомлений (userId -> true)
@@ -166,6 +172,7 @@ ${addressesText}
                     [{ text: '💬 Чаты', callback_data: 'admin_chats' }],
                     [{ text: '📢 Создать уведомление', callback_data: 'admin_notification' }],
                     [{ text: '💾 Данные', callback_data: 'admin_data' }],
+                    [{ text: '👋 Настройка приветственного сообщения', callback_data: 'admin_welcome' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
             }
@@ -205,6 +212,11 @@ ${addressesText}
     bot.action('admin_data', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showDataMenu(ctx);
+    });
+
+    bot.action('admin_welcome', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showWelcomeSettings(ctx);
     });
 
     bot.action('admin_logout', async (ctx) => {
@@ -998,6 +1010,8 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
 
     // Хранит пользователей, которым администратор отвечает
     const adminReplyMode = new Map();
+    const welcomeEditMode = new Map(); // userId -> true (режим редактирования приветственного сообщения)
+    const databaseImportMode = new Map(); // userId -> true (режим загрузки БД)
 
     bot.action(/^admin_reply_(\d+)$/, async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
@@ -1018,8 +1032,10 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 importPaymentMode.delete(ctx.from.id);
                 importProductMode.delete(ctx.from.id);
                 adminReplyMode.delete(ctx.from.id);
+                welcomeEditMode.delete(ctx.from.id);
+                databaseImportMode.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
-                await showDataMenu(ctx);
+                await showAdminPanel(ctx);
             }
             // Для всех остальных команд просто возвращаемся, чтобы они обрабатывались другими обработчиками
             return;
@@ -1027,6 +1043,21 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
 
         // Далее обрабатываем только для админов
         if (!isAdmin(ctx.from.id)) return;
+
+        // Обработка редактирования приветственного сообщения
+        if (welcomeEditMode.has(ctx.from.id)) {
+            try {
+                const newMessage = ctx.message.text;
+                await settingsService.setWelcomeMessage(newMessage);
+                welcomeEditMode.delete(ctx.from.id);
+                await ctx.reply('✅ Приветственное сообщение успешно обновлено!');
+                await showWelcomeSettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении приветственного сообщения:', error);
+                await ctx.reply('❌ Ошибка при сохранении приветственного сообщения: ' + error.message);
+            }
+            return;
+        }
 
         // Обработка загрузки платежных адресов
         if (importPaymentMode.has(ctx.from.id)) {
@@ -1182,6 +1213,250 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         }
     });
 
+    // Обработка загрузки документов (SQL файлов БД)
+    bot.on('document', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+
+        // Проверяем, находится ли администратор в режиме загрузки БД
+        if (databaseImportMode.has(ctx.from.id)) {
+            try {
+                const document = ctx.message.document;
+
+                // Проверяем, что это SQL файл
+                if (!document.file_name || !document.file_name.endsWith('.sql')) {
+                    await ctx.reply('❌ Ошибка: Файл должен иметь расширение .sql');
+                    return;
+                }
+
+                await ctx.reply('📥 Загрузка SQL файла...');
+
+                // Получаем файл
+                const file = await bot.telegram.getFile(document.file_id);
+                const fileUrl = `https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`;
+
+                // Скачиваем файл
+                const response = await fetch(fileUrl);
+                const sqlContent = await response.text();
+
+                await ctx.reply('💾 Создание резервной копии текущей БД...');
+
+                // Создаем резервную копию текущей БД
+                const __filename = fileURLToPath(import.meta.url);
+                const __dirname = dirname(__filename);
+                const dbPath = config.dbPath.startsWith('./') || config.dbPath.startsWith('../')
+                    ? join(__dirname, '../..', config.dbPath)
+                    : config.dbPath;
+
+                const backupPath = `${dbPath}.backup_${Date.now()}`;
+                if (existsSync(dbPath)) {
+                    copyFileSync(dbPath, backupPath);
+                }
+
+                await ctx.reply('🔄 Восстановление БД из SQL файла...');
+
+                // Закрываем текущее подключение к БД
+                await database.close();
+
+                // Создаем новую БД из SQL файла
+                const newDb = new sqlite3.Database(dbPath);
+
+                // Выполняем SQL команды из файла
+                const statements = sqlContent
+                    .split(';')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0 && !s.startsWith('--'));
+
+                for (const statement of statements) {
+                    await new Promise((resolve, reject) => {
+                        newDb.run(statement, (err) => {
+                            if (err) {
+                                console.error('[AdminHandlers] Ошибка при выполнении SQL:', err);
+                                console.error('[AdminHandlers] SQL:', statement.substring(0, 100));
+                            }
+                            resolve();
+                        });
+                    });
+                }
+
+                newDb.close();
+
+                // Переподключаемся к БД
+                await database.reconnect();
+
+                databaseImportMode.delete(ctx.from.id);
+                await ctx.reply(
+                    '✅ <b>База данных успешно загружена!</b>\n\n' +
+                    `Резервная копия сохранена: ${backupPath}\n\n` +
+                    '⚠️ Рекомендуется перезапустить бота для применения изменений.',
+                    { parse_mode: 'HTML' }
+                );
+                await showDataMenu(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при загрузке БД:', error);
+                await ctx.reply('❌ Ошибка при загрузке БД: ' + error.message);
+            }
+            return;
+        }
+    });
+
+    // Обработка загрузки документов (SQL файлов БД)
+    bot.on('document', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+
+        // Проверяем, находится ли администратор в режиме загрузки БД
+        if (databaseImportMode.has(ctx.from.id)) {
+            try {
+                const document = ctx.message.document;
+
+                // Проверяем, что это SQL файл
+                if (!document.file_name || !document.file_name.endsWith('.sql')) {
+                    await ctx.reply('❌ Ошибка: Файл должен иметь расширение .sql');
+                    return;
+                }
+
+                await ctx.reply('📥 Загрузка SQL файла...');
+
+                // Получаем файл
+                const file = await bot.telegram.getFile(document.file_id);
+                const fileUrl = `https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`;
+
+                // Скачиваем файл
+                const response = await fetch(fileUrl);
+                const sqlContent = await response.text();
+
+                await ctx.reply('💾 Создание резервной копии текущей БД...');
+
+                // Создаем резервную копию текущей БД
+                const __filename = fileURLToPath(import.meta.url);
+                const __dirname = dirname(__filename);
+                const dbPath = config.dbPath.startsWith('./') || config.dbPath.startsWith('../')
+                    ? join(__dirname, '../..', config.dbPath)
+                    : config.dbPath;
+
+                const backupPath = `${dbPath}.backup_${Date.now()}`;
+                if (existsSync(dbPath)) {
+                    copyFileSync(dbPath, backupPath);
+                }
+
+                await ctx.reply('🔄 Восстановление БД из SQL файла...');
+
+                // Закрываем текущее подключение к БД
+                await database.close();
+
+                // Удаляем старую БД
+                if (existsSync(dbPath)) {
+                    unlinkSync(dbPath);
+                }
+
+                // Создаем новую БД из SQL файла
+                const newDb = new sqlite3.Database(dbPath);
+
+                // Выполняем SQL команды из файла
+                const statements = sqlContent
+                    .split(';')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0 && !s.startsWith('--'));
+
+                for (const statement of statements) {
+                    await new Promise((resolve, reject) => {
+                        newDb.run(statement, (err) => {
+                            if (err) {
+                                console.error('[AdminHandlers] Ошибка при выполнении SQL:', err);
+                                console.error('[AdminHandlers] SQL:', statement.substring(0, 100));
+                            }
+                            resolve();
+                        });
+                    });
+                }
+
+                newDb.close();
+
+                // Переподключаемся к БД
+                await database.reconnect();
+
+                databaseImportMode.delete(ctx.from.id);
+                await ctx.reply(
+                    '✅ <b>База данных успешно загружена!</b>\n\n' +
+                    `Резервная копия сохранена: ${backupPath}\n\n` +
+                    '⚠️ Рекомендуется перезапустить бота для применения изменений.',
+                    { parse_mode: 'HTML' }
+                );
+                await showDataMenu(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при загрузке БД:', error);
+                await ctx.reply('❌ Ошибка при загрузке БД: ' + error.message);
+            }
+            return;
+        }
+    });
+
+    // Настройка приветственного сообщения
+    async function showWelcomeSettings(ctx) {
+        if (!isAdmin(ctx.from.id)) {
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
+            } else {
+                await ctx.reply('❌ У вас нет доступа к админ-панели.');
+            }
+            return;
+        }
+
+        const currentMessage = await settingsService.getWelcomeMessage();
+
+        const text = `
+👋 <b>Настройка приветственного сообщения</b>
+
+Текущее приветственное сообщение:
+
+<pre>${currentMessage.substring(0, 200)}${currentMessage.length > 200 ? '...' : ''}</pre>
+
+Выберите действие:
+        `.trim();
+
+        const keyboard = {
+            inline_keyboard: [
+                [{ text: '✏️ Редактировать сообщение', callback_data: 'edit_welcome' }],
+                [{ text: '👁️ Просмотреть полный текст', callback_data: 'view_welcome' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    }
+
+    bot.action('edit_welcome', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        welcomeEditMode.set(ctx.from.id, true);
+        await ctx.reply(
+            '✏️ <b>Редактирование приветственного сообщения</b>\n\n' +
+            'Отправьте новое приветственное сообщение.\n' +
+            'Вы можете использовать HTML разметку для форматирования.\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    bot.action('view_welcome', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const currentMessage = await settingsService.getWelcomeMessage();
+        await ctx.reply(
+            '👁️ <b>Текущее приветственное сообщение:</b>\n\n' +
+            `<pre>${currentMessage}</pre>`,
+            { parse_mode: 'HTML' }
+        );
+        await showWelcomeSettings(ctx);
+    });
+
     // Меню работы с данными
     async function showDataMenu(ctx) {
         if (!isAdmin(ctx.from.id)) {
@@ -1210,6 +1485,8 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 [{ text: '📥 Выгрузить все фасовки', callback_data: 'export_packagings' }],
                 [{ text: '📤 Загрузить готовые платежные адреса', callback_data: 'import_payments' }],
                 [{ text: '📤 Загрузить готовые товары', callback_data: 'import_products' }],
+                [{ text: '💾 ВЫГРУЗИТЬ БД', callback_data: 'export_database' }],
+                [{ text: '📥 ЗАГРУЗИТЬ БД', callback_data: 'import_database' }],
                 [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
             ]
         };
@@ -1365,6 +1642,103 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         await exportPackagings(ctx);
     });
 
+    // Выгрузка базы данных в SQL формат
+    async function exportDatabase(ctx) {
+        try {
+            await ctx.reply('💾 Создание SQL дампа базы данных...');
+
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            const dbPath = config.dbPath.startsWith('./') || config.dbPath.startsWith('../')
+                ? join(__dirname, '../..', config.dbPath)
+                : config.dbPath;
+
+            // Получаем все таблицы
+            const tables = await database.all(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            );
+
+            let sqlDump = '-- SQL Dump of Telegram Bot Database\n';
+            sqlDump += `-- Generated: ${new Date().toISOString()}\n\n`;
+
+            // Для каждой таблицы получаем структуру и данные
+            for (const table of tables) {
+                const tableName = table.name;
+
+                // Получаем CREATE TABLE statement
+                const createTable = await database.get(
+                    `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`,
+                    [tableName]
+                );
+
+                if (createTable && createTable.sql) {
+                    sqlDump += `-- Table: ${tableName}\n`;
+                    sqlDump += `${createTable.sql};\n\n`;
+                }
+
+                // Получаем все данные из таблицы
+                const rows = await database.all(`SELECT * FROM ${tableName}`);
+
+                if (rows.length > 0) {
+                    // Получаем названия колонок
+                    const columns = Object.keys(rows[0]);
+
+                    // Создаем INSERT statements
+                    for (const row of rows) {
+                        const values = columns.map(col => {
+                            const value = row[col];
+                            if (value === null) return 'NULL';
+                            if (typeof value === 'string') {
+                                return `'${value.replace(/'/g, "''")}'`;
+                            }
+                            return value;
+                        });
+                        sqlDump += `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${values.join(', ')});\n`;
+                    }
+                    sqlDump += '\n';
+                }
+            }
+
+            // Сохраняем во временный файл
+            const tempFilePath = join(__dirname, '../../database', `backup_${Date.now()}.sql`);
+            writeFileSync(tempFilePath, sqlDump, 'utf8');
+
+            // Отправляем файл администратору
+            await ctx.replyWithDocument(
+                { source: tempFilePath, filename: `database_backup_${Date.now()}.sql` },
+                {
+                    caption: '💾 <b>SQL дамп базы данных</b>\n\nФайл готов к загрузке.',
+                    parse_mode: 'HTML'
+                }
+            );
+
+            // Удаляем временный файл
+            unlinkSync(tempFilePath);
+
+            await showDataMenu(ctx);
+        } catch (error) {
+            console.error('[AdminHandlers] Ошибка при выгрузке БД:', error);
+            await ctx.reply('❌ Ошибка при выгрузке БД: ' + error.message);
+        }
+    }
+
+    bot.action('export_database', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await exportDatabase(ctx);
+    });
+
+    bot.action('import_database', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        databaseImportMode.set(ctx.from.id, true);
+        await ctx.reply(
+            '📥 <b>Загрузка базы данных</b>\n\n' +
+            '⚠️ <b>ВНИМАНИЕ!</b> Текущая база данных будет заменена загруженной!\n' +
+            'Резервная копия текущей БД будет создана автоматически.\n\n' +
+            'Отправьте SQL файл базы данных.\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
 
     console.log('[AdminHandlers] Админ-обработчики успешно настроены');
     console.log('[AdminHandlers] Зарегистрированы команды: /apanel и другие админ-команды');

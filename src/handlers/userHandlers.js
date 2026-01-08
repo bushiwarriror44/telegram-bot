@@ -4,6 +4,7 @@ import { paymentService } from '../services/paymentService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
 import { userService } from '../services/userService.js';
 import { supportService } from '../services/supportService.js';
+import { settingsService } from '../services/settingsService.js';
 
 // Хранит пользователей, которые находятся в режиме поддержки
 const supportMode = new Map();
@@ -25,6 +26,17 @@ export function setupUserHandlers(bot) {
                 last_name: ctx.from.last_name
             });
             console.log('[UserHandlers] Пользователь сохранен');
+
+            // Получаем и показываем приветственное сообщение
+            console.log('[UserHandlers] Получение приветственного сообщения...');
+            const welcomeMessage = await settingsService.getWelcomeMessage();
+            console.log('[UserHandlers] Отправка приветственного сообщения...');
+            // Отправляем сообщение с поддержкой HTML разметки
+            await ctx.reply(welcomeMessage, {
+                parse_mode: 'HTML',
+                disable_web_page_preview: false
+            });
+
             console.log('[UserHandlers] Показ меню городов...');
             await showCitiesMenu(ctx);
             console.log('[UserHandlers] Меню городов показано');
