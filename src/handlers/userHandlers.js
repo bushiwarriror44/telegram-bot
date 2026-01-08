@@ -778,20 +778,37 @@ async function showPromocodeInput(ctx, productId) {
 
     promocodeInputMode.set(ctx.from.id, productId);
 
-    await ctx.editMessageText(
-        `🎁 <b>Использование промокода</b>\n\n` +
+    const inputText = `🎁 <b>Использование промокода</b>\n\n` +
         `📦 Товар: <b>${product.name}</b>\n` +
         `💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n\n` +
-        `Введите код промокода:`,
-        {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '◀️ Назад к товару', callback_data: `back_to_product_${productId}` }]
-                ]
-            }
+        `Введите код промокода:`;
+
+    const inputKeyboard = {
+        inline_keyboard: [
+            [{ text: '◀️ Назад к товару', callback_data: `back_to_product_${productId}` }]
+        ]
+    };
+
+    // Если это callback query, редактируем сообщение, иначе отправляем новое
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(inputText, {
+                parse_mode: 'HTML',
+                reply_markup: inputKeyboard
+            });
+        } catch (error) {
+            // Если не удалось отредактировать, отправляем новое сообщение
+            await ctx.reply(inputText, {
+                parse_mode: 'HTML',
+                reply_markup: inputKeyboard
+            });
         }
-    );
+    } else {
+        await ctx.reply(inputText, {
+            parse_mode: 'HTML',
+            reply_markup: inputKeyboard
+        });
+    }
 }
 
 // Функция для применения промокода
@@ -841,10 +858,31 @@ ${product.description || 'Описание отсутствует'}
 
     keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${city.id}` }]);
 
-    await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: keyboard
+    // Если это callback query, редактируем сообщение, иначе отправляем новое
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            });
+        } catch (error) {
+            // Если не удалось отредактировать, отправляем новое сообщение
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            });
         }
-    });
+    } else {
+        // Если это текстовое сообщение, отправляем новое
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: {
+                inline_keyboard: keyboard
+            }
+        });
+    }
 }
