@@ -1011,19 +1011,22 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
 
     // Обработка ответов администратора и загрузки данных
     bot.on('text', async (ctx) => {
-        if (!isAdmin(ctx.from.id)) return;
-
-        // Пропускаем команды
-        if (ctx.message.text.startsWith('/')) {
-            if (ctx.message.text === '/cancel') {
+        // ВАЖНО: Пропускаем команды для ВСЕХ пользователей, чтобы они обрабатывались через bot.command()
+        if (ctx.message.text && ctx.message.text.startsWith('/')) {
+            // Обрабатываем только /cancel для админов
+            if (ctx.message.text === '/cancel' && isAdmin(ctx.from.id)) {
                 importPaymentMode.delete(ctx.from.id);
                 importProductMode.delete(ctx.from.id);
                 adminReplyMode.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showDataMenu(ctx);
             }
+            // Для всех остальных команд просто возвращаемся, чтобы они обрабатывались другими обработчиками
             return;
         }
+
+        // Далее обрабатываем только для админов
+        if (!isAdmin(ctx.from.id)) return;
 
         // Обработка загрузки платежных адресов
         if (importPaymentMode.has(ctx.from.id)) {
