@@ -17,16 +17,16 @@ export function setupUserHandlers(bot) {
         console.log('[UserHandlers] Username:', ctx.from.username);
         console.log('[UserHandlers] Имя:', ctx.from.first_name);
         try {
-        // Сохраняем пользователя в БД
+            // Сохраняем пользователя в БД
             console.log('[UserHandlers] Сохранение пользователя в БД...');
-        await userService.saveOrUpdate(ctx.from.id, {
-            username: ctx.from.username,
-            first_name: ctx.from.first_name,
-            last_name: ctx.from.last_name
-        });
+            await userService.saveOrUpdate(ctx.from.id, {
+                username: ctx.from.username,
+                first_name: ctx.from.first_name,
+                last_name: ctx.from.last_name
+            });
             console.log('[UserHandlers] Пользователь сохранен');
             console.log('[UserHandlers] Показ меню городов...');
-        await showCitiesMenu(ctx);
+            await showCitiesMenu(ctx);
             console.log('[UserHandlers] Меню городов показано');
         } catch (error) {
             console.error('[UserHandlers] ОШИБКА в обработчике /start:', error);
@@ -153,10 +153,14 @@ export function setupUserHandlers(bot) {
     });
 
     // Обработка текстовых сообщений от пользователей (когда они пишут в поддержку)
+    // ВАЖНО: Этот обработчик должен регистрироваться ПОСЛЕ всех bot.command(),
+    // чтобы команды обрабатывались первыми
     bot.on('text', async (ctx) => {
-        // Пропускаем команды
+        // Пропускаем команды - они должны обрабатываться через bot.command()
         if (ctx.message.text && ctx.message.text.startsWith('/')) {
             console.log('[UserHandlers] bot.on(text): Пропуск команды:', ctx.message.text);
+            // В Telegraf, если мы делаем return, обновление продолжает обрабатываться другими обработчиками
+            // Но лучше явно не обрабатывать команды здесь
             return;
         }
 
@@ -185,10 +189,10 @@ async function showCabinetMenu(ctx) {
             first_name: ctx.from.first_name,
             last_name: ctx.from.last_name
         });
-        
+
         const user = await userService.getByChatId(ctx.from.id);
         const balance = user?.balance || 0;
-        
+
         const text = `👤 <b>Личный кабинет</b>
 
 🆔 ID: <code>${ctx.from.id}</code>
@@ -256,7 +260,7 @@ async function showCabinetMenu(ctx) {
 async function showTopupMenu(ctx) {
     try {
         const paymentMethods = await paymentService.getAllMethods();
-        
+
         if (paymentMethods.length === 0) {
             await ctx.editMessageText('❌ Методы оплаты пока не настроены. Обратитесь к администратору.');
             return;
@@ -270,9 +274,9 @@ async function showTopupMenu(ctx) {
 
         const keyboard = [];
         for (const method of paymentMethods) {
-            keyboard.push([{ 
-                text: `${method.name} (${method.network})`, 
-                callback_data: `topup_method_${method.id}` 
+            keyboard.push([{
+                text: `${method.name} (${method.network})`,
+                callback_data: `topup_method_${method.id}`
             }]);
         }
         keyboard.push([{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]);
@@ -292,14 +296,14 @@ async function showTopupMenu(ctx) {
 async function showMyOrders(ctx) {
     try {
         const orders = await getOrdersByUser(ctx.from.id);
-        
+
         if (orders.length === 0) {
             const text = `
 📦 <b>Мои заказы</b>
 
 У вас пока нет заказов.
             `.trim();
-            
+
             await ctx.editMessageText(text, {
                 parse_mode: 'HTML',
                 reply_markup: {
@@ -337,14 +341,14 @@ async function showMyOrders(ctx) {
 async function showTopupHistory(ctx) {
     try {
         const topups = await getTopupsByUser(ctx.from.id);
-        
+
         if (topups.length === 0) {
             const text = `
 💵 <b>История пополнений</b>
 
 У вас пока нет пополнений.
             `.trim();
-            
+
             await ctx.editMessageText(text, {
                 parse_mode: 'HTML',
                 reply_markup: {
