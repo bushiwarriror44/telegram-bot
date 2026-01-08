@@ -98,12 +98,8 @@ export function setupAdminHandlers(bot) {
                     // Продолжаем выполнение даже если меню не установилось
                 }
 
-                // Скрываем reply keyboard для админа
-                await ctx.reply('Кнопки меню скрыты для администратора.', {
-                    reply_markup: {
-                        remove_keyboard: true
-                    }
-                });
+                // Показываем админские reply keyboard кнопки
+                await showAdminMenuKeyboard(ctx);
 
                 // Показываем админ-панель
                 console.log('[AdminHandlers] Показ админ-панели...');
@@ -129,6 +125,33 @@ export function setupAdminHandlers(bot) {
     // Проверка прав администратора
     function isAdmin(userId) {
         return adminSessions.has(userId);
+    }
+
+    // Функция для получения админских reply keyboard кнопок
+    function getAdminMenuKeyboard() {
+        const keyboard = [
+            ['Управление городами', 'Управление товарами'],
+            ['Управление фасовками', 'Управление методами оплаты'],
+            ['Управление карточными счетами', 'Чаты'],
+            ['Создать уведомление', 'Данные'],
+            ['Настройка приветственного сообщения', 'Настройка кнопок'],
+            ['Бонусы и промокоды'],
+            ['Выход из админ-панели']
+        ];
+
+        return {
+            keyboard: keyboard,
+            resize_keyboard: true,
+            one_time_keyboard: false
+        };
+    }
+
+    // Функция для показа админских reply keyboard кнопок
+    async function showAdminMenuKeyboard(ctx) {
+        const keyboard = getAdminMenuKeyboard();
+        await ctx.reply('Кнопки меню изменены согласно роли администратора', {
+            reply_markup: keyboard
+        });
     }
 
     // Главное меню админ-панели
@@ -243,6 +266,108 @@ ${addressesText}
         await showPromocodesAdmin(ctx);
     });
 
+    // Обработчики для админских reply keyboard кнопок
+    bot.hears('Управление городами', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showCitiesAdmin(ctx);
+    });
+
+    bot.hears('Управление товарами', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showProductsAdmin(ctx);
+    });
+
+    bot.hears('Управление фасовками', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showPackagingsAdmin(ctx);
+    });
+
+    bot.hears('Управление методами оплаты', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showPaymentsAdmin(ctx);
+    });
+
+    bot.hears('Управление карточными счетами', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showCardsAdmin(ctx);
+    });
+
+    bot.hears('Чаты', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showChatsMenu(ctx);
+    });
+
+    bot.hears('Создать уведомление', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showNotificationMenu(ctx);
+    });
+
+    bot.hears('Данные', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showDataMenu(ctx);
+    });
+
+    bot.hears('Настройка приветственного сообщения', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showWelcomeSettings(ctx);
+    });
+
+    bot.hears('Настройка кнопок', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showMenuButtonsAdmin(ctx);
+    });
+
+    bot.hears('Бонусы и промокоды', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showPromocodesAdmin(ctx);
+    });
+
+    bot.hears('Выход из админ-панели', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        adminSessions.delete(ctx.from.id);
+        notificationSessions.delete(ctx.from.id);
+
+        // Возвращаем обычное пользовательское меню команд
+        try {
+            const userCommands = [
+                { command: 'start', description: 'Главное меню' },
+                { command: 'catalog', description: 'Каталог товаров' },
+                { command: 'cabinet', description: 'Личный кабинет' }
+            ];
+
+            // Устанавливаем пользовательские команды для этого пользователя
+            await bot.telegram.setMyCommands(userCommands, {
+                scope: {
+                    type: 'chat',
+                    chat_id: ctx.from.id
+                }
+            });
+            console.log('[AdminHandlers] Пользовательское меню команд восстановлено для пользователя:', ctx.from.id);
+        } catch (error) {
+            console.error('[AdminHandlers] Ошибка при восстановлении пользовательского меню команд:', error);
+            console.error('[AdminHandlers] Детали ошибки:', error.message);
+        }
+
+        await ctx.reply('✅ Вы вышли из админ-панели. Пользовательское меню восстановлено.');
+
+        // Показываем пользовательские reply keyboard кнопки
+        const topButtons = [
+            ['Каталог', 'Мой кабинет'],
+            ['Помощь', 'Отзывы']
+        ];
+        const menuButtons = await menuButtonService.getAll(true);
+        const dynamicButtons = menuButtons.map(btn => [btn.name]);
+        const keyboard = [...topButtons, ...dynamicButtons];
+
+        await ctx.reply('Выберите действие:', {
+            reply_markup: {
+                keyboard: keyboard,
+                resize_keyboard: true,
+                one_time_keyboard: false
+            }
+        });
+    });
+
     bot.action('admin_logout', async (ctx) => {
         adminSessions.delete(ctx.from.id);
         notificationSessions.delete(ctx.from.id);
@@ -309,14 +434,31 @@ ${addressesText}
 Или нажмите кнопку ниже для отмены.
         `.trim();
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '❌ Отмена', callback_data: 'admin_panel' }]
-                ]
+        const replyMarkup = {
+            inline_keyboard: [
+                [{ text: '❌ Отмена', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        // Если это callback query, редактируем сообщение, иначе отправляем новое
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
             }
-        });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        }
     }
 
     bot.command('sendnotification', async (ctx) => {
@@ -389,16 +531,33 @@ ${cards.map(card => `• ${card.name}: <code>${card.account_number}</code> ${car
 При оплате картой пользователям будет случайно показываться один из активных счетов.
         `.trim();
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '➕ Добавить карточный счет', callback_data: 'admin_card_add' }],
-                    [{ text: '🗑️ Удалить карточный счет', callback_data: 'admin_card_delete' }],
-                    [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
-                ]
+        const replyMarkup = {
+            inline_keyboard: [
+                [{ text: '➕ Добавить карточный счет', callback_data: 'admin_card_add' }],
+                [{ text: '🗑️ Удалить карточный счет', callback_data: 'admin_card_delete' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        // Если это callback query, редактируем сообщение, иначе отправляем новое
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
             }
-        });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        }
     }
 
     bot.action('admin_card_add', async (ctx) => {
@@ -474,18 +633,38 @@ ${cards.map(card => `• ${card.name}: <code>${card.account_number}</code> ${car
 
 Список городов:
 ${cities.map(c => `• ${c.name}`).join('\n') || 'Городов пока нет'}
-    `.trim();
+        `.trim();
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '➕ Добавить город', callback_data: 'admin_city_add' }],
-                    [{ text: '🗑️ Удалить город', callback_data: 'admin_city_delete' }],
-                    [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
-                ]
+        const replyMarkup = {
+            inline_keyboard: [
+                [{ text: '➕ Добавить город', callback_data: 'admin_city_add' }],
+                [{ text: '🗑️ Удалить город', callback_data: 'admin_city_delete' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        // Если вызвано из callback-кнопки, пробуем отредактировать сообщение,
+        // иначе (команда /addcity) отправляем новое сообщение
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (error) {
+                // Если Telegram не позволяет редактировать (message can't be edited),
+                // просто отправляем новое сообщение, чтобы не падать с 400
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
             }
-        });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        }
     }
 
     bot.action('admin_city_add', async (ctx) => {
@@ -566,10 +745,27 @@ ${cities.map(c => `• ${c.name}`).join('\n') || 'Городов пока нет
         ]);
         keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_panel' }]);
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: { inline_keyboard: keyboard }
-        });
+        const replyMarkup = { inline_keyboard: keyboard };
+
+        // Если это callback query, редактируем сообщение, иначе отправляем новое
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        }
     }
 
     bot.action(/^admin_products_city_(\d+)$/, async (ctx) => {
@@ -736,17 +932,36 @@ ${products.map(p => {
 ${methods.map(m => `• ${m.name} (${m.network})`).join('\n') || 'Методов оплаты пока нет'}
     `.trim();
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '➕ Добавить метод оплаты', callback_data: 'admin_payment_add' }],
-                    [{ text: '🔐 Изменить реквизиты', callback_data: 'admin_payment_address' }],
-                    [{ text: '🗑️ Удалить метод оплаты', callback_data: 'admin_payment_delete' }],
-                    [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
-                ]
+        const replyMarkup = {
+            inline_keyboard: [
+                [{ text: '➕ Добавить метод оплаты', callback_data: 'admin_payment_add' }],
+                [{ text: '🔐 Изменить реквизиты', callback_data: 'admin_payment_address' }],
+                [{ text: '🗑️ Удалить метод оплаты', callback_data: 'admin_payment_delete' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        // Если это callback query, редактируем сообщение, иначе отправляем новое
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (error) {
+                // Если не удалось отредактировать, отправляем новое сообщение
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
             }
-        });
+        } else {
+            // Если это команда, отправляем новое сообщение
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        }
     }
 
     bot.action('admin_payment_add', async (ctx) => {
@@ -890,15 +1105,32 @@ ${methods.map(m => `• ${m.name} (${m.network})`).join('\n') || 'Методов
 ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фасовок пока нет'}
     `.trim();
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '➕ Добавить фасовку', callback_data: 'admin_packaging_add' }],
-                    [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
-                ]
+        const replyMarkup = {
+            inline_keyboard: [
+                [{ text: '➕ Добавить фасовку', callback_data: 'admin_packaging_add' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        // Если это callback query, редактируем сообщение, иначе отправляем новое
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
             }
-        });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        }
     }
 
     bot.action('admin_packaging_add', async (ctx) => {
@@ -952,16 +1184,35 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
 Выберите действие:
         `.trim();
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '📋 Последние', callback_data: 'admin_chats_recent' }],
-                    [{ text: '📚 Все чаты', callback_data: 'admin_chats_all' }],
-                    [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
-                ]
+        const replyMarkup = {
+            inline_keyboard: [
+                [{ text: '📋 Последние', callback_data: 'admin_chats_recent' }],
+                [{ text: '📚 Все чаты', callback_data: 'admin_chats_all' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        // Если это callback query, редактируем сообщение, иначе отправляем новое
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (error) {
+                // Если не удалось отредактировать, отправляем новое сообщение
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
             }
-        });
+        } else {
+            // Если это команда или reply keyboard кнопка, отправляем новое сообщение
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        }
     }
 
     bot.action('admin_chats_recent', async (ctx) => {
@@ -1563,10 +1814,17 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         };
 
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(text, {
-                parse_mode: 'HTML',
-                reply_markup: keyboard
-            });
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            }
         } else {
             await ctx.reply(text, {
                 parse_mode: 'HTML',
@@ -1633,10 +1891,23 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         };
 
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(text, {
-                parse_mode: 'HTML',
-                reply_markup: keyboard
-            });
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            } catch (error) {
+                // Если не удалось отредактировать (например, сообщение не изменилось), игнорируем ошибку
+                if (error.message && error.message.includes('message is not modified')) {
+                    // Игнорируем эту ошибку - сообщение уже содержит нужный текст
+                    return;
+                }
+                // Для других ошибок отправляем новое сообщение
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            }
         } else {
             await ctx.reply(text, {
                 parse_mode: 'HTML',
@@ -1856,7 +2127,17 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             // Удаляем временный файл
             unlinkSync(tempFilePath);
 
-            await showDataMenu(ctx);
+            // Показываем меню данных только если это был callback query
+            // Если это обычное сообщение, не показываем меню, чтобы избежать ошибки редактирования
+            if (ctx.callbackQuery) {
+                try {
+                    await showDataMenu(ctx);
+                } catch (error) {
+                    // Если не удалось отредактировать сообщение, просто игнорируем ошибку
+                    // Файл уже отправлен, это главное
+                    console.error('[AdminHandlers] Ошибка при показе меню данных после выгрузки БД:', error.message);
+                }
+            }
         } catch (error) {
             console.error('[AdminHandlers] Ошибка при выгрузке БД:', error);
             await ctx.reply('❌ Ошибка при выгрузке БД: ' + error.message);
@@ -1931,10 +2212,17 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         };
 
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(text, {
-                parse_mode: 'HTML',
-                reply_markup: keyboard
-            });
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            }
         } else {
             await ctx.reply(text, {
                 parse_mode: 'HTML',
@@ -2072,10 +2360,17 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         };
 
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(text, {
-                parse_mode: 'HTML',
-                reply_markup: keyboard
-            });
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            }
         } else {
             await ctx.reply(text, {
                 parse_mode: 'HTML',
