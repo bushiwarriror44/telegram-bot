@@ -32,14 +32,14 @@ async function getMenuKeyboard() {
         ['Каталог', 'Мой кабинет'],
         ['Помощь', 'Отзывы']
     ];
-    
+
     // Получаем динамические кнопки из БД
     const menuButtons = await menuButtonService.getAll(true);
     const dynamicButtons = menuButtons.map(btn => [btn.name]);
-    
+
     // Объединяем верхние кнопки и динамические
     const keyboard = [...topButtons, ...dynamicButtons];
-    
+
     return {
         keyboard: keyboard,
         resize_keyboard: true,
@@ -53,7 +53,7 @@ async function showMenuKeyboard(ctx) {
     if (isAdmin(ctx.from.id)) {
         return;
     }
-    
+
     const keyboard = await getMenuKeyboard();
     await ctx.reply('Выберите действие:', {
         reply_markup: keyboard
@@ -90,7 +90,7 @@ export function setupUserHandlers(bot) {
 
             // Показываем reply keyboard с кнопками меню (если пользователь не админ)
             await showMenuKeyboard(ctx);
-            
+
             console.log('[UserHandlers] Показ меню городов...');
             await showCitiesMenu(ctx);
             console.log('[UserHandlers] Меню городов показано');
@@ -188,6 +188,12 @@ export function setupUserHandlers(bot) {
         const productId = parseInt(ctx.match[1]);
         const methodId = parseInt(ctx.match[2]);
         await showPaymentAddress(ctx, productId, methodId);
+    });
+
+    // Обработка выбора метода пополнения баланса в личном кабинете
+    bot.action(/^topup_method_(\d+)$/, async (ctx) => {
+        const methodId = parseInt(ctx.match[1]);
+        await showTopupMethod(ctx, methodId);
     });
 
     // Обработка выбора метода оплаты с промокодом
@@ -307,7 +313,7 @@ export function setupUserHandlers(bot) {
         // Обработка динамических кнопок меню
         const menuButtons = await menuButtonService.getAll(true);
         const clickedButton = menuButtons.find(btn => btn.name === ctx.message.text);
-        
+
         if (clickedButton) {
             await userService.saveOrUpdate(ctx.from.id, {
                 username: ctx.from.username,
@@ -401,7 +407,11 @@ async function showTopupMenu(ctx) {
         const paymentMethods = await paymentService.getAllMethods();
 
         if (paymentMethods.length === 0) {
-            await ctx.editMessageText('❌ Методы оплаты пока не настроены. Обратитесь к администратору.');
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText('❌ Методы оплаты пока не настроены. Обратитесь к администратору.');
+            } else {
+                await ctx.reply('❌ Методы оплаты пока не настроены. Обратитесь к администратору.');
+            }
             return;
         }
 
@@ -420,15 +430,102 @@ async function showTopupMenu(ctx) {
         }
         keyboard.push([{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]);
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: keyboard
+        // Если пришло из callback, пытаемся отредактировать, иначе отправляем новое сообщение
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: keyboard
+                    }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: keyboard
+                    }
+                });
             }
-        });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            });
+        }
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showTopupMenu:', error);
-        await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+        } else {
+            await ctx.reply('Произошла ошибка. Попробуйте позже.');
+        }
+    }
+}
+
+// Показ реквизитов для выбранного метода пополнения
+async function showTopupMethod(ctx, methodId) {
+    try {
+        const method = await paymentService.getMethodById(methodId);
+        if (!method) {
+            await ctx.reply('Метод оплаты не найден.');
+            return;
+        }
+
+        let text = '';
+        let replyMarkup = {
+            inline_keyboard: [
+                [{ text: '◀️ Назад', callback_data: 'topup_balance' }]
+            ]
+        };
+
+        if (method.type === 'card') {
+            const cardAccount = await cardAccountService.getRandom();
+            if (!cardAccount) {
+                await ctx.reply('Карточные счета не настроены. Обратитесь к администратору.');
+                return;
+            }
+            text = `💳 <b>Пополнение картой</b>\n\n` +
+                `Способ: ${method.name}\n` +
+                `Реквизиты:\n<b>${cardAccount.name}</b>\n<code>${cardAccount.account_number}</code>`;
+        } else {
+            const address = await paymentService.getAddressForMethod(methodId);
+            if (!address) {
+                await ctx.reply('Адрес для пополнения не найден. Обратитесь к администратору.');
+                return;
+            }
+            text = `💳 <b>Пополнение через ${method.name}</b>\n\n` +
+                `Сеть: ${method.network}\n` +
+                `Адрес для пополнения:\n<code>${address.address}</code>`;
+        }
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        }
+    } catch (error) {
+        console.error('[UserHandlers] ОШИБКА в showTopupMethod:', error);
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+        } else {
+            await ctx.reply('Произошла ошибка. Попробуйте позже.');
+        }
     }
 }
 
@@ -721,7 +818,7 @@ async function showPaymentAddress(ctx, productId, methodId, promocodeId = null) 
     // Рассчитываем цену с учетом промокода
     let finalPrice = product.price;
     let discountText = '';
-    
+
     if (promocodeId) {
         const promocode = await promocodeService.getById(promocodeId);
         if (promocode) {
@@ -821,7 +918,7 @@ async function applyPromocode(ctx, productId, promocodeText) {
 
     // Валидация промокода
     const validation = await promocodeService.validatePromocodeForUser(ctx.from.id, promocodeText);
-    
+
     if (!validation.valid) {
         await ctx.reply(`❌ ${validation.reason}`);
         await showProductDetails(ctx, productId);
