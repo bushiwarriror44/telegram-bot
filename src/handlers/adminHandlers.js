@@ -23,6 +23,7 @@ export function setupAdminHandlers(bot) {
 
     // Команда для входа в админ-панель
     bot.command('apanel', async (ctx) => {
+        console.log('[AdminHandlers] ========== ОБРАБОТЧИК /apanel ВЫЗВАН ==========');
         console.log('[AdminHandlers] ========== Команда /apanel получена ==========');
         console.log('[AdminHandlers] Пользователь ID:', ctx.from.id);
         console.log('[AdminHandlers] Текст команды:', ctx.message.text);

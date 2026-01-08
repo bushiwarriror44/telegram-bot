@@ -155,7 +155,8 @@ export function setupUserHandlers(bot) {
     // Обработка текстовых сообщений от пользователей (когда они пишут в поддержку)
     bot.on('text', async (ctx) => {
         // Пропускаем команды
-        if (ctx.message.text.startsWith('/')) {
+        if (ctx.message.text && ctx.message.text.startsWith('/')) {
+            console.log('[UserHandlers] bot.on(text): Пропуск команды:', ctx.message.text);
             return;
         }
 

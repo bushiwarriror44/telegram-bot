@@ -34,6 +34,45 @@ async function startBot() {
     const bot = new Telegraf(config.botToken);
     console.log('[START] Шаг 4 завершен: Экземпляр бота создан');
 
+    // ВАЖНО: Middleware должен регистрироваться ДО обработчиков!
+    // Логирование всех входящих обновлений для отладки
+    console.log('[START] Регистрация middleware для логирования обновлений (ПЕРЕД обработчиками)...');
+    bot.use(async (ctx, next) => {
+      console.log('[BOT] ========== ВХОДЯЩЕЕ ОБНОВЛЕНИЕ ==========');
+      console.log('[BOT] Update ID:', ctx.update.update_id);
+      console.log('[BOT] Тип обновления:', ctx.update.message ? 'message' : ctx.update.callback_query ? 'callback_query' : 'other');
+      if (ctx.update.message) {
+        console.log('[BOT] Message ID:', ctx.update.message.message_id);
+        console.log('[BOT] Text:', ctx.update.message.text);
+        console.log('[BOT] From ID:', ctx.update.message.from?.id);
+        console.log('[BOT] From Username:', ctx.update.message.from?.username);
+        if (ctx.update.message.text?.startsWith('/')) {
+          console.log('[BOT] Это команда:', ctx.update.message.text);
+        }
+      }
+      console.log('[BOT] ========================================');
+      return next();
+    });
+    console.log('[START] Middleware для логирования обновлений настроен');
+
+    // Обработка ошибок
+    console.log('[START] Настройка обработчика ошибок...');
+    bot.catch((err, ctx) => {
+      console.error('[BOT] ========== ОШИБКА В БОТЕ ==========');
+      console.error('[BOT] Ошибка:', err);
+      console.error('[BOT] Сообщение:', err.message);
+      console.error('[BOT] Stack:', err.stack);
+      console.error('[BOT] Context:', ctx ? 'есть' : 'нет');
+      if (ctx) {
+        console.error('[BOT] Update ID:', ctx.update?.update_id);
+        console.error('[BOT] Message:', ctx.message?.text);
+      }
+      if (ctx && ctx.reply) {
+        ctx.reply('Произошла ошибка. Попробуйте позже.');
+      }
+    });
+    console.log('[START] Обработчик ошибок настроен');
+
     // Настройка обработчиков (сначала пользовательские, чтобы /start не перехватывался админ-обработчиками)
     console.log('[START] Шаг 5: Настройка обработчиков...');
     console.log('[START] Настройка пользовательских обработчиков (первыми)...');
@@ -56,40 +95,6 @@ async function startBot() {
     } catch (commandsError) {
       console.error('[START] Ошибка при настройке меню команд:', commandsError);
     }
-
-    // Обработка ошибок
-    console.log('[START] Настройка обработчика ошибок...');
-    bot.catch((err, ctx) => {
-      console.error('[BOT] ========== ОШИБКА В БОТЕ ==========');
-      console.error('[BOT] Ошибка:', err);
-      console.error('[BOT] Сообщение:', err.message);
-      console.error('[BOT] Stack:', err.stack);
-      console.error('[BOT] Context:', ctx ? 'есть' : 'нет');
-      if (ctx) {
-        console.error('[BOT] Update ID:', ctx.update?.update_id);
-        console.error('[BOT] Message:', ctx.message?.text);
-      }
-      if (ctx && ctx.reply) {
-        ctx.reply('Произошла ошибка. Попробуйте позже.');
-      }
-    });
-    console.log('[START] Обработчик ошибок настроен');
-
-    // Логирование всех входящих обновлений для отладки
-    bot.use(async (ctx, next) => {
-      console.log('[BOT] ========== ВХОДЯЩЕЕ ОБНОВЛЕНИЕ ==========');
-      console.log('[BOT] Update ID:', ctx.update.update_id);
-      console.log('[BOT] Тип обновления:', ctx.update.message ? 'message' : ctx.update.callback_query ? 'callback_query' : 'other');
-      if (ctx.update.message) {
-        console.log('[BOT] Message ID:', ctx.update.message.message_id);
-        console.log('[BOT] Text:', ctx.update.message.text);
-        console.log('[BOT] From ID:', ctx.update.message.from?.id);
-        console.log('[BOT] From Username:', ctx.update.message.from?.username);
-      }
-      console.log('[BOT] ========================================');
-      return next();
-    });
-    console.log('[START] Middleware для логирования обновлений настроен');
 
     // Запуск бота
     console.log('[START] Шаг 6: Запуск бота...');
