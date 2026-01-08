@@ -26,6 +26,43 @@ export function setupAdminHandlers(bot) {
 
         if (password === config.adminPassword) {
             adminSessions.set(ctx.from.id, true);
+
+            // Приветственное сообщение
+            await ctx.reply('✅ Вы вошли в администраторскую панель!', {
+                parse_mode: 'HTML'
+            });
+
+            // Настройка админского меню команд для этого пользователя
+            try {
+                const adminCommands = [
+                    { command: 'apanel', description: 'Админ-панель' },
+                    { command: 'sendnotification', description: 'Создать уведомление' },
+                    { command: 'addcity', description: 'Добавить город' },
+                    { command: 'addproduct', description: 'Добавить товар' },
+                    { command: 'addpayment', description: 'Добавить метод оплаты' },
+                    { command: 'setaddress', description: 'Установить адрес оплаты' },
+                    { command: 'addcard', description: 'Добавить карточный счет' },
+                    { command: 'addpack', description: 'Добавить фасовку' }
+                ];
+
+                // Устанавливаем команды для конкретного пользователя
+                // В Telegraf 4.x для приватного чата используем chat_id равный user_id
+                await bot.telegram.setMyCommands(adminCommands, {
+                    scope: {
+                        type: 'chat',
+                        chat_id: ctx.from.id
+                    }
+                });
+                console.log('[AdminHandlers] Админское меню команд установлено для пользователя:', ctx.from.id);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при установке админского меню команд:', error);
+                console.error('[AdminHandlers] Детали ошибки:', error.message);
+                console.error('[AdminHandlers] Stack:', error.stack);
+                // Если scope не поддерживается, команды останутся глобальными
+                // Это не критично, админ все равно сможет использовать команды
+            }
+
+            // Показываем админ-панель
             await showAdminPanel(ctx);
         } else {
             await ctx.reply('❌ Неверный пароль доступа к админ-панели.');
@@ -128,7 +165,30 @@ ${addressesText}
     bot.action('admin_logout', async (ctx) => {
         adminSessions.delete(ctx.from.id);
         notificationSessions.delete(ctx.from.id);
-        await ctx.editMessageText('✅ Вы вышли из админ-панели.');
+
+        // Возвращаем обычное пользовательское меню команд
+        try {
+            const userCommands = [
+                { command: 'start', description: 'Главное меню' },
+                { command: 'catalog', description: 'Каталог товаров' },
+                { command: 'cabinet', description: 'Личный кабинет' }
+            ];
+
+            // Устанавливаем пользовательские команды для этого пользователя
+            await bot.telegram.setMyCommands(userCommands, {
+                scope: {
+                    type: 'chat',
+                    chat_id: ctx.from.id
+                }
+            });
+            console.log('[AdminHandlers] Пользовательское меню команд восстановлено для пользователя:', ctx.from.id);
+        } catch (error) {
+            console.error('[AdminHandlers] Ошибка при восстановлении пользовательского меню команд:', error);
+            console.error('[AdminHandlers] Детали ошибки:', error.message);
+            // Если scope не поддерживается, это не критично
+        }
+
+        await ctx.editMessageText('✅ Вы вышли из админ-панели. Пользовательское меню восстановлено.');
     });
 
     // Управление уведомлениями
