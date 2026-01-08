@@ -19,53 +19,89 @@ const PRODUCT_TEMPLATES = [
 
 export function setupAdminHandlers(bot) {
     console.log('[AdminHandlers] Настройка админ-обработчиков...');
+    console.log('[AdminHandlers] Регистрация команды /apanel...');
+
     // Команда для входа в админ-панель
     bot.command('apanel', async (ctx) => {
-        const args = ctx.message.text.split(' ');
-        const password = args[1];
+        console.log('[AdminHandlers] ========== Команда /apanel получена ==========');
+        console.log('[AdminHandlers] Пользователь ID:', ctx.from.id);
+        console.log('[AdminHandlers] Текст команды:', ctx.message.text);
 
-        if (password === config.adminPassword) {
-            adminSessions.set(ctx.from.id, true);
+        try {
+            const args = ctx.message.text.split(' ');
+            const password = args[1];
+            console.log('[AdminHandlers] Пароль получен:', password ? 'да' : 'нет');
 
-            // Приветственное сообщение
-            await ctx.reply('✅ Вы вошли в администраторскую панель!', {
-                parse_mode: 'HTML'
-            });
-
-            // Настройка админского меню команд для этого пользователя
-            try {
-                const adminCommands = [
-                    { command: 'apanel', description: 'Админ-панель' },
-                    { command: 'sendnotification', description: 'Создать уведомление' },
-                    { command: 'addcity', description: 'Добавить город' },
-                    { command: 'addproduct', description: 'Добавить товар' },
-                    { command: 'addpayment', description: 'Добавить метод оплаты' },
-                    { command: 'setaddress', description: 'Установить адрес оплаты' },
-                    { command: 'addcard', description: 'Добавить карточный счет' },
-                    { command: 'addpack', description: 'Добавить фасовку' }
-                ];
-
-                // Устанавливаем команды для конкретного пользователя
-                // В Telegraf 4.x для приватного чата используем chat_id равный user_id
-                await bot.telegram.setMyCommands(adminCommands, {
-                    scope: {
-                        type: 'chat',
-                        chat_id: ctx.from.id
-                    }
-                });
-                console.log('[AdminHandlers] Админское меню команд установлено для пользователя:', ctx.from.id);
-            } catch (error) {
-                console.error('[AdminHandlers] Ошибка при установке админского меню команд:', error);
-                console.error('[AdminHandlers] Детали ошибки:', error.message);
-                console.error('[AdminHandlers] Stack:', error.stack);
-                // Если scope не поддерживается, команды останутся глобальными
-                // Это не критично, админ все равно сможет использовать команды
+            if (!password) {
+                await ctx.reply('❌ Укажите пароль: /apanel пароль');
+                return;
             }
 
-            // Показываем админ-панель
-            await showAdminPanel(ctx);
-        } else {
-            await ctx.reply('❌ Неверный пароль доступа к админ-панели.');
+            if (password === config.adminPassword) {
+                console.log('[AdminHandlers] Пароль верный, вход в админ-панель');
+                adminSessions.set(ctx.from.id, true);
+
+                // Приветственное сообщение
+                console.log('[AdminHandlers] Отправка приветственного сообщения...');
+                await ctx.reply('✅ Вы вошли в администраторскую панель!', {
+                    parse_mode: 'HTML'
+                });
+                console.log('[AdminHandlers] Приветственное сообщение отправлено');
+
+                // Настройка админского меню команд для этого пользователя
+                console.log('[AdminHandlers] Настройка админского меню команд...');
+                try {
+                    const adminCommands = [
+                        { command: 'apanel', description: 'Админ-панель' },
+                        { command: 'sendnotification', description: 'Создать уведомление' },
+                        { command: 'addcity', description: 'Добавить город' },
+                        { command: 'addproduct', description: 'Добавить товар' },
+                        { command: 'addpayment', description: 'Добавить метод оплаты' },
+                        { command: 'setaddress', description: 'Установить адрес оплаты' },
+                        { command: 'addcard', description: 'Добавить карточный счет' },
+                        { command: 'addpack', description: 'Добавить фасовку' }
+                    ];
+
+                    // Пробуем установить команды для конкретного пользователя
+                    // Используем асинхронный вызов без await, чтобы не блокировать выполнение
+                    bot.telegram.setMyCommands(adminCommands, {
+                        scope: {
+                            type: 'chat',
+                            chat_id: ctx.from.id
+                        }
+                    }).then(() => {
+                        console.log('[AdminHandlers] Админское меню команд установлено для пользователя:', ctx.from.id);
+                    }).catch((error) => {
+                        console.error('[AdminHandlers] Ошибка при установке админского меню команд:', error);
+                        console.error('[AdminHandlers] Детали ошибки:', error.message);
+                        // Пробуем установить глобально как fallback
+                        bot.telegram.setMyCommands(adminCommands).catch(err => {
+                            console.error('[AdminHandlers] Ошибка при установке команд глобально:', err);
+                        });
+                    });
+                } catch (error) {
+                    console.error('[AdminHandlers] Критическая ошибка при настройке меню команд:', error);
+                    // Продолжаем выполнение даже если меню не установилось
+                }
+
+                // Показываем админ-панель
+                console.log('[AdminHandlers] Показ админ-панели...');
+                await showAdminPanel(ctx);
+                console.log('[AdminHandlers] Админ-панель показана');
+            } else {
+                console.log('[AdminHandlers] Неверный пароль');
+                await ctx.reply('❌ Неверный пароль доступа к админ-панели.');
+            }
+        } catch (error) {
+            console.error('[AdminHandlers] ========== КРИТИЧЕСКАЯ ОШИБКА в /apanel ==========');
+            console.error('[AdminHandlers] Ошибка:', error);
+            console.error('[AdminHandlers] Сообщение:', error.message);
+            console.error('[AdminHandlers] Stack:', error.stack);
+            try {
+                await ctx.reply('❌ Произошла ошибка при входе в админ-панель. Попробуйте позже.');
+            } catch (e) {
+                console.error('[AdminHandlers] Не удалось отправить сообщение об ошибке:', e);
+            }
         }
     });
 
@@ -1010,5 +1046,8 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             return; // Явно указываем, что сообщение обработано
         }
     });
+
+    console.log('[AdminHandlers] Админ-обработчики успешно настроены');
+    console.log('[AdminHandlers] Зарегистрированы команды: /apanel и другие админ-команды');
 }
 
