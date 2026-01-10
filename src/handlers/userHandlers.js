@@ -359,7 +359,9 @@ export function setupUserHandlers(bot) {
 // Показ отзывов с пагинацией
 async function showReviews(ctx, page = 1) {
     try {
+        console.log('[UserHandlers] Запрос отзывов, страница:', page);
         const { reviews, currentPage, totalPages } = await reviewService.getAll(page, 5);
+        console.log('[UserHandlers] Получено отзывов:', reviews.length, 'Всего страниц:', totalPages);
 
         if (reviews.length === 0) {
             const text = '❤️ Отзывы:\n\nПока нет отзывов.';

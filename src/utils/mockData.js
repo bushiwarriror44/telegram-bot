@@ -5,6 +5,7 @@ import { paymentService } from '../services/paymentService.js';
 import { packagingService } from '../services/packagingService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
 import { menuButtonService } from '../services/menuButtonService.js';
+import { reviewService } from '../services/reviewService.js';
 
 const mockCities = [
   'Москва',
@@ -392,21 +393,32 @@ export async function initializeMockData() {
   ];
 
   // Проверяем, есть ли уже отзывы
-  const { reviewService } = await import('../services/reviewService.js');
-  const existingReviews = await reviewService.getAllReviews();
+  try {
+    const existingReviews = await reviewService.getAllReviews();
 
-  if (existingReviews.length === 0) {
-    for (const review of mockReviews) {
-      await reviewService.create(
-        review.product_name,
-        review.city_name,
-        review.district_name,
-        review.rating,
-        review.review_text,
-        review.review_date
-      );
+    if (existingReviews.length === 0) {
+      console.log('Создание моковых отзывов...');
+      for (const review of mockReviews) {
+        try {
+          await reviewService.create(
+            review.product_name,
+            review.city_name,
+            review.district_name,
+            review.rating,
+            review.review_text,
+            review.review_date
+          );
+          console.log(`Создан отзыв: ${review.product_name}`);
+        } catch (error) {
+          console.error(`Ошибка при создании отзыва ${review.product_name}:`, error);
+        }
+      }
+      console.log('Создано моковых отзывов: ' + mockReviews.length);
+    } else {
+      console.log(`Отзывы уже существуют (${existingReviews.length} шт.), пропускаем создание моковых данных`);
     }
-    console.log('Создано моковых отзывов: ' + mockReviews.length);
+  } catch (error) {
+    console.error('Ошибка при проверке/создании отзывов:', error);
   }
 
   console.log('Моковые данные успешно инициализированы!');
