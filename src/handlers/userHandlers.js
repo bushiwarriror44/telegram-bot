@@ -378,7 +378,13 @@ export function setupUserHandlers(bot) {
             // Валидация промокода
             const validation = await promocodeService.validatePromocodeForUser(ctx.from.id, promocodeText);
             if (!validation.valid) {
-                await ctx.reply(`❌ ${validation.reason}`);
+                await ctx.reply(`❌ ${validation.reason}\n\nПопробуйте ввести промо-код еще раз или нажмите "Продолжить без промо".`, {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Вернуться к товару', callback_data: `back_to_product_${productId}` }]
+                        ]
+                    }
+                });
                 return;
             }
 
@@ -947,31 +953,27 @@ async function showProductDetails(ctx, productId) {
 
     const district = await districtService.getById(product.district_id);
     const city = await cityService.getById(product.city_id);
-    const paymentMethods = await paymentService.getAllMethods();
 
-    const packagingLine = product.packaging_value
-        ? `\n⚖️ Фасовка: <b>${product.packaging_value} кг</b>\n`
-        : '\n';
+    const packagingLabel = product.packaging_value ? ` ${product.packaging_value}г` : '';
 
-    const text = `
-📦 <b>${product.name}</b>
+    // Формируем текст в новом формате
+    const text = `Вы выбрали: ${product.name}${packagingLabel}
 
-${product.description || 'Описание отсутствует'}
 
-💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>
-📍 Район: ${district.name}, Город: ${city.name}${packagingLine}
-${paymentMethods.length === 0 ? '❌ Методы оплаты пока не настроены. Обратитесь к администратору.' : 'Выберите способ оплаты:'}
-  `.trim();
 
-    const keyboard = paymentMethods.map(method => [
-        { text: `${method.name}`, callback_data: `pay_${product.id}_${method.id}` }
-    ]);
 
-    // Добавляем кнопку "Использовать промокод"
-    if (paymentMethods.length > 0) {
-        keyboard.push([{ text: '🎁 Использовать промокод', callback_data: `use_promocode_${product.id}` }]);
-    }
-    keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${district.id}` }]);
+Цена (без комиссии): ${product.price.toLocaleString('ru-RU')} ₽
+Описание: ${product.description || 'Описание отсутствует'}
+
+
+
+❔ У вас есть промо-код ❔`;
+
+    const keyboard = [
+        [{ text: '✏️ Ввести промо', callback_data: `enter_promo_${product.id}` }],
+        [{ text: '🙅‍♂️ Продолжить без промо', callback_data: `continue_no_promo_${product.id}` }],
+        [{ text: '🔙 Назад', callback_data: `back_to_products_${district.id}` }]
+    ];
 
     // Определяем путь к изображению
     let photoPath = null;
@@ -1094,7 +1096,11 @@ async function createOrder(ctx, productId, promocodeId = null) {
         );
 
         // Удаляем сообщение о загрузке
-        await ctx.deleteMessage(loadingMsg.message_id);
+        try {
+            await ctx.deleteMessage(loadingMsg.message_id);
+        } catch (error) {
+            console.error('[UserHandlers] Ошибка при удалении сообщения о загрузке:', error);
+        }
 
         // Показываем детали заказа
         await showOrderDetails(ctx, order.id);
@@ -1290,122 +1296,3 @@ async function showPaymentAddress(ctx, productId, methodId, promocodeId = null) 
     });
 }
 
-// Функция для показа интерфейса ввода промокода
-async function showPromocodeInput(ctx, productId) {
-    const product = await productService.getById(productId);
-    if (!product) {
-        await ctx.reply('Товар не найден.');
-        return;
-    }
-
-    promocodeInputMode.set(ctx.from.id, productId);
-
-    const inputText = `🎁 <b>Использование промокода</b>\n\n` +
-        `📦 Товар: <b>${product.name}</b>\n` +
-        `💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n\n` +
-        `Введите код промокода:`;
-
-    const inputKeyboard = {
-        inline_keyboard: [
-            [{ text: '◀️ Назад к товару', callback_data: `back_to_product_${productId}` }]
-        ]
-    };
-
-    // Если это callback query, редактируем сообщение, иначе отправляем новое
-    if (ctx.callbackQuery) {
-        try {
-            await ctx.editMessageText(inputText, {
-                parse_mode: 'HTML',
-                reply_markup: inputKeyboard
-            });
-        } catch (error) {
-            // Если не удалось отредактировать, отправляем новое сообщение
-            await ctx.reply(inputText, {
-                parse_mode: 'HTML',
-                reply_markup: inputKeyboard
-            });
-        }
-    } else {
-        await ctx.reply(inputText, {
-            parse_mode: 'HTML',
-            reply_markup: inputKeyboard
-        });
-    }
-}
-
-// Функция для применения промокода
-async function applyPromocode(ctx, productId, promocodeText) {
-    const product = await productService.getById(productId);
-    if (!product) {
-        await ctx.reply('Товар не найден.');
-        return;
-    }
-
-    // Валидация промокода
-    const validation = await promocodeService.validatePromocodeForUser(ctx.from.id, promocodeText);
-
-    if (!validation.valid) {
-        await ctx.reply(`❌ ${validation.reason}`);
-        await showProductDetails(ctx, productId);
-        return;
-    }
-
-    const promocode = validation.promocode;
-    const discount = (product.price * promocode.discount_percent) / 100;
-    const finalPrice = product.price - discount;
-
-    const district = await districtService.getById(product.district_id);
-    const city = await cityService.getById(product.city_id);
-    const paymentMethods = await paymentService.getAllMethods();
-
-    const packagingLine = product.packaging_value
-        ? `\n⚖️ Фасовка: <b>${product.packaging_value} кг</b>\n`
-        : '\n';
-
-    const text = `
-📦 <b>${product.name}</b>
-
-${product.description || 'Описание отсутствует'}
-
-💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>
-🎁 Промокод <b>${promocode.code}</b>: -${promocode.discount_percent}%
-💰 Скидка: <b>${discount.toLocaleString('ru-RU')} ₽</b>
-💰 Итого: <b>${finalPrice.toLocaleString('ru-RU')} ₽</b>
-📍 Район: ${district.name}, Город: ${city.name}${packagingLine}
-Выберите способ оплаты:
-  `.trim();
-
-    const keyboard = paymentMethods.map(method => [
-        { text: `💳 ${method.name}`, callback_data: `pay_with_promo_${product.id}_${method.id}_${promocode.id}` }
-    ]);
-
-    keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${district.id}` }]);
-
-    // Если это callback query, редактируем сообщение, иначе отправляем новое
-    if (ctx.callbackQuery) {
-        try {
-            await ctx.editMessageText(text, {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    inline_keyboard: keyboard
-                }
-            });
-        } catch (error) {
-            // Если не удалось отредактировать, отправляем новое сообщение
-            await ctx.reply(text, {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    inline_keyboard: keyboard
-                }
-            });
-        }
-    } else {
-        // Если это текстовое сообщение, отправляем новое
-        await ctx.reply(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: keyboard
-            }
-        });
-    }
-}
