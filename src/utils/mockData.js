@@ -139,10 +139,14 @@ export async function initializeMockData() {
   console.log('[MOCK] Всего товаров:', totalProducts);
 
   // Если есть и города, и товары - пропускаем создание городов/товаров,
-  // но ВСЁ РАВНО инициализируем кнопки меню
+  // но ВСЁ РАВНО инициализируем кнопки меню и отзывы
   if (existingCities.length > 0 && totalProducts > 0) {
     console.log('[MOCK] Данные уже существуют, пропускаем создание городов/товаров');
     await initializeDefaultMenuButtons();
+
+    // Создаем моковые отзывы, если их нет
+    await createMockReviews();
+
     console.log('[MOCK] Моковые данные (кнопки меню) инициализированы при существующей БД');
     return;
   }
@@ -349,6 +353,13 @@ export async function initializeMockData() {
   await initializeDefaultMenuButtons();
 
   // Создаем моковые отзывы
+  await createMockReviews();
+
+  console.log('Моковые данные успешно инициализированы!');
+}
+
+// Функция для создания моковых отзывов
+async function createMockReviews() {
   const mockReviews = [
     {
       product_name: 'Магнитогорск / Правый Орджо / 🧲😻Леденцы Мяу Мяу New😻🧲 2г',
@@ -397,7 +408,7 @@ export async function initializeMockData() {
     const existingReviews = await reviewService.getAllReviews();
 
     if (existingReviews.length === 0) {
-      console.log('Создание моковых отзывов...');
+      console.log('[MOCK] Создание моковых отзывов...');
       for (const review of mockReviews) {
         try {
           await reviewService.create(
@@ -408,14 +419,14 @@ export async function initializeMockData() {
             review.review_text,
             review.review_date
           );
-          console.log(`Создан отзыв: ${review.product_name}`);
+          console.log(`[MOCK] Создан отзыв: ${review.product_name}`);
         } catch (error) {
-          console.error(`Ошибка при создании отзыва ${review.product_name}:`, error);
+          console.error(`[MOCK] Ошибка при создании отзыва ${review.product_name}:`, error);
         }
       }
-      console.log('Создано моковых отзывов: ' + mockReviews.length);
+      console.log(`[MOCK] Создано моковых отзывов: ${mockReviews.length}`);
     } else {
-      console.log(`Отзывы уже существуют (${existingReviews.length} шт.), пропускаем создание моковых данных`);
+      console.log(`[MOCK] Отзывы уже существуют (${existingReviews.length} шт.), пропускаем создание моковых данных`);
     }
   } catch (error) {
     console.error('Ошибка при проверке/создании отзывов:', error);
