@@ -45,18 +45,26 @@ export class ProductService {
         );
     }
 
-    async create(cityId, districtId, name, description, price, packagingId) {
+    async create(cityId, districtId, name, description, price, packagingId, imagePath = null) {
         const result = await database.run(
-            'INSERT INTO products (city_id, district_id, name, description, price, packaging_id) VALUES (?, ?, ?, ?, ?, ?)',
-            [cityId, districtId, name, description, price, packagingId]
+            'INSERT INTO products (city_id, district_id, name, description, price, packaging_id, image_path) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [cityId, districtId, name, description, price, packagingId, imagePath]
         );
         return await this.getById(result.lastID);
     }
 
-    async update(id, name, description, price, packagingId) {
+    async update(id, name, description, price, packagingId, imagePath = null) {
         await database.run(
-            'UPDATE products SET name = ?, description = ?, price = ?, packaging_id = ? WHERE id = ?',
-            [name, description, price, packagingId, id]
+            'UPDATE products SET name = ?, description = ?, price = ?, packaging_id = ?, image_path = ? WHERE id = ?',
+            [name, description, price, packagingId, imagePath, id]
+        );
+        return await this.getById(id);
+    }
+
+    async updateImage(id, imagePath) {
+        await database.run(
+            'UPDATE products SET image_path = ? WHERE id = ?',
+            [imagePath, id]
         );
         return await this.getById(id);
     }

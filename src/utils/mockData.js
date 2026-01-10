@@ -171,17 +171,26 @@ export async function initializeMockData() {
       if (products.length > 0) {
         console.log(`[MOCK] Создание товаров для города ${city.name}, района ${district.name}...`);
         const packaging = packagingByValue.get(1);
-        for (const product of products) {
+        for (let j = 0; j < products.length; j++) {
+          const product = products[j];
           try {
+            // Для первого товара первого города устанавливаем дефолтное изображение
+            let imagePath = null;
+            const cityIndex = existingCities.findIndex(c => c.id === city.id);
+            if (j === 0 && cityIndex === 0) {
+              imagePath = 'src/assets/img/placeholder_photo.png';
+            }
+            
             await productService.create(
               city.id,
               district.id,
               product.name,
               product.description,
               product.price,
-              packaging ? packaging.id : null
+              packaging ? packaging.id : null,
+              imagePath
             );
-            console.log(`[MOCK] Товар создан: ${product.name} для города ${city.name}, района ${district.name}`);
+            console.log(`[MOCK] Товар создан: ${product.name} для города ${city.name}, района ${district.name}${imagePath ? ' (с фото)' : ''}`);
           } catch (error) {
             console.error(`[MOCK] ОШИБКА при создании товара ${product.name}:`, error);
           }
@@ -266,15 +275,23 @@ export async function initializeMockData() {
       const packaging = packagingByValue.get(1);
         console.log(`[MOCK] Фасовка для товара:`, packaging ? packaging.id : 'null');
         try {
+          // Для первого товара устанавливаем дефолтное изображение
+          let imagePath = null;
+          if (j === 0 && i === 0) {
+            // Первый товар первого города
+            imagePath = 'src/assets/img/placeholder_photo.png';
+          }
+          
       await productService.create(
         city.id,
         district.id,
         product.name,
         product.description,
         product.price,
-        packaging ? packaging.id : null
+        packaging ? packaging.id : null,
+        imagePath
       );
-          console.log(`[MOCK] Товар создан: ${product.name}`);
+          console.log(`[MOCK] Товар создан: ${product.name}${imagePath ? ' (с фото)' : ''}`);
         } catch (error) {
           console.error(`[MOCK] ОШИБКА при создании товара ${product.name}:`, error);
           throw error;

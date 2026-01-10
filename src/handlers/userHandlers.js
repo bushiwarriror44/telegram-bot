@@ -10,6 +10,12 @@ import { menuButtonService } from '../services/menuButtonService.js';
 import { promocodeService } from '../services/promocodeService.js';
 import { statisticsService } from '../services/statisticsService.js';
 import { referralService } from '../services/referralService.js';
+import { existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Хранит пользователей, которые находятся в режиме поддержки
 const supportMode = new Map();
@@ -419,10 +425,9 @@ async function showCabinetMenu(ctx) {
 
         const keyboard = [
             [{ text: '💳 Пополнить', callback_data: 'topup_balance' }],
+            [{ text: '🌶 Реферальная система', callback_data: 'my_referrals' }],
             [{ text: '📦 Мои заказы', callback_data: 'my_orders' }],
-            [{ text: '💵 История пополнений', callback_data: 'topup_history' }],
-            [{ text: '👥 Мои рефералы', callback_data: 'my_referrals' }],
-            [{ text: '🏠 Главное меню', callback_data: 'back_to_cities' }]
+            [{ text: '💰 История пополнений', callback_data: 'topup_history' }],
         ];
 
         const replyMarkup = {
@@ -945,21 +950,6 @@ async function showProductDetails(ctx, productId) {
         ? `\n⚖️ Фасовка: <b>${product.packaging_value} кг</b>\n`
         : '\n';
 
-    if (paymentMethods.length === 0) {
-        await ctx.editMessageText(
-            `📦 <b>${product.name}</b>\n\n${product.description || 'Описание отсутствует'}\n\n💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n📍 Район: ${district.name}, Город: ${city.name}${packagingLine}\n❌ Методы оплаты пока не настроены. Обратитесь к администратору.`,
-            {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${district.id}` }]
-                    ]
-                }
-            }
-        );
-        return;
-    }
-
     const text = `
 📦 <b>${product.name}</b>
 
@@ -967,7 +957,7 @@ ${product.description || 'Описание отсутствует'}
 
 💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>
 📍 Район: ${district.name}, Город: ${city.name}${packagingLine}
-Выберите способ оплаты:
+${paymentMethods.length === 0 ? '❌ Методы оплаты пока не настроены. Обратитесь к администратору.' : 'Выберите способ оплаты:'}
   `.trim();
 
     const keyboard = paymentMethods.map(method => [
@@ -975,15 +965,78 @@ ${product.description || 'Описание отсутствует'}
     ]);
 
     // Добавляем кнопку "Использовать промокод"
-    keyboard.push([{ text: '🎁 Использовать промокод', callback_data: `use_promocode_${product.id}` }]);
+    if (paymentMethods.length > 0) {
+        keyboard.push([{ text: '🎁 Использовать промокод', callback_data: `use_promocode_${product.id}` }]);
+    }
     keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${district.id}` }]);
 
-    await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: keyboard
+    // Определяем путь к изображению
+    let photoPath = null;
+    if (product.image_path) {
+        // Если путь относительный, делаем его абсолютным
+        if (product.image_path.startsWith('./') || product.image_path.startsWith('../')) {
+            photoPath = join(__dirname, '../..', product.image_path);
+        } else if (product.image_path.startsWith('src/')) {
+            // Если путь начинается с src/, делаем его абсолютным
+            photoPath = join(__dirname, '../..', product.image_path);
+        } else {
+            photoPath = product.image_path;
         }
-    });
+    } else {
+        // Используем дефолтное изображение только если нет загруженного фото
+        const defaultImagePath = join(__dirname, '../..', 'src/assets/img/placeholder_photo.png');
+        if (existsSync(defaultImagePath)) {
+            photoPath = defaultImagePath;
+        }
+    }
+
+    const replyMarkup = {
+        inline_keyboard: keyboard
+    };
+
+    // Если есть фото, отправляем его с текстом, иначе только текст
+    if (photoPath && existsSync(photoPath)) {
+        try {
+            if (ctx.callbackQuery) {
+                await ctx.deleteMessage();
+            }
+            await ctx.replyWithPhoto(
+                { source: photoPath },
+                {
+                    caption: text,
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                }
+            );
+        } catch (error) {
+            console.error('[UserHandlers] Ошибка при отправке фото:', error);
+            // Если не удалось отправить фото, отправляем только текст
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } else {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            }
+        }
+    } else {
+        // Нет фото, отправляем только текст
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            });
+        }
+    }
 }
 
 async function showPaymentAddress(ctx, productId, methodId, promocodeId = null) {

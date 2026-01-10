@@ -151,6 +151,7 @@ class Database {
         description TEXT,
         price REAL NOT NULL,
         packaging_id INTEGER,
+        image_path TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE,
         FOREIGN KEY (district_id) REFERENCES districts(id) ON DELETE CASCADE
@@ -383,6 +384,12 @@ class Database {
     const hasBalance = userColumns.some((col) => col.name === 'balance');
     if (!hasBalance) {
       await this.run('ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0');
+    }
+
+    // Миграция: добавляем колонку image_path в существующую таблицу products при необходимости
+    const hasImagePath = productColumns.some((col) => col.name === 'image_path');
+    if (!hasImagePath) {
+      await this.run('ALTER TABLE products ADD COLUMN image_path TEXT');
     }
 
     // Миграция: добавляем колонку district_id в существующую таблицу products при необходимости

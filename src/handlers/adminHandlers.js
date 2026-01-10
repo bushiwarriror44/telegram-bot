@@ -12,7 +12,7 @@ import { statisticsService } from '../services/statisticsService.js';
 import { menuButtonService } from '../services/menuButtonService.js';
 import { promocodeService } from '../services/promocodeService.js';
 import { database } from '../database/db.js';
-import { readFileSync, writeFileSync, existsSync, copyFileSync, unlinkSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, copyFileSync, unlinkSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import sqlite3 from 'sqlite3';
@@ -532,7 +532,7 @@ ${addressesText}
 
         for (const user of users) {
             try {
-                await bot.telegram.sendMessage(user.chat_id, `📢 <b>Уведомление от администратора</b>\n\n${text}`, {
+                await bot.telegram.sendMessage(user.chat_id, `${text}`, {
                     parse_mode: 'HTML'
                 });
                 successCount++;
@@ -1119,27 +1119,26 @@ ${products.map(p => {
         }).join('\n') || 'Товаров пока нет'}
         `.trim();
 
+        const keyboard = [
+            [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }],
+            [{ text: '✏️ Редактировать товар', callback_data: `admin_product_edit_${districtId}` }],
+            [{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${districtId}` }],
+            [{ text: '◀️ Назад к районам', callback_data: `admin_products_city_${city.id}` }]
+        ];
+
         if (ctx.callbackQuery) {
             try {
                 await ctx.editMessageText(text, {
                     parse_mode: 'HTML',
                     reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }],
-                            [{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${districtId}` }],
-                            [{ text: '◀️ Назад к районам', callback_data: `admin_products_city_${city.id}` }]
-                        ]
+                        inline_keyboard: keyboard
                     }
                 });
             } catch (error) {
                 await ctx.reply(text, {
                     parse_mode: 'HTML',
                     reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }],
-                            [{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${districtId}` }],
-                            [{ text: '◀️ Назад к районам', callback_data: `admin_products_city_${city.id}` }]
-                        ]
+                        inline_keyboard: keyboard
                     }
                 });
             }
@@ -1147,11 +1146,7 @@ ${products.map(p => {
             await ctx.reply(text, {
                 parse_mode: 'HTML',
                 reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }],
-                        [{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${districtId}` }],
-                        [{ text: '◀️ Назад к районам', callback_data: `admin_products_city_${city.id}` }]
-                    ]
+                    inline_keyboard: keyboard
                 }
             });
         }
@@ -1248,7 +1243,8 @@ ${products.map(p => {
                 name,
                 description.trim(),
                 priceNum,
-                packaging.id
+                packaging.id,
+                null // imagePath будет null при создании через команду
             );
             await ctx.reply(`✅ Товар "${name}" успешно добавлен!`);
             await showDistrictProductsAdmin(ctx, districtId);
@@ -1291,6 +1287,78 @@ ${products.map(p => {
         } catch (error) {
             await ctx.editMessageText(`❌ Ошибка: ${error.message}`);
         }
+    });
+
+    // Редактирование товара
+    bot.action(/^admin_product_edit_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const districtId = parseInt(ctx.match[1]);
+        const products = await productService.getByDistrictId(districtId);
+
+        if (products.length === 0) {
+            await ctx.editMessageText('Нет товаров для редактирования.');
+            return;
+        }
+
+        const keyboard = products.map(product => [
+            { text: `✏️ ${product.name}`, callback_data: `admin_product_edit_select_${product.id}` }
+        ]);
+        const district = await districtService.getById(districtId);
+        const city = await cityService.getById(district.city_id);
+        keyboard.push([{ text: '◀️ Назад', callback_data: `admin_products_district_${districtId}` }]);
+
+        await ctx.editMessageText('Выберите товар для редактирования:', {
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    });
+
+    bot.action(/^admin_product_edit_select_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const productId = parseInt(ctx.match[1]);
+        const product = await productService.getById(productId);
+
+        if (!product) {
+            await ctx.reply('Товар не найден.');
+            return;
+        }
+
+        const district = await districtService.getById(product.district_id);
+        const city = await cityService.getById(product.city_id);
+
+        const text = `
+✏️ <b>Редактирование товара: ${product.name}</b>
+
+Текущие данные:
+• Название: ${product.name}
+• Описание: ${product.description || 'Отсутствует'}
+• Цена: ${product.price} ₽
+• Фасовка: ${product.packaging_value || 'Не указана'} кг
+• Фото: ${product.image_path ? '✅ Загружено' : '❌ Нет фото'}
+
+Выберите действие:
+        `.trim();
+
+        const keyboard = [
+            [{ text: '📷 Загрузить/Изменить фото', callback_data: `admin_product_upload_photo_${product.id}` }],
+            [{ text: '◀️ Назад к товарам', callback_data: `admin_products_district_${product.district_id}` }]
+        ];
+
+        await ctx.editMessageText(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    });
+
+    bot.action(/^admin_product_upload_photo_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const productId = parseInt(ctx.match[1]);
+        productImageUploadMode.set(ctx.from.id, productId);
+        await ctx.reply(
+            '📷 <b>Загрузка фото товара</b>\n\n' +
+            'Отправьте фото для товара. Фото будет сохранено и отображаться при просмотре товара.\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
     });
 
     // Управление методами оплаты
@@ -1704,6 +1772,8 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 promocodeAddMode.delete(ctx.from.id);
                 promocodeAssignMode.delete(ctx.from.id);
                 promocodeAssignAllMode.delete(ctx.from.id);
+                referralDiscountEditMode.delete(ctx.from.id);
+                productImageUploadMode.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showAdminPanel(ctx);
                 return; // Не передаем дальше, так как команда обработана
@@ -1971,12 +2041,23 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                         packagingId = packaging.id;
                     }
 
+                    // Находим район для города (берем первый)
+                    const districts = await districtService.getByCityId(city.id);
+                    const district = districts.length > 0 ? districts[0] : null;
+
+                    if (!district) {
+                        await ctx.reply(`❌ Для города ${city.name} не найден район. Создайте район сначала.`);
+                        continue;
+                    }
+
                     await productService.create(
                         city.id,
+                        district.id,
                         item.name,
                         item.description || '',
                         item.price,
-                        packagingId
+                        packagingId,
+                        null // imagePath
                     );
                     createdCount++;
                 }
@@ -2028,6 +2109,77 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 await ctx.reply(`❌ Ошибка: ${error.message}`);
             }
             return; // Явно указываем, что сообщение обработано
+        }
+    });
+
+    // Обработка загрузки фото для товаров
+    bot.on('photo', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+
+        if (productImageUploadMode.has(ctx.from.id)) {
+            try {
+                const productId = productImageUploadMode.get(ctx.from.id);
+                const product = await productService.getById(productId);
+
+                if (!product) {
+                    await ctx.reply('Товар не найден.');
+                    productImageUploadMode.delete(ctx.from.id);
+                    return;
+                }
+
+                // Получаем фото наибольшего размера
+                const photo = ctx.message.photo[ctx.message.photo.length - 1];
+                const file = await bot.telegram.getFile(photo.file_id);
+                const fileUrl = `https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`;
+
+                // Создаем директорию для изображений товаров, если её нет
+                const __filename = fileURLToPath(import.meta.url);
+                const __dirname = dirname(__filename);
+                const imagesDir = join(__dirname, '../..', 'src/assets/products');
+                if (!existsSync(imagesDir)) {
+                    mkdirSync(imagesDir, { recursive: true });
+                }
+
+                // Скачиваем и сохраняем изображение
+                const response = await fetch(fileUrl);
+                const buffer = await response.arrayBuffer();
+                const imagePath = join(imagesDir, `product_${productId}_${Date.now()}.jpg`);
+                writeFileSync(imagePath, Buffer.from(buffer));
+
+                // Сохраняем относительный путь в БД
+                const relativePath = `src/assets/products/${imagePath.split('products/')[1]}`;
+                await productService.updateImage(productId, relativePath);
+
+                productImageUploadMode.delete(ctx.from.id);
+                await ctx.reply('✅ Фото товара успешно загружено!');
+
+                // Показываем меню редактирования товара
+                const district = await districtService.getById(product.district_id);
+                await ctx.reply(
+                    `✏️ <b>Редактирование товара: ${product.name}</b>\n\n` +
+                    `Текущие данные:\n` +
+                    `• Название: ${product.name}\n` +
+                    `• Описание: ${product.description || 'Отсутствует'}\n` +
+                    `• Цена: ${product.price} ₽\n` +
+                    `• Фасовка: ${product.packaging_value || 'Не указана'} кг\n` +
+                    `• Фото: ✅ Загружено\n\n` +
+                    `Выберите действие:`,
+                    {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '📷 Загрузить/Изменить фото', callback_data: `admin_product_upload_photo_${product.id}` }],
+                                [{ text: '◀️ Назад к товарам', callback_data: `admin_products_district_${product.district_id}` }]
+                            ]
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при загрузке фото товара:', error);
+                await ctx.reply('❌ Ошибка при загрузке фото: ' + error.message);
+                productImageUploadMode.delete(ctx.from.id);
+            }
+            return;
         }
     });
 
