@@ -127,6 +127,20 @@ export class SettingsService {
   async setNotificationChannelId(channelId) {
     return await this.set('notification_channel_id', channelId.toString());
   }
+
+  /**
+   * Получает время на оплату в минутах
+   */
+  async getPaymentTimeMinutes() {
+    return parseInt(await this.get('payment_time_minutes', '30'));
+  }
+
+  /**
+   * Устанавливает время на оплату в минутах
+   */
+  async setPaymentTimeMinutes(minutes) {
+    return await this.set('payment_time_minutes', minutes.toString());
+  }
 }
 
 export const settingsService = new SettingsService();

@@ -41,13 +41,18 @@ export class NotificationService {
             const username = user?.username ? `@${user.username}` : `ID: ${order.user_chat_id}`;
             const name = user?.first_name || 'Неизвестно';
 
+            // Получаем время на оплату из настроек
+            const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes();
+
             const message = `🛒 <b>Новый заказ</b>\n\n` +
                 `📦 Заказ #${order.id}\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `📦 Товар: ${order.product_name}\n` +
                 `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ₽\n` +
                 `📍 Город: ${order.city_name}, Район: ${order.district_name}\n` +
-                `📅 Дата: ${new Date(order.created_at).toLocaleString('ru-RU')}`;
+                `⏰ Время на оплату: ${paymentTimeMinutes} минут\n` +
+                `📅 Дата: ${new Date(order.created_at).toLocaleString('ru-RU')}\n\n` +
+                `📊 Статус: <b>Ожидает оплаты</b>`;
 
             await this.sendToChannel(message);
         } catch (error) {
@@ -71,7 +76,8 @@ export class NotificationService {
                 `📦 Заказ #${order.id}\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `💳 Способ оплаты: ${paymentMethodName}\n` +
-                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ₽`;
+                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ₽\n\n` +
+                `📊 Статус: <b>Переход к оплате</b>`;
 
             await this.sendToChannel(message);
         } catch (error) {
@@ -94,11 +100,35 @@ export class NotificationService {
                 `👤 Пользователь: ${name} (${username})\n` +
                 `💳 Способ: ${paymentMethodName}\n` +
                 `💰 Сумма: ${amount.toLocaleString('ru-RU')} ₽\n` +
-                `📅 Дата: ${new Date().toLocaleString('ru-RU')}`;
+                `📅 Дата: ${new Date().toLocaleString('ru-RU')}\n\n` +
+                `📊 Статус: <b>Ожидает оплаты</b>`;
 
             await this.sendToChannel(message);
         } catch (error) {
             console.error('[NotificationService] Ошибка при отправке уведомления о пополнении:', error);
+        }
+    }
+
+    /**
+     * Уведомление о выборе реквизита для пополнения баланса
+     */
+    async notifyTopupRequest(userId, paymentMethodName) {
+        try {
+            const user = await userService.getByChatId(userId);
+            if (!user) return;
+
+            const username = user.username ? `@${user.username}` : `ID: ${userId}`;
+            const name = user.first_name || 'Неизвестно';
+
+            const message = `💰 <b>Пополнение баланса</b>\n\n` +
+                `👤 Пользователь: ${name} (${username})\n` +
+                `💳 Способ: ${paymentMethodName}\n` +
+                `📅 Дата: ${new Date().toLocaleString('ru-RU')}\n\n` +
+                `📊 Статус: <b>Ожидает оплаты</b>`;
+
+            await this.sendToChannel(message);
+        } catch (error) {
+            console.error('[NotificationService] Ошибка при отправке уведомления о запросе пополнения:', error);
         }
     }
 }

@@ -592,10 +592,9 @@ async function showTopupMethod(ctx, methodId) {
                 `Адрес для пополнения:\n<code>${address.address}</code>`;
         }
 
-        // Отправляем уведомление о выборе способа пополнения
-        // Примечание: уведомление о пополнении баланса будет отправляться администратором при подтверждении
+        // Отправляем уведомление о выборе реквизита для пополнения баланса
         if (notificationService) {
-            // Здесь можно добавить уведомление о запросе на пополнение, если нужно
+            await notificationService.notifyTopupRequest(ctx.from.id, method.name);
         }
 
         if (ctx.callbackQuery) {
