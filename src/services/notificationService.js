@@ -1,0 +1,107 @@
+import { settingsService } from './settingsService.js';
+import { userService } from './userService.js';
+import { orderService } from './orderService.js';
+
+export class NotificationService {
+    constructor(bot) {
+        this.bot = bot;
+    }
+
+    /**
+     * Отправляет уведомление в канал
+     */
+    async sendToChannel(message, parseMode = 'HTML') {
+        try {
+            const channelId = await settingsService.getNotificationChannelId();
+            if (!channelId) {
+                console.log('[NotificationService] Канал не привязан, уведомление не отправлено');
+                return false;
+            }
+
+            await this.bot.telegram.sendMessage(channelId, message, {
+                parse_mode: parseMode
+            });
+            console.log('[NotificationService] Уведомление отправлено в канал:', channelId);
+            return true;
+        } catch (error) {
+            console.error('[NotificationService] Ошибка при отправке уведомления в канал:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Уведомление о создании заказа
+     */
+    async notifyOrderCreated(orderId) {
+        try {
+            const order = await orderService.getById(orderId);
+            if (!order) return;
+
+            const user = await userService.getByChatId(order.user_chat_id);
+            const username = user?.username ? `@${user.username}` : `ID: ${order.user_chat_id}`;
+            const name = user?.first_name || 'Неизвестно';
+
+            const message = `🛒 <b>Новый заказ</b>\n\n` +
+                `📦 Заказ #${order.id}\n` +
+                `👤 Пользователь: ${name} (${username})\n` +
+                `📦 Товар: ${order.product_name}\n` +
+                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ₽\n` +
+                `📍 Город: ${order.city_name}, Район: ${order.district_name}\n` +
+                `📅 Дата: ${new Date(order.created_at).toLocaleString('ru-RU')}`;
+
+            await this.sendToChannel(message);
+        } catch (error) {
+            console.error('[NotificationService] Ошибка при отправке уведомления о заказе:', error);
+        }
+    }
+
+    /**
+     * Уведомление о выборе способа оплаты
+     */
+    async notifyPaymentMethodSelected(orderId, paymentMethodName) {
+        try {
+            const order = await orderService.getById(orderId);
+            if (!order) return;
+
+            const user = await userService.getByChatId(order.user_chat_id);
+            const username = user?.username ? `@${user.username}` : `ID: ${order.user_chat_id}`;
+            const name = user?.first_name || 'Неизвестно';
+
+            const message = `💳 <b>Выбран способ оплаты</b>\n\n` +
+                `📦 Заказ #${order.id}\n` +
+                `👤 Пользователь: ${name} (${username})\n` +
+                `💳 Способ оплаты: ${paymentMethodName}\n` +
+                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ₽`;
+
+            await this.sendToChannel(message);
+        } catch (error) {
+            console.error('[NotificationService] Ошибка при отправке уведомления о способе оплаты:', error);
+        }
+    }
+
+    /**
+     * Уведомление о пополнении баланса
+     */
+    async notifyTopup(userId, amount, paymentMethodName) {
+        try {
+            const user = await userService.getByChatId(userId);
+            if (!user) return;
+
+            const username = user.username ? `@${user.username}` : `ID: ${userId}`;
+            const name = user.first_name || 'Неизвестно';
+
+            const message = `💰 <b>Пополнение баланса</b>\n\n` +
+                `👤 Пользователь: ${name} (${username})\n` +
+                `💳 Способ: ${paymentMethodName}\n` +
+                `💰 Сумма: ${amount.toLocaleString('ru-RU')} ₽\n` +
+                `📅 Дата: ${new Date().toLocaleString('ru-RU')}`;
+
+            await this.sendToChannel(message);
+        } catch (error) {
+            console.error('[NotificationService] Ошибка при отправке уведомления о пополнении:', error);
+        }
+    }
+}
+
+// Экспортируем класс, экземпляр будет создан после инициализации bot
+export { NotificationService };

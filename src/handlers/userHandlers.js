@@ -40,7 +40,7 @@ function isAdmin(userId) {
 async function getMenuKeyboard() {
     const topButtons = [
         ['♻️ Каталог', '⚙️ Мой кабинет'],
-        ['📨 Помощь', '🛟 Отзывы']
+        ['📨 Отзывы']
     ];
 
     // Получаем динамические кнопки из БД
@@ -70,8 +70,16 @@ async function showMenuKeyboard(ctx) {
     });
 }
 
+let notificationService = null;
+
 export function setupUserHandlers(bot) {
     console.log('[UserHandlers] Настройка пользовательских обработчиков...');
+
+    // Инициализируем notificationService с bot
+    (async () => {
+        const { NotificationService } = await import('../services/notificationService.js');
+        notificationService = new NotificationService(bot);
+    })();
     // Главное меню - выбор города
     bot.start(async (ctx) => {
         console.log('[UserHandlers] ========== Команда /start получена ==========');
@@ -582,6 +590,12 @@ async function showTopupMethod(ctx, methodId) {
             text = `💳 <b>Пополнение через ${method.name}</b>\n\n` +
                 `Сеть: ${method.network}\n` +
                 `Адрес для пополнения:\n<code>${address.address}</code>`;
+        }
+
+        // Отправляем уведомление о выборе способа пополнения
+        // Примечание: уведомление о пополнении баланса будет отправляться администратором при подтверждении
+        if (notificationService) {
+            // Здесь можно добавить уведомление о запросе на пополнение, если нужно
         }
 
         if (ctx.callbackQuery) {
@@ -1112,6 +1126,11 @@ async function createOrder(ctx, productId, promocodeId = null) {
             promocodeId
         );
 
+        // Отправляем уведомление о создании заказа
+        if (notificationService) {
+            await notificationService.notifyOrderCreated(order.id);
+        }
+
         // Ждем 5 секунд перед показом заказа
         await new Promise(resolve => setTimeout(resolve, 5000));
 
@@ -1201,6 +1220,11 @@ async function showPaymentAddressForOrder(ctx, orderId, methodId) {
 
     // Обновляем метод оплаты в заказе
     await orderService.updatePaymentMethod(orderId, methodId);
+
+    // Отправляем уведомление о выборе способа оплаты
+    if (notificationService) {
+        await notificationService.notifyPaymentMethodSelected(orderId, method.name);
+    }
 
     // Обновляем активность пользователя
     await userService.saveOrUpdate(ctx.from.id, {

@@ -113,6 +113,20 @@ export class SettingsService {
   async setBlockTimeHours(hours) {
     return await this.set('block_time_hours', hours.toString());
   }
+
+  /**
+   * Получает ID привязанного Telegram-канала
+   */
+  async getNotificationChannelId() {
+    return await this.get('notification_channel_id', null);
+  }
+
+  /**
+   * Устанавливает ID привязанного Telegram-канала
+   */
+  async setNotificationChannelId(channelId) {
+    return await this.set('notification_channel_id', channelId.toString());
+  }
 }
 
 export const settingsService = new SettingsService();

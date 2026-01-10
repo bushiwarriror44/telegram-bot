@@ -24,6 +24,7 @@ export { adminSessions };
 const notificationSessions = new Map(); // Хранит сессии создания уведомлений (userId -> true)
 const importPaymentMode = new Map(); // userId -> true (режим загрузки платежных данных)
 const importProductMode = new Map(); // userId -> true (режим загрузки товаров)
+const channelBindMode = new Map(); // userId -> true (режим привязки канала)
 
 // Шаблоны товаров по умолчанию
 const PRODUCT_TEMPLATES = [
@@ -217,6 +218,7 @@ ${addressesText}
                     [{ text: '🎨 Настройка иконок', callback_data: 'admin_icons' }],
                     [{ text: '🎁 Бонусы и промокоды', callback_data: 'admin_promocodes' }],
                     [{ text: '👥 Настройка реферальной системы', callback_data: 'admin_referrals' }],
+                    [{ text: '📢 Привязать телеграм-канал', callback_data: 'admin_bind_channel' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
             }
@@ -1774,6 +1776,7 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 promocodeAssignAllMode.delete(ctx.from.id);
                 referralDiscountEditMode.delete(ctx.from.id);
                 productImageUploadMode.delete(ctx.from.id);
+                channelBindMode.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showAdminPanel(ctx);
                 return; // Не передаем дальше, так как команда обработана
@@ -1947,6 +1950,74 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             return;
         }
 
+        // Обработка привязки канала
+        if (channelBindMode.has(ctx.from.id)) {
+            try {
+                let channelId = null;
+
+                // Проверяем, переслано ли сообщение из канала
+                if (ctx.message.forward_from_chat) {
+                    const chat = ctx.message.forward_from_chat;
+                    if (chat.type === 'channel') {
+                        channelId = chat.id.toString();
+                    }
+                }
+
+                // Если не переслано, пытаемся распарсить ID из текста
+                if (!channelId) {
+                    const text = ctx.message.text.trim();
+                    // Проверяем, является ли текст числом (ID канала)
+                    if (/^-?\d+$/.test(text)) {
+                        channelId = text;
+                    } else {
+                        await ctx.reply(
+                            '❌ Не удалось определить ID канала.\n\n' +
+                            'Перешлите сообщение из канала или отправьте ID канала в формате: <code>-1001234567890</code>',
+                            { parse_mode: 'HTML' }
+                        );
+                        return;
+                    }
+                }
+
+                // Сохраняем ID канала
+                await settingsService.setNotificationChannelId(channelId);
+                channelBindMode.delete(ctx.from.id);
+
+                // Проверяем, что бот может отправлять сообщения в канал
+                try {
+                    await bot.telegram.sendMessage(channelId, '✅ Канал успешно привязан! Уведомления будут приходить сюда.');
+                    await ctx.reply(`✅ Канал успешно привязан!\n\nID канала: <code>${channelId}</code>`, {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                            ]
+                        }
+                    });
+                } catch (error) {
+                    console.error('[AdminHandlers] Ошибка при проверке доступа к каналу:', error);
+                    await ctx.reply(
+                        `⚠️ Канал привязан, но бот не может отправлять сообщения.\n\n` +
+                        `Убедитесь, что бот добавлен в канал как администратор.\n\n` +
+                        `ID канала: <code>${channelId}</code>`,
+                        {
+                            parse_mode: 'HTML',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                                ]
+                            }
+                        }
+                    );
+                }
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при привязке канала:', error);
+                await ctx.reply('❌ Ошибка при привязке канала: ' + error.message);
+                channelBindMode.delete(ctx.from.id);
+            }
+            return;
+        }
+
         // Обработка загрузки платежных адресов
         if (importPaymentMode.has(ctx.from.id)) {
             try {
@@ -2110,6 +2181,58 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             }
             return; // Явно указываем, что сообщение обработано
         }
+    });
+
+    // Обработка пересланных сообщений для привязки канала
+    bot.on('message', async (ctx, next) => {
+        if (!isAdmin(ctx.from.id)) {
+            return next();
+        }
+
+        if (channelBindMode.has(ctx.from.id) && ctx.message.forward_from_chat) {
+            try {
+                const chat = ctx.message.forward_from_chat;
+                if (chat.type === 'channel') {
+                    const channelId = chat.id.toString();
+
+                    // Сохраняем ID канала
+                    await settingsService.setNotificationChannelId(channelId);
+                    channelBindMode.delete(ctx.from.id);
+
+                    // Проверяем, что бот может отправлять сообщения в канал
+                    try {
+                        await bot.telegram.sendMessage(channelId, '✅ Канал успешно привязан! Уведомления будут приходить сюда.');
+                        await ctx.reply(`✅ Канал успешно привязан!\n\nID канала: <code>${channelId}</code>`, {
+                            parse_mode: 'HTML',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                                ]
+                            }
+                        });
+                    } catch (error) {
+                        console.error('[AdminHandlers] Ошибка при проверке доступа к каналу:', error);
+                        await ctx.reply(
+                            `⚠️ Канал привязан, но бот не может отправлять сообщения.\n\n` +
+                            `Убедитесь, что бот добавлен в канал как администратор.\n\n` +
+                            `ID канала: <code>${channelId}</code>`,
+                            {
+                                parse_mode: 'HTML',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                                    ]
+                                }
+                            }
+                        );
+                    }
+                    return;
+                }
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при привязке канала через пересылку:', error);
+            }
+        }
+        return next();
     });
 
     // Обработка загрузки фото для товаров
