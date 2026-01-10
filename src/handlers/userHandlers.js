@@ -1,4 +1,5 @@
 import { cityService } from '../services/cityService.js';
+import { districtService } from '../services/districtService.js';
 import { productService } from '../services/productService.js';
 import { paymentService } from '../services/paymentService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
@@ -157,7 +158,18 @@ export function setupUserHandlers(bot) {
             last_name: ctx.from.last_name
         });
         const cityId = parseInt(ctx.match[1]);
-        await showProductsMenu(ctx, cityId);
+        await showDistrictsMenu(ctx, cityId);
+    });
+
+    // Обработка выбора района
+    bot.action(/^district_(\d+)$/, async (ctx) => {
+        await userService.saveOrUpdate(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            last_name: ctx.from.last_name
+        });
+        const districtId = parseInt(ctx.match[1]);
+        await showProductsMenu(ctx, districtId);
     });
 
     // Обработка выбора товара
@@ -225,11 +237,21 @@ export function setupUserHandlers(bot) {
         }
     });
 
-    // Вернуться к товарам
-    bot.action(/^back_to_products_(\d+)$/, async (ctx) => {
+    // Вернуться к районам
+    bot.action(/^back_to_districts_(\d+)$/, async (ctx) => {
         const cityId = parseInt(ctx.match[1]);
         try {
-            await showProductsMenu(ctx, cityId);
+            await showDistrictsMenu(ctx, cityId);
+        } catch (error) {
+            await ctx.reply('Ошибка при загрузке районов. Попробуйте снова.');
+        }
+    });
+
+    // Вернуться к товарам
+    bot.action(/^back_to_products_(\d+)$/, async (ctx) => {
+        const districtId = parseInt(ctx.match[1]);
+        try {
+            await showProductsMenu(ctx, districtId);
         } catch (error) {
             await ctx.reply('Ошибка при загрузке товаров. Попробуйте снова.');
         }
@@ -705,22 +727,73 @@ async function showCitiesMenu(ctx) {
     );
 }
 
-async function showProductsMenu(ctx, cityId) {
+async function showDistrictsMenu(ctx, cityId) {
     const city = await cityService.getById(cityId);
     if (!city) {
         await ctx.reply('Город не найден.');
         return;
     }
 
-    const products = await productService.getByCityId(cityId);
+    const districts = await districtService.getByCityId(cityId);
 
-    if (products.length === 0) {
+    if (districts.length === 0) {
         await ctx.reply(
-            `В городе ${city.name} пока нет товаров.`,
+            `В городе ${city.name} пока нет районов. Обратитесь к администратору.`,
             {
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]
+                    ]
+                }
+            }
+        );
+        return;
+    }
+
+    const keyboard = districts.map(district => [
+        { text: `📍 ${district.name}`, callback_data: `district_${district.id}` }
+    ]);
+
+    keyboard.push([{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]);
+
+    try {
+        await ctx.editMessageText(
+            `🏙️ Город: ${city.name}\n\n📍 Выберите район:`,
+            {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            }
+        );
+    } catch (error) {
+        await ctx.reply(
+            `🏙️ Город: ${city.name}\n\n📍 Выберите район:`,
+            {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            }
+        );
+    }
+}
+
+async function showProductsMenu(ctx, districtId) {
+    const district = await districtService.getById(districtId);
+    if (!district) {
+        await ctx.reply('Район не найден.');
+        return;
+    }
+
+    const city = await cityService.getById(district.city_id);
+    const products = await productService.getByDistrictId(districtId);
+
+    if (products.length === 0) {
+        await ctx.reply(
+            `В районе ${district.name} (${city.name}) пока нет товаров.`,
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад к районам', callback_data: `back_to_districts_${city.id}` }]
                     ]
                 }
             }
@@ -740,16 +813,27 @@ async function showProductsMenu(ctx, cityId) {
         ];
     });
 
-    keyboard.push([{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]);
+    keyboard.push([{ text: '◀️ Назад к районам', callback_data: `back_to_districts_${city.id}` }]);
 
-    await ctx.editMessageText(
-        `🛍️ Товары в городе ${city.name}:\n\nВыберите товар:`,
-        {
-            reply_markup: {
-                inline_keyboard: keyboard
+    try {
+        await ctx.editMessageText(
+            `🛍️ Товары в районе ${district.name} (${city.name}):\n\nВыберите товар:`,
+            {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
             }
-        }
-    );
+        );
+    } catch (error) {
+        await ctx.reply(
+            `🛍️ Товары в районе ${district.name} (${city.name}):\n\nВыберите товар:`,
+            {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            }
+        );
+    }
 }
 
 async function showProductDetails(ctx, productId) {
@@ -759,6 +843,7 @@ async function showProductDetails(ctx, productId) {
         return;
     }
 
+    const district = await districtService.getById(product.district_id);
     const city = await cityService.getById(product.city_id);
     const paymentMethods = await paymentService.getAllMethods();
 
@@ -768,12 +853,12 @@ async function showProductDetails(ctx, productId) {
 
     if (paymentMethods.length === 0) {
         await ctx.editMessageText(
-            `📦 <b>${product.name}</b>\n\n${product.description || 'Описание отсутствует'}\n\n💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n📍 Город: ${city.name}${packagingLine}\n❌ Методы оплаты пока не настроены. Обратитесь к администратору.`,
+            `📦 <b>${product.name}</b>\n\n${product.description || 'Описание отсутствует'}\n\n💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>\n📍 Район: ${district.name}, Город: ${city.name}${packagingLine}\n❌ Методы оплаты пока не настроены. Обратитесь к администратору.`,
             {
                 parse_mode: 'HTML',
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${city.id}` }]
+                        [{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${district.id}` }]
                     ]
                 }
             }
@@ -787,7 +872,7 @@ async function showProductDetails(ctx, productId) {
 ${product.description || 'Описание отсутствует'}
 
 💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>
-📍 Город: ${city.name}${packagingLine}
+📍 Район: ${district.name}, Город: ${city.name}${packagingLine}
 Выберите способ оплаты:
   `.trim();
 
@@ -797,7 +882,7 @@ ${product.description || 'Описание отсутствует'}
 
     // Добавляем кнопку "Использовать промокод"
     keyboard.push([{ text: '🎁 Использовать промокод', callback_data: `use_promocode_${product.id}` }]);
-    keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${city.id}` }]);
+    keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${district.id}` }]);
 
     await ctx.editMessageText(text, {
         parse_mode: 'HTML',
@@ -937,6 +1022,7 @@ async function applyPromocode(ctx, productId, promocodeText) {
     const discount = (product.price * promocode.discount_percent) / 100;
     const finalPrice = product.price - discount;
 
+    const district = await districtService.getById(product.district_id);
     const city = await cityService.getById(product.city_id);
     const paymentMethods = await paymentService.getAllMethods();
 
@@ -953,7 +1039,7 @@ ${product.description || 'Описание отсутствует'}
 🎁 Промокод <b>${promocode.code}</b>: -${promocode.discount_percent}%
 💰 Скидка: <b>${discount.toLocaleString('ru-RU')} ₽</b>
 💰 Итого: <b>${finalPrice.toLocaleString('ru-RU')} ₽</b>
-📍 Город: ${city.name}${packagingLine}
+📍 Район: ${district.name}, Город: ${city.name}${packagingLine}
 Выберите способ оплаты:
   `.trim();
 
@@ -961,7 +1047,7 @@ ${product.description || 'Описание отсутствует'}
         { text: `💳 ${method.name}`, callback_data: `pay_with_promo_${product.id}_${method.id}_${promocode.id}` }
     ]);
 
-    keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${city.id}` }]);
+    keyboard.push([{ text: '◀️ Назад к товарам', callback_data: `back_to_products_${district.id}` }]);
 
     // Если это callback query, редактируем сообщение, иначе отправляем новое
     if (ctx.callbackQuery) {

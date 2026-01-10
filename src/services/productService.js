@@ -1,6 +1,21 @@
 import { database } from '../database/db.js';
 
 export class ProductService {
+    async getByDistrictId(districtId) {
+        return await database.all(
+            `
+      SELECT 
+        p.*,
+        pk.value AS packaging_value
+      FROM products p
+      LEFT JOIN packagings pk ON pk.id = p.packaging_id
+      WHERE p.district_id = ?
+      ORDER BY p.name
+      `,
+            [districtId]
+        );
+    }
+
     async getByCityId(cityId) {
         return await database.all(
             `
@@ -30,10 +45,10 @@ export class ProductService {
         );
     }
 
-    async create(cityId, name, description, price, packagingId) {
+    async create(cityId, districtId, name, description, price, packagingId) {
         const result = await database.run(
-            'INSERT INTO products (city_id, name, description, price, packaging_id) VALUES (?, ?, ?, ?, ?)',
-            [cityId, name, description, price, packagingId]
+            'INSERT INTO products (city_id, district_id, name, description, price, packaging_id) VALUES (?, ?, ?, ?, ?, ?)',
+            [cityId, districtId, name, description, price, packagingId]
         );
         return await this.getById(result.lastID);
     }

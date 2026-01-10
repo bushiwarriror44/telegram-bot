@@ -1,4 +1,5 @@
 import { cityService } from '../services/cityService.js';
+import { districtService } from '../services/districtService.js';
 import { productService } from '../services/productService.js';
 import { paymentService } from '../services/paymentService.js';
 import { packagingService } from '../services/packagingService.js';
@@ -151,22 +152,36 @@ export async function initializeMockData() {
       packagingListAfter.map((p) => [p.value, p])
     );
     
+    // Создаем районы для существующих городов, если их нет
+    for (const city of existingCities) {
+      const districts = await districtService.getByCityId(city.id);
+      if (districts.length === 0) {
+        console.log(`[MOCK] Создание района "Центральный" для города ${city.name}...`);
+        await districtService.create(city.id, 'Центральный');
+      }
+    }
+
     // Создаем товары для существующих городов
     for (const city of existingCities) {
+      const districts = await districtService.getByCityId(city.id);
+      if (districts.length === 0) continue;
+      
+      const district = districts[0]; // Используем первый район
       const products = mockProducts[city.name] || [];
       if (products.length > 0) {
-        console.log(`[MOCK] Создание товаров для города ${city.name}...`);
+        console.log(`[MOCK] Создание товаров для города ${city.name}, района ${district.name}...`);
         const packaging = packagingByValue.get(1);
         for (const product of products) {
           try {
             await productService.create(
               city.id,
+              district.id,
               product.name,
               product.description,
               product.price,
               packaging ? packaging.id : null
             );
-            console.log(`[MOCK] Товар создан: ${product.name} для города ${city.name}`);
+            console.log(`[MOCK] Товар создан: ${product.name} для города ${city.name}, района ${district.name}`);
           } catch (error) {
             console.error(`[MOCK] ОШИБКА при создании товара ${product.name}:`, error);
           }
@@ -227,8 +242,8 @@ export async function initializeMockData() {
     packagingList.map((p) => [p.value, p])
   );
 
-  // Создаем города и товары
-  console.log('[MOCK] Создание городов и товаров...');
+  // Создаем города, районы и товары
+  console.log('[MOCK] Создание городов, районов и товаров...');
   console.log('[MOCK] Количество городов для создания:', mockCities.length);
   for (let i = 0; i < mockCities.length; i++) {
     const cityName = mockCities[i];
@@ -236,6 +251,11 @@ export async function initializeMockData() {
     try {
     const city = await cityService.create(cityName);
       console.log(`[MOCK] Город создан: ${cityName}, ID:`, city?.id);
+
+      // Создаем район "Центральный" для города
+      console.log(`[MOCK] Создание района "Центральный" для города ${cityName}...`);
+      const district = await districtService.create(city.id, 'Центральный');
+      console.log(`[MOCK] Район создан: ${district.name}, ID:`, district?.id);
 
     const products = mockProducts[cityName] || [];
       console.log(`[MOCK] Товаров для города ${cityName}:`, products.length);
@@ -248,6 +268,7 @@ export async function initializeMockData() {
         try {
       await productService.create(
         city.id,
+        district.id,
         product.name,
         product.description,
         product.price,

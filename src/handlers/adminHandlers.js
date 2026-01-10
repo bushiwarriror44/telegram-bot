@@ -1,5 +1,6 @@
 import { config } from '../config/index.js';
 import { cityService } from '../services/cityService.js';
+import { districtService } from '../services/districtService.js';
 import { productService } from '../services/productService.js';
 import { paymentService } from '../services/paymentService.js';
 import { packagingService } from '../services/packagingService.js';
@@ -663,6 +664,7 @@ ${cities.map(c => `• ${c.name}`).join('\n') || 'Городов пока нет
             inline_keyboard: [
                 [{ text: '➕ Добавить город', callback_data: 'admin_city_add' }],
                 [{ text: '🗑️ Удалить город', callback_data: 'admin_city_delete' }],
+                [{ text: '📍 Управление районами', callback_data: 'admin_districts' }],
                 [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
             ]
         };
@@ -714,8 +716,10 @@ ${cities.map(c => `• ${c.name}`).join('\n') || 'Городов пока нет
         }
 
         try {
-            await cityService.create(cityName);
-            await ctx.reply(`✅ Город "${cityName}" успешно добавлен!`);
+            const city = await cityService.create(cityName);
+            // Автоматически создаем район "Центральный" для нового города
+            await districtService.create(city.id, 'Центральный');
+            await ctx.reply(`✅ Город "${cityName}" успешно добавлен! Район "Центральный" создан автоматически.`);
             await showCitiesAdmin(ctx);
         } catch (error) {
             await ctx.reply(`❌ Ошибка: ${error.message}`);
@@ -754,6 +758,244 @@ ${cities.map(c => `• ${c.name}`).join('\n') || 'Городов пока нет
         }
     });
 
+    // Управление районами
+    bot.action('admin_districts', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showDistrictsAdmin(ctx);
+    });
+
+    async function showDistrictsAdmin(ctx) {
+        const cities = await cityService.getAll();
+
+        const text = `
+📍 <b>Управление районами</b>
+
+Выберите город для управления районами:
+        `.trim();
+
+        const keyboard = cities.map(city => [
+            { text: `🏙️ ${city.name}`, callback_data: `admin_districts_city_${city.id}` }
+        ]);
+        keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_cities' }]);
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    }
+
+    bot.action(/^admin_districts_city_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const cityId = parseInt(ctx.match[1]);
+        await showDistrictsForCity(ctx, cityId);
+    });
+
+    async function showDistrictsForCity(ctx, cityId) {
+        const city = await cityService.getById(cityId);
+        if (!city) {
+            await ctx.reply('Город не найден.');
+            return;
+        }
+
+        const districts = await districtService.getByCityId(cityId);
+
+        const text = `
+📍 <b>Районы города: ${city.name}</b>
+
+Список районов:
+${districts.map(d => `• ${d.name}`).join('\n') || 'Районов пока нет'}
+        `.trim();
+
+        const keyboard = [
+            [{ text: '➕ Добавить район', callback_data: `admin_district_add_${cityId}` }],
+            [{ text: '✏️ Изменить район', callback_data: `admin_district_edit_${cityId}` }],
+            [{ text: '🗑️ Удалить район', callback_data: `admin_district_delete_${cityId}` }],
+            [{ text: '◀️ Назад к городам', callback_data: 'admin_districts' }]
+        ];
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    }
+
+    const districtAddMode = new Map(); // userId -> cityId
+    const districtEditMode = new Map(); // userId -> { cityId, districtId }
+
+    bot.action(/^admin_district_add_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const cityId = parseInt(ctx.match[1]);
+        districtAddMode.set(ctx.from.id, cityId);
+        await ctx.reply(
+            'Введите название нового района:\n\nФормат: <code>/adddistrict Название района</code>',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    bot.command('adddistrict', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.reply('❌ У вас нет доступа.');
+            return;
+        }
+
+        if (!districtAddMode.has(ctx.from.id)) {
+            await ctx.reply('❌ Сначала выберите город для добавления района.');
+            return;
+        }
+
+        const cityId = districtAddMode.get(ctx.from.id);
+        const args = ctx.message.text.split(' ').slice(1);
+        const districtName = args.join(' ');
+
+        if (!districtName) {
+            await ctx.reply('❌ Укажите название района.\nФормат: /adddistrict Название района');
+            return;
+        }
+
+        try {
+            await districtService.create(cityId, districtName);
+            districtAddMode.delete(ctx.from.id);
+            await ctx.reply(`✅ Район "${districtName}" успешно добавлен!`);
+            await showDistrictsForCity(ctx, cityId);
+        } catch (error) {
+            await ctx.reply(`❌ Ошибка: ${error.message}`);
+        }
+    });
+
+    bot.action(/^admin_district_edit_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const cityId = parseInt(ctx.match[1]);
+        const districts = await districtService.getByCityId(cityId);
+
+        if (districts.length === 0) {
+            await ctx.editMessageText('Нет районов для изменения.');
+            return;
+        }
+
+        const keyboard = districts.map(district => [
+            { text: `✏️ ${district.name}`, callback_data: `admin_district_edit_select_${district.id}` }
+        ]);
+        keyboard.push([{ text: '◀️ Назад', callback_data: `admin_districts_city_${cityId}` }]);
+
+        await ctx.editMessageText('Выберите район для изменения:', {
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    });
+
+    bot.action(/^admin_district_edit_select_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const districtId = parseInt(ctx.match[1]);
+        const district = await districtService.getById(districtId);
+
+        if (!district) {
+            await ctx.reply('Район не найден.');
+            return;
+        }
+
+        districtEditMode.set(ctx.from.id, { cityId: district.city_id, districtId });
+        await ctx.reply(
+            `Введите новое название для района "${district.name}":\n\nФормат: <code>/editdistrict Новое название</code>`,
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    bot.command('editdistrict', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.reply('❌ У вас нет доступа.');
+            return;
+        }
+
+        if (!districtEditMode.has(ctx.from.id)) {
+            await ctx.reply('❌ Сначала выберите район для изменения.');
+            return;
+        }
+
+        const { cityId, districtId } = districtEditMode.get(ctx.from.id);
+        const args = ctx.message.text.split(' ').slice(1);
+        const newName = args.join(' ');
+
+        if (!newName) {
+            await ctx.reply('❌ Укажите новое название района.\nФормат: /editdistrict Новое название');
+            return;
+        }
+
+        try {
+            await districtService.update(districtId, newName);
+            districtEditMode.delete(ctx.from.id);
+            await ctx.reply(`✅ Район успешно изменен на "${newName}"!`);
+            await showDistrictsForCity(ctx, cityId);
+        } catch (error) {
+            await ctx.reply(`❌ Ошибка: ${error.message}`);
+        }
+    });
+
+    bot.action(/^admin_district_delete_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const cityId = parseInt(ctx.match[1]);
+        const districts = await districtService.getByCityId(cityId);
+
+        if (districts.length === 0) {
+            await ctx.editMessageText('Нет районов для удаления.');
+            return;
+        }
+
+        const keyboard = districts.map(district => [
+            { text: `🗑️ ${district.name}`, callback_data: `admin_district_del_${district.id}` }
+        ]);
+        keyboard.push([{ text: '◀️ Назад', callback_data: `admin_districts_city_${cityId}` }]);
+
+        await ctx.editMessageText('Выберите район для удаления:', {
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    });
+
+    bot.action(/^admin_district_del_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const districtId = parseInt(ctx.match[1]);
+        const district = await districtService.getById(districtId);
+
+        if (!district) {
+            await ctx.reply('Район не найден.');
+            return;
+        }
+
+        try {
+            await districtService.delete(districtId);
+            await ctx.editMessageText('✅ Район успешно удален!');
+            await showDistrictsForCity(ctx, district.city_id);
+        } catch (error) {
+            await ctx.editMessageText(`❌ Ошибка: ${error.message}`);
+        }
+    });
+
     // Управление товарами
     async function showProductsAdmin(ctx) {
         const cities = await cityService.getAll();
@@ -765,7 +1007,7 @@ ${cities.map(c => `• ${c.name}`).join('\n') || 'Городов пока нет
     `.trim();
 
         const keyboard = cities.map(city => [
-            { text: `📍 ${city.name}`, callback_data: `admin_products_city_${city.id}` }
+            { text: `🏙️ ${city.name}`, callback_data: `admin_products_city_${city.id}` }
         ]);
         keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_panel' }]);
 
@@ -795,45 +1037,128 @@ ${cities.map(c => `• ${c.name}`).join('\n') || 'Городов пока нет
     bot.action(/^admin_products_city_(\d+)$/, async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         const cityId = parseInt(ctx.match[1]);
-        await showCityProductsAdmin(ctx, cityId);
+        await showDistrictsForProducts(ctx, cityId);
     });
 
-    async function showCityProductsAdmin(ctx, cityId) {
+    async function showDistrictsForProducts(ctx, cityId) {
         const city = await cityService.getById(cityId);
-        const products = await productService.getByCityId(cityId);
+        if (!city) {
+            await ctx.reply('Город не найден.');
+            return;
+        }
+
+        const districts = await districtService.getByCityId(cityId);
 
         const text = `
-📦 <b>Товары в городе: ${city.name}</b>
+📦 <b>Управление товарами</b>
+
+Город: <b>${city.name}</b>
+
+Выберите район:
+        `.trim();
+
+        const keyboard = districts.map(district => [
+            { text: `📍 ${district.name}`, callback_data: `admin_products_district_${district.id}` }
+        ]);
+        keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_products' }]);
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    }
+
+    bot.action(/^admin_products_district_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const districtId = parseInt(ctx.match[1]);
+        await showDistrictProductsAdmin(ctx, districtId);
+    });
+
+    async function showDistrictProductsAdmin(ctx, districtId) {
+        const district = await districtService.getById(districtId);
+        if (!district) {
+            await ctx.reply('Район не найден.');
+            return;
+        }
+
+        const city = await cityService.getById(district.city_id);
+        const products = await productService.getByDistrictId(districtId);
+
+        const text = `
+📦 <b>Товары в районе: ${district.name} (${city.name})</b>
 
 ${products.map(p => {
             const packagingLabel = p.packaging_value ? ` (${p.packaging_value} кг)` : '';
             return `• ${p.name}${packagingLabel} - ${p.price} ₽`;
         }).join('\n') || 'Товаров пока нет'}
-    `.trim();
+        `.trim();
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${cityId}` }],
-                    [{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${cityId}` }],
-                    [{ text: '◀️ Назад', callback_data: 'admin_products' }]
-                ]
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }],
+                            [{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${districtId}` }],
+                            [{ text: '◀️ Назад к районам', callback_data: `admin_products_city_${city.id}` }]
+                        ]
+                    }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }],
+                            [{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${districtId}` }],
+                            [{ text: '◀️ Назад к районам', callback_data: `admin_products_city_${city.id}` }]
+                        ]
+                    }
+                });
             }
-        });
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }],
+                        [{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${districtId}` }],
+                        [{ text: '◀️ Назад к районам', callback_data: `admin_products_city_${city.id}` }]
+                    ]
+                }
+            });
+        }
     }
 
     bot.action(/^admin_product_add_(\d+)$/, async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
-        const cityId = parseInt(ctx.match[1]);
+        const districtId = parseInt(ctx.match[1]);
+        const district = await districtService.getById(districtId);
+        const city = await cityService.getById(district.city_id);
         await ctx.editMessageText(
             `Введите данные нового товара.\n\nДоступные шаблоны названий:\n` +
             PRODUCT_TEMPLATES.map(t => `${t.id}) ${t.name}`).join('\n') +
             `\n\nВы можете указать либо название товара, либо ID шаблона.\n` +
             `Также обязательно укажите фасовку (например: 0.25, 0.5, 1, 2 и т.д.).\n\n` +
-            `Формат: <code>/addproduct ${cityId} НазваниеИЛИ_ID|Описание|Цена|Фасовка</code>\n\n` +
-            `Пример c шаблоном: /addproduct ${cityId} 1|Сладкие красные яблоки|500|1\n` +
-            `Пример с произвольным названием: /addproduct ${cityId} Манго|Спелое манго|900|0.5`,
+            `Формат: <code>/addproduct ${districtId} НазваниеИЛИ_ID|Описание|Цена|Фасовка</code>\n\n` +
+            `Пример c шаблоном: /addproduct ${districtId} 1|Сладкие красные яблоки|500|1\n` +
+            `Пример с произвольным названием: /addproduct ${districtId} Манго|Спелое манго|900|0.5\n\n` +
+            `Район: ${district.name}, Город: ${city.name}`,
             { parse_mode: 'HTML' }
         );
     });
@@ -845,13 +1170,21 @@ ${products.map(p => {
         }
 
         const args = ctx.message.text.split(' ').slice(1);
-        const cityId = parseInt(args[0]);
+        const districtId = parseInt(args[0]);
         const data = args.slice(1).join(' ').split('|');
 
-        if (isNaN(cityId)) {
-            await ctx.reply('❌ Неверный формат cityId.\nФормат: /addproduct cityId НазваниеИЛИ_ID|Описание|Цена|Фасовка');
+        if (isNaN(districtId)) {
+            await ctx.reply('❌ Неверный формат districtId.\nФормат: /addproduct districtId НазваниеИЛИ_ID|Описание|Цена|Фасовка');
             return;
         }
+
+        const district = await districtService.getById(districtId);
+        if (!district) {
+            await ctx.reply('❌ Район не найден.');
+            return;
+        }
+
+        const cityId = district.city_id;
 
         if (data.length < 4) {
             await ctx.reply('❌ Неверный формат.\nФормат: /addproduct cityId НазваниеИЛИ_ID|Описание|Цена|Фасовка');
@@ -899,13 +1232,14 @@ ${products.map(p => {
 
             await productService.create(
                 cityId,
+                districtId,
                 name,
                 description.trim(),
                 priceNum,
                 packaging.id
             );
             await ctx.reply(`✅ Товар "${name}" успешно добавлен!`);
-            await showCityProductsAdmin(ctx, cityId);
+            await showDistrictProductsAdmin(ctx, districtId);
         } catch (error) {
             await ctx.reply(`❌ Ошибка: ${error.message}`);
         }
@@ -913,18 +1247,20 @@ ${products.map(p => {
 
     bot.action(/^admin_product_delete_(\d+)$/, async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
-        const cityId = parseInt(ctx.match[1]);
-        const products = await productService.getByCityId(cityId);
+        const districtId = parseInt(ctx.match[1]);
+        const products = await productService.getByDistrictId(districtId);
 
         if (products.length === 0) {
             await ctx.editMessageText('Нет товаров для удаления.');
             return;
         }
 
+        const district = await districtService.getById(districtId);
+        const city = await cityService.getById(district.city_id);
         const keyboard = products.map(product => [
-            { text: `🗑️ ${product.name}`, callback_data: `admin_product_del_${product.id}_${cityId}` }
+            { text: `🗑️ ${product.name}`, callback_data: `admin_product_del_${product.id}_${districtId}` }
         ]);
-        keyboard.push([{ text: '◀️ Назад', callback_data: `admin_products_city_${cityId}` }]);
+        keyboard.push([{ text: '◀️ Назад', callback_data: `admin_products_district_${districtId}` }]);
 
         await ctx.editMessageText('Выберите товар для удаления:', {
             reply_markup: { inline_keyboard: keyboard }
@@ -934,12 +1270,12 @@ ${products.map(p => {
     bot.action(/^admin_product_del_(\d+)_(\d+)$/, async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         const productId = parseInt(ctx.match[1]);
-        const cityId = parseInt(ctx.match[2]);
+        const districtId = parseInt(ctx.match[2]);
 
         try {
             await productService.delete(productId);
             await ctx.editMessageText('✅ Товар успешно удален!');
-            await showCityProductsAdmin(ctx, cityId);
+            await showDistrictProductsAdmin(ctx, districtId);
         } catch (error) {
             await ctx.editMessageText(`❌ Ошибка: ${error.message}`);
         }
@@ -1906,7 +2242,7 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
     // Настройка иконок
     async function showIconsSettings(ctx) {
         const currentIcon = await settingsService.getCityIcon();
-        
+
         const text = `🎨 <b>Настройка иконок</b>\n\n` +
             `Текущая иконка для городов: <b>${currentIcon}</b>\n\n` +
             `Выберите действие:`;

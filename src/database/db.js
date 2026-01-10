@@ -120,6 +120,18 @@ class Database {
       )
     `);
 
+    // Таблица районов
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS districts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        city_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE,
+        UNIQUE(city_id, name)
+      )
+    `);
+
     // Таблица фасовок
     await this.run(`
       CREATE TABLE IF NOT EXISTS packagings (
@@ -134,12 +146,14 @@ class Database {
       CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         city_id INTEGER NOT NULL,
+        district_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
         price REAL NOT NULL,
         packaging_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE
+        FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE,
+        FOREIGN KEY (district_id) REFERENCES districts(id) ON DELETE CASCADE
       )
     `);
 
@@ -347,9 +361,53 @@ class Database {
       await this.run('ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0');
     }
 
+    // Миграция: добавляем колонку district_id в существующую таблицу products при необходимости
+    const productColumns = await this.db.all('PRAGMA table_info(products)');
+    const hasDistrictId = productColumns.some((col) => col.name === 'district_id');
+    if (!hasDistrictId) {
+      console.log('[DB.init] Добавление колонки district_id в таблицу products...');
+      // SQLite не поддерживает ALTER TABLE ADD COLUMN с NOT NULL без значения по умолчанию
+      // Поэтому сначала добавляем колонку как nullable
+      await this.run('ALTER TABLE products ADD COLUMN district_id INTEGER');
+      
+      // Создаем дефолтный район для каждого города, если его нет
+      const cities = await this.db.all('SELECT id FROM cities');
+      for (const city of cities) {
+        // Проверяем, есть ли уже районы для этого города
+        const existingDistricts = await this.db.all('SELECT id FROM districts WHERE city_id = ?', [city.id]);
+        if (existingDistricts.length === 0) {
+          // Создаем дефолтный район "Центральный"
+          await this.run('INSERT INTO districts (city_id, name) VALUES (?, ?)', [city.id, 'Центральный']);
+        }
+      }
+      
+      // Получаем первый район для каждого города и обновляем товары
+      const districts = await this.db.all('SELECT id, city_id FROM districts');
+      for (const district of districts) {
+        await this.run('UPDATE products SET district_id = ? WHERE city_id = ? AND district_id IS NULL', [district.id, district.city_id]);
+      }
+      
+      // Если остались товары без района, создаем для них дефолтный
+      const productsWithoutDistrict = await this.db.all('SELECT DISTINCT city_id FROM products WHERE district_id IS NULL');
+      for (const product of productsWithoutDistrict) {
+        const defaultDistrict = await this.db.get('SELECT id FROM districts WHERE city_id = ? LIMIT 1', [product.city_id]);
+        if (defaultDistrict) {
+          await this.run('UPDATE products SET district_id = ? WHERE city_id = ? AND district_id IS NULL', [defaultDistrict.id, product.city_id]);
+        }
+      }
+      
+      console.log('[DB.init] Миграция district_id завершена.');
+    }
+
     // Индексы для оптимизации
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_products_city_id ON products(city_id)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_products_district_id ON products(district_id)'
+    );
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_districts_city_id ON districts(city_id)'
     );
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_payment_addresses_method_id ON payment_addresses(payment_method_id)'
