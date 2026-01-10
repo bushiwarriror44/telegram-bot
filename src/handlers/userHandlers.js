@@ -11,6 +11,7 @@ import { promocodeService } from '../services/promocodeService.js';
 import { statisticsService } from '../services/statisticsService.js';
 import { referralService } from '../services/referralService.js';
 import { orderService } from '../services/orderService.js';
+import { reviewService } from '../services/reviewService.js';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -38,9 +39,14 @@ function isAdmin(userId) {
 
 // Функция для получения reply keyboard с кнопками меню
 async function getMenuKeyboard() {
+    // Получаем количество отзывов
+    const reviews = await reviewService.getAllReviews();
+    const reviewsCount = reviews.length;
+    const reviewsButtonText = reviewsCount > 0 ? `📨 Отзывы (${reviewsCount})` : '📨 Отзывы';
+
     const topButtons = [
         ['♻️ Каталог', '⚙️ Мой кабинет'],
-        ['📨 Отзывы']
+        [reviewsButtonText]
     ];
 
     // Получаем динамические кнопки из БД
@@ -328,9 +334,98 @@ export function setupUserHandlers(bot) {
         await showHelpMenu(ctx);
     });
 
-    bot.hears(['🛟 Отзывы', 'Отзывы'], async (ctx) => {
-        await ctx.reply('📝 Отзывы:\n\n(Здесь будет информация об отзывах)');
+    // Обработка кнопки "Отзывы" (может быть с количеством или без)
+    bot.hears(/^📨 Отзывы( \(\d+\))?$/, async (ctx) => {
+        await showReviews(ctx, 1);
     });
+
+    // Также обрабатываем старый формат для совместимости
+    bot.hears(['🛟 Отзывы', 'Отзывы'], async (ctx) => {
+        await showReviews(ctx, 1);
+    });
+
+    // Обработка пагинации отзывов
+    bot.action(/^reviews_page_(\d+)$/, async (ctx) => {
+        const page = parseInt(ctx.match[1]);
+        await showReviews(ctx, page);
+    });
+
+    // Обработчик для текущей страницы (неактивная кнопка)
+    bot.action('reviews_current', async (ctx) => {
+        await ctx.answerCbQuery();
+    });
+}
+
+// Показ отзывов с пагинацией
+async function showReviews(ctx, page = 1) {
+    try {
+        const { reviews, currentPage, totalPages } = await reviewService.getAll(page, 5);
+
+        if (reviews.length === 0) {
+            const text = '❤️ Отзывы:\n\nПока нет отзывов.';
+            const keyboard = {
+                inline_keyboard: [
+                    [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                ]
+            };
+
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(text, { reply_markup: keyboard });
+            } else {
+                await ctx.reply(text, { reply_markup: keyboard });
+            }
+            return;
+        }
+
+        let text = '❤️ Отзывы:\n\n';
+
+        for (const review of reviews) {
+            // Форматируем звезды
+            const stars = '⭐️'.repeat(review.rating);
+
+            text += `Товар: ${review.product_name}\n`;
+            text += `Дата: ${review.review_date.split('-').reverse().join('.')}\n`;
+            text += `Оценка: ${stars}\n`;
+            text += `Отзыв: ${review.review_text}\n\n`;
+        }
+
+        // Кнопки пагинации
+        const keyboard = [];
+        const navRow = [];
+
+        if (currentPage > 1) {
+            navRow.push({ text: '◀️', callback_data: `reviews_page_${currentPage - 1}` });
+        }
+
+        navRow.push({ text: `${currentPage} / ${totalPages}`, callback_data: 'reviews_current' });
+
+        if (currentPage < totalPages) {
+            navRow.push({ text: '▶️', callback_data: `reviews_page_${currentPage + 1}` });
+        }
+
+        if (navRow.length > 0) {
+            keyboard.push(navRow);
+        }
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    } catch (error) {
+        console.error('[UserHandlers] Ошибка при показе отзывов:', error);
+        await ctx.reply('Произошла ошибка при загрузке отзывов. Попробуйте позже.');
+    }
 
     // Обработка текстовых сообщений от пользователей (когда они пишут в поддержку)
     // ВАЖНО: Этот обработчик должен регистрироваться ПОСЛЕ всех bot.command(),

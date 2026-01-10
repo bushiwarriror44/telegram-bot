@@ -385,6 +385,25 @@ class Database {
       'CREATE INDEX IF NOT EXISTS idx_product_views_product_id ON product_views(product_id)'
     );
 
+    // Таблица отзывов
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_name TEXT NOT NULL,
+        city_name TEXT NOT NULL,
+        district_name TEXT NOT NULL,
+        rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+        review_text TEXT NOT NULL,
+        review_date DATE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Индекс для быстрого поиска отзывов по дате
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_reviews_date ON reviews(review_date DESC)'
+    );
+
     // Миграция: добавляем колонку balance в существующую таблицу users при необходимости
     const userColumns = await this.db.all('PRAGMA table_info(users)');
     const hasBalance = userColumns.some((col) => col.name === 'balance');
@@ -439,7 +458,7 @@ class Database {
       // SQLite не поддерживает ALTER TABLE ADD COLUMN с NOT NULL без значения по умолчанию
       // Поэтому сначала добавляем колонку как nullable
       await this.run('ALTER TABLE products ADD COLUMN district_id INTEGER');
-      
+
       // Создаем дефолтный район для каждого города, если его нет
       const cities = await this.db.all('SELECT id FROM cities');
       for (const city of cities) {
@@ -450,13 +469,13 @@ class Database {
           await this.run('INSERT INTO districts (city_id, name) VALUES (?, ?)', [city.id, 'Центральный']);
         }
       }
-      
+
       // Получаем первый район для каждого города и обновляем товары
       const districts = await this.db.all('SELECT id, city_id FROM districts');
       for (const district of districts) {
         await this.run('UPDATE products SET district_id = ? WHERE city_id = ? AND district_id IS NULL', [district.id, district.city_id]);
       }
-      
+
       // Если остались товары без района, создаем для них дефолтный
       const productsWithoutDistrict = await this.db.all('SELECT DISTINCT city_id FROM products WHERE district_id IS NULL');
       for (const product of productsWithoutDistrict) {
@@ -465,7 +484,7 @@ class Database {
           await this.run('UPDATE products SET district_id = ? WHERE city_id = ? AND district_id IS NULL', [defaultDistrict.id, product.city_id]);
         }
       }
-      
+
       console.log('[DB.init] Миграция district_id завершена.');
     }
 

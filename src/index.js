@@ -69,7 +69,7 @@ async function startBot() {
         console.error('[BOT] Message:', ctx.message?.text);
       }
       if (ctx && ctx.reply) {
-        ctx.reply('Произошла ошибка. Попробуйте позже.');
+      ctx.reply('Произошла ошибка. Попробуйте позже.');
       }
     });
     console.log('[START] Обработчик ошибок настроен');

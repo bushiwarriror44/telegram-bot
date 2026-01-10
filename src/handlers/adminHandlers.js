@@ -11,6 +11,7 @@ import { settingsService } from '../services/settingsService.js';
 import { statisticsService } from '../services/statisticsService.js';
 import { menuButtonService } from '../services/menuButtonService.js';
 import { promocodeService } from '../services/promocodeService.js';
+import { reviewService } from '../services/reviewService.js';
 import { database } from '../database/db.js';
 import { readFileSync, writeFileSync, existsSync, copyFileSync, unlinkSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
@@ -25,6 +26,8 @@ const notificationSessions = new Map(); // Хранит сессии созда�
 const importPaymentMode = new Map(); // userId -> true (режим загрузки платежных данных)
 const importProductMode = new Map(); // userId -> true (режим загрузки товаров)
 const channelBindMode = new Map(); // userId -> true (режим привязки канала)
+const reviewCreateMode = new Map(); // userId -> {step: 'product'|'rating'|'text'|'date', data: {}}
+const reviewImportMode = new Map(); // userId -> true (режим загрузки отзывов)
 
 // Шаблоны товаров по умолчанию
 const PRODUCT_TEMPLATES = [
@@ -219,6 +222,7 @@ ${addressesText}
                     [{ text: '🎁 Бонусы и промокоды', callback_data: 'admin_promocodes' }],
                     [{ text: '👥 Настройка реферальной системы', callback_data: 'admin_referrals' }],
                     [{ text: '📢 Привязать телеграм-канал', callback_data: 'admin_bind_channel' }],
+                    [{ text: '💬 Управление отзывами', callback_data: 'admin_reviews' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
             }
@@ -360,6 +364,12 @@ ${addressesText}
     bot.action('admin_stats', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showStatisticsAdmin(ctx);
+    });
+
+    // Управление отзывами
+    bot.action('admin_reviews', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showReviewsAdmin(ctx);
     });
 
     // Обработчики для админских reply keyboard кнопок
@@ -1849,6 +1859,8 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 referralDiscountEditMode.delete(ctx.from.id);
                 productImageUploadMode.delete(ctx.from.id);
                 channelBindMode.delete(ctx.from.id);
+                reviewCreateMode.delete(ctx.from.id);
+                reviewImportMode.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showAdminPanel(ctx);
                 return; // Не передаем дальше, так как команда обработана
@@ -2139,6 +2151,94 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             return;
         }
 
+        // Обработка создания отзыва вручную
+        if (reviewCreateMode.has(ctx.from.id)) {
+            try {
+                const mode = reviewCreateMode.get(ctx.from.id);
+                const step = mode.step;
+                const data = mode.data || {};
+
+                if (step === 'product') {
+                    // Парсим название товара: "Город / Район / Товар фасовка"
+                    const parts = ctx.message.text.split(' / ');
+                    if (parts.length < 3) {
+                        await ctx.reply('❌ Неверный формат. Используйте: <code>Город / Район / Товар фасовка</code>', {
+                            parse_mode: 'HTML'
+                        });
+                        return;
+                    }
+                    data.product_name = ctx.message.text;
+                    data.city_name = parts[0].trim();
+                    data.district_name = parts[1].trim();
+                    mode.step = 'rating';
+                    mode.data = data;
+                    reviewCreateMode.set(ctx.from.id, mode);
+                    await ctx.reply(
+                        '✏️ Введите оценку (от 1 до 5):',
+                        {
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '1 ⭐', callback_data: 'review_rating_1' },
+                                    { text: '2 ⭐', callback_data: 'review_rating_2' },
+                                    { text: '3 ⭐', callback_data: 'review_rating_3' }],
+                                    [{ text: '4 ⭐', callback_data: 'review_rating_4' },
+                                    { text: '5 ⭐', callback_data: 'review_rating_5' }],
+                                    [{ text: '◀️ Отмена', callback_data: 'admin_reviews' }]
+                                ]
+                            }
+                        }
+                    );
+                } else if (step === 'text') {
+                    data.review_text = ctx.message.text;
+                    mode.step = 'date';
+                    mode.data = data;
+                    reviewCreateMode.set(ctx.from.id, mode);
+                    await ctx.reply(
+                        '✏️ Введите дату отзыва в формате <code>ДД.ММ.ГГГГ</code>:\n\n' +
+                        'Пример: <code>30.12.2025</code>',
+                        {
+                            parse_mode: 'HTML',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '◀️ Отмена', callback_data: 'admin_reviews' }]
+                                ]
+                            }
+                        }
+                    );
+                } else if (step === 'date') {
+                    // Парсим дату в формате ДД.ММ.ГГГГ
+                    const dateMatch = ctx.message.text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+                    if (!dateMatch) {
+                        await ctx.reply('❌ Неверный формат даты. Используйте: <code>ДД.ММ.ГГГГ</code>', {
+                            parse_mode: 'HTML'
+                        });
+                        return;
+                    }
+                    const [, day, month, year] = dateMatch;
+                    data.review_date = `${year}-${month}-${day}`;
+
+                    // Создаем отзыв
+                    await reviewService.create(
+                        data.product_name,
+                        data.city_name,
+                        data.district_name,
+                        data.rating,
+                        data.review_text,
+                        data.review_date
+                    );
+
+                    reviewCreateMode.delete(ctx.from.id);
+                    await ctx.reply('✅ Отзыв успешно создан!');
+                    await showReviewsAdmin(ctx);
+                }
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при создании отзыва:', error);
+                await ctx.reply('❌ Ошибка при создании отзыва: ' + error.message);
+                reviewCreateMode.delete(ctx.from.id);
+            }
+            return;
+        }
+
         // Обработка загрузки товаров
         if (importProductMode.has(ctx.from.id)) {
             try {
@@ -2373,6 +2473,46 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 console.error('[AdminHandlers] Ошибка при загрузке фото товара:', error);
                 await ctx.reply('❌ Ошибка при загрузке фото: ' + error.message);
                 productImageUploadMode.delete(ctx.from.id);
+            }
+            return;
+        }
+
+        // Обработка загрузки отзывов
+        if (reviewImportMode.has(ctx.from.id)) {
+            try {
+                const document = ctx.message.document;
+
+                // Проверяем, что это JSON файл
+                if (!document.file_name || !document.file_name.endsWith('.json')) {
+                    await ctx.reply('❌ Ошибка: Файл должен иметь расширение .json');
+                    return;
+                }
+
+                await ctx.reply('📥 Загрузка JSON файла с отзывами...');
+
+                // Получаем файл
+                const file = await bot.telegram.getFile(document.file_id);
+                const fileUrl = `https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`;
+
+                // Скачиваем файл
+                const response = await fetch(fileUrl);
+                const jsonText = await response.text();
+                const data = JSON.parse(jsonText);
+
+                if (!Array.isArray(data)) {
+                    await ctx.reply('❌ Ошибка: JSON должен быть массивом объектов.');
+                    return;
+                }
+
+                // Импортируем отзывы
+                const count = await reviewService.importReviews(data);
+                reviewImportMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Успешно загружено ${count} отзывов!`);
+                await showReviewsAdmin(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при загрузке отзывов:', error);
+                await ctx.reply('❌ Ошибка при загрузке отзывов: ' + error.message);
+                reviewImportMode.delete(ctx.from.id);
             }
             return;
         }
@@ -3537,6 +3677,50 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             await showPromocodesAdmin(ctx);
         } catch (error) {
             await ctx.editMessageText(`❌ Ошибка: ${error.message}`);
+        }
+    });
+
+    // Обработка выбора оценки для отзыва
+    bot.action(/^review_rating_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const rating = parseInt(ctx.match[1]);
+        const mode = reviewCreateMode.get(ctx.from.id);
+        if (mode) {
+            mode.data.rating = rating;
+            mode.step = 'text';
+            reviewCreateMode.set(ctx.from.id, mode);
+            await ctx.editMessageText(
+                '✏️ Введите текст отзыва:',
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Отмена', callback_data: 'admin_reviews' }]
+                        ]
+                    }
+                }
+            );
+        }
+    });
+
+    // Обработка выбора оценки для отзыва
+    bot.action(/^review_rating_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const rating = parseInt(ctx.match[1]);
+        const mode = reviewCreateMode.get(ctx.from.id);
+        if (mode) {
+            mode.data.rating = rating;
+            mode.step = 'text';
+            reviewCreateMode.set(ctx.from.id, mode);
+            await ctx.editMessageText(
+                '✏️ Введите текст отзыва:',
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Отмена', callback_data: 'admin_reviews' }]
+                        ]
+                    }
+                }
+            );
         }
     });
 

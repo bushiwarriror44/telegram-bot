@@ -126,7 +126,7 @@ export async function initializeMockData() {
   console.log('[MOCK] Проверка существующих городов...');
   const existingCities = await cityService.getAll();
   console.log('[MOCK] Найдено городов:', existingCities.length);
-  
+
   // Проверяем наличие товаров
   console.log('[MOCK] Проверка существующих товаров...');
   let totalProducts = 0;
@@ -136,7 +136,7 @@ export async function initializeMockData() {
     console.log(`[MOCK] В городе ${city.name} товаров:`, cityProducts.length);
   }
   console.log('[MOCK] Всего товаров:', totalProducts);
-  
+
   // Если есть и города, и товары - пропускаем создание городов/товаров,
   // но ВСЁ РАВНО инициализируем кнопки меню
   if (existingCities.length > 0 && totalProducts > 0) {
@@ -145,11 +145,11 @@ export async function initializeMockData() {
     console.log('[MOCK] Моковые данные (кнопки меню) инициализированы при существующей БД');
     return;
   }
-  
+
   // Если есть города, но нет товаров - создаем только товары
   if (existingCities.length > 0 && totalProducts === 0) {
     console.log('[MOCK] Города есть, но товаров нет. Создаем товары для существующих городов...');
-    
+
     // Создаем базовые фасовки если их нет
     const packagingList = await packagingService.getAll();
     if (packagingList.length === 0) {
@@ -162,7 +162,7 @@ export async function initializeMockData() {
     const packagingByValue = new Map(
       packagingListAfter.map((p) => [p.value, p])
     );
-    
+
     // Создаем районы для существующих городов, если их нет
     for (const city of existingCities) {
       const districts = await districtService.getByCityId(city.id);
@@ -176,7 +176,7 @@ export async function initializeMockData() {
     for (const city of existingCities) {
       const districts = await districtService.getByCityId(city.id);
       if (districts.length === 0) continue;
-      
+
       const district = districts[0]; // Используем первый район
       const products = mockProducts[city.name] || [];
       if (products.length > 0) {
@@ -191,7 +191,7 @@ export async function initializeMockData() {
             if (j === 0 && cityIndex === 0) {
               imagePath = 'src/assets/img/placeholder_photo.png';
             }
-            
+
             await productService.create(
               city.id,
               district.id,
@@ -208,7 +208,7 @@ export async function initializeMockData() {
         }
       }
     }
-    
+
     // Создаем методы оплаты если их нет
     const existingPayments = await paymentService.getAllMethods(true);
     if (existingPayments.length === 0) {
@@ -222,7 +222,7 @@ export async function initializeMockData() {
         await paymentService.createMethod(method.name, method.network, 'card');
       }
     }
-    
+
     // Создаем карточные счета если их нет
     const existingCards = await cardAccountService.getAll(false);
     if (existingCards.length === 0) {
@@ -238,7 +238,7 @@ export async function initializeMockData() {
         await cardAccountService.create(card.name, card.accountNumber);
       }
     }
-    
+
     console.log('[MOCK] Товары для существующих городов созданы!');
 
     // Инициализируем кнопки меню и выходим
@@ -254,7 +254,7 @@ export async function initializeMockData() {
     const value = defaultPackagings[i];
     console.log(`[MOCK] Создание фасовки ${i + 1}/${defaultPackagings.length}:`, value);
     try {
-    await packagingService.getOrCreate(value);
+      await packagingService.getOrCreate(value);
       console.log(`[MOCK] Фасовка ${value} успешно создана/получена`);
     } catch (error) {
       console.error(`[MOCK] ОШИБКА при создании фасовки ${value}:`, error);
@@ -273,7 +273,7 @@ export async function initializeMockData() {
     const cityName = mockCities[i];
     console.log(`[MOCK] Создание города ${i + 1}/${mockCities.length}: ${cityName}`);
     try {
-    const city = await cityService.create(cityName);
+      const city = await cityService.create(cityName);
       console.log(`[MOCK] Город создан: ${cityName}, ID:`, city?.id);
 
       // Создаем район "Центральный" для города
@@ -281,13 +281,13 @@ export async function initializeMockData() {
       const district = await districtService.create(city.id, 'Центральный');
       console.log(`[MOCK] Район создан: ${district.name}, ID:`, district?.id);
 
-    const products = mockProducts[cityName] || [];
+      const products = mockProducts[cityName] || [];
       console.log(`[MOCK] Товаров для города ${cityName}:`, products.length);
       for (let j = 0; j < products.length; j++) {
         const product = products[j];
         console.log(`[MOCK] Создание товара ${j + 1}/${products.length}: ${product.name}`);
-      // Для примера всем товарам ставим фасовку 1 (можно легко поменять)
-      const packaging = packagingByValue.get(1);
+        // Для примера всем товарам ставим фасовку 1 (можно легко поменять)
+        const packaging = packagingByValue.get(1);
         console.log(`[MOCK] Фасовка для товара:`, packaging ? packaging.id : 'null');
         try {
           // Для первого товара устанавливаем дефолтное изображение
@@ -296,16 +296,16 @@ export async function initializeMockData() {
             // Первый товар первого города
             imagePath = 'src/assets/img/placeholder_photo.png';
           }
-          
-      await productService.create(
-        city.id,
-        district.id,
-        product.name,
-        product.description,
-        product.price,
-        packaging ? packaging.id : null,
-        imagePath
-      );
+
+          await productService.create(
+            city.id,
+            district.id,
+            product.name,
+            product.description,
+            product.price,
+            packaging ? packaging.id : null,
+            imagePath
+          );
           console.log(`[MOCK] Товар создан: ${product.name}${imagePath ? ' (с фото)' : ''}`);
         } catch (error) {
           console.error(`[MOCK] ОШИБКА при создании товара ${product.name}:`, error);
@@ -344,8 +344,71 @@ export async function initializeMockData() {
     console.log(`Создан карточный счет: ${card.name} - ${card.accountNumber}`);
   }
 
-  // Инициализируем кнопки меню и завершаем
+  // Инициализируем кнопки меню
   await initializeDefaultMenuButtons();
+
+  // Создаем моковые отзывы
+  const mockReviews = [
+    {
+      product_name: 'Магнитогорск / Правый Орджо / 🧲😻Леденцы Мяу Мяу New😻🧲 2г',
+      city_name: 'Магнитогорск',
+      district_name: 'Правый Орджо',
+      rating: 5,
+      review_text: 'Все отлично, все на месте\nЗабрал быстро\nТовар классный\nВсем спасибо',
+      review_date: '2025-12-30'
+    },
+    {
+      product_name: 'Белорецк / Окраина / 😻Леденцы Мяу Мяу New😻 3г',
+      city_name: 'Белорецк',
+      district_name: 'Окраина',
+      rating: 5,
+      review_text: 'Касание',
+      review_date: '2025-12-29'
+    },
+    {
+      product_name: 'Учалы / Учалы / 🌶 Spice Mix Vasabi 🌶 3г',
+      city_name: 'Учалы',
+      district_name: 'Учалы',
+      rating: 5,
+      review_text: 'От души 🤝',
+      review_date: '2025-12-29'
+    },
+    {
+      product_name: 'Учалы / Учалы / 🧲💎 Леденцы Кис Кис 💎🧲 2г',
+      city_name: 'Учалы',
+      district_name: 'Учалы',
+      rating: 5,
+      review_text: 'Бро дома от души и душевно респект тебе, а нам чёткие подъёмом',
+      review_date: '2025-12-28'
+    },
+    {
+      product_name: 'Магнитогорск / Правый Орджо / 🧲😻Леденцы Мяу Мяу New😻🧲 2г',
+      city_name: 'Магнитогорск',
+      district_name: 'Правый Орджо',
+      rating: 5,
+      review_text: 'Все на месте\nПолный анти шкур\nСам еле как забрал, но все четко\nСпасибо 😂🤟🏻',
+      review_date: '2025-12-28'
+    }
+  ];
+
+  // Проверяем, есть ли уже отзывы
+  const { reviewService } = await import('../services/reviewService.js');
+  const existingReviews = await reviewService.getAllReviews();
+
+  if (existingReviews.length === 0) {
+    for (const review of mockReviews) {
+      await reviewService.create(
+        review.product_name,
+        review.city_name,
+        review.district_name,
+        review.rating,
+        review.review_text,
+        review.review_date
+      );
+    }
+    console.log('Создано моковых отзывов: ' + mockReviews.length);
+  }
+
   console.log('Моковые данные успешно инициализированы!');
 }
 
