@@ -316,6 +316,82 @@ export function setupUserHandlers(bot) {
         await showHelpMenu(ctx);
     });
 
+    // Обработка текстовых сообщений от пользователей (когда они пишут в поддержку)
+    // ВАЖНО: Этот обработчик должен регистрироваться ПЕРЕД bot.hears(),
+    // чтобы он мог обработать динамические кнопки до того, как bot.hears() перехватит их
+    bot.on('text', async (ctx, next) => {
+        console.log('[UserHandlers] bot.on(text) вызван для текста:', ctx.message.text);
+
+        // Пропускаем команды - они должны обрабатываться через bot.command()
+        if (ctx.message.text && ctx.message.text.startsWith('/')) {
+            console.log('[UserHandlers] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
+            return next(); // позволяем другим middleware (командам) обработать
+        }
+
+        // Проверяем, находится ли пользователь в режиме поддержки
+        if (supportMode.has(ctx.from.id)) {
+            // Сохраняем сообщение пользователя
+            await userService.saveOrUpdate(ctx.from.id, {
+                username: ctx.from.username,
+                first_name: ctx.from.first_name,
+                last_name: ctx.from.last_name
+            });
+
+            await supportService.saveUserMessage(ctx.from.id, ctx.message.text);
+            await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!');
+            supportMode.delete(ctx.from.id);
+            return;
+        }
+
+        // Обработка ввода промокода
+        if (promocodeInputMode.has(ctx.from.id)) {
+            const productId = promocodeInputMode.get(ctx.from.id);
+            const promocodeText = ctx.message.text.trim().toUpperCase();
+
+            // Валидация промокода
+            const validation = await promocodeService.validatePromocodeForUser(ctx.from.id, promocodeText);
+            if (!validation.valid) {
+                await ctx.reply(`❌ ${validation.reason}\n\nПопробуйте ввести промо-код еще раз или нажмите "Продолжить без промо".`, {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Вернуться к товару', callback_data: `back_to_product_${productId}` }]
+                        ]
+                    }
+                });
+                return;
+            }
+
+            // Создаем заказ с промокодом
+            await createOrder(ctx, productId, validation.promocode.id);
+            promocodeInputMode.delete(ctx.from.id);
+            return;
+        }
+
+        // Обработка динамических кнопок меню
+        console.log('[UserHandlers] Проверка динамических кнопок для текста:', ctx.message.text);
+        const menuButtons = await menuButtonService.getAll(true);
+        console.log('[UserHandlers] Найдено динамических кнопок:', menuButtons.length);
+        console.log('[UserHandlers] Названия кнопок:', menuButtons.map(btn => btn.name));
+
+        const clickedButton = menuButtons.find(btn => btn.name === ctx.message.text);
+        console.log('[UserHandlers] Найдена кнопка?', !!clickedButton);
+
+        if (clickedButton) {
+            console.log('[UserHandlers] Обработка нажатия на кнопку:', clickedButton.name);
+            await userService.saveOrUpdate(ctx.from.id, {
+                username: ctx.from.username,
+                first_name: ctx.from.first_name,
+                last_name: ctx.from.last_name
+            });
+            await ctx.reply(clickedButton.message, { parse_mode: 'HTML' });
+            return;
+        }
+
+        // Если не обработано, передаем дальше к bot.hears()
+        console.log('[UserHandlers] Текст не обработан, передаем дальше к bot.hears()');
+        return next();
+    });
+
     // Обработчики для текстовых кнопок меню (с иконками и без)
     bot.hears(['♻️ Каталог', 'Каталог'], async (ctx) => {
         await userService.saveOrUpdate(ctx.from.id, {
@@ -464,82 +540,6 @@ async function showReviews(ctx, page = 1) {
             console.error('[UserHandlers] Ошибка при отправке сообщения об ошибке:', replyError);
         }
     }
-
-    // Обработка текстовых сообщений от пользователей (когда они пишут в поддержку)
-    // ВАЖНО: Этот обработчик должен регистрироваться ПОСЛЕ всех bot.command(),
-    // чтобы команды обрабатывались первыми
-    bot.on('text', async (ctx, next) => {
-        console.log('[UserHandlers] bot.on(text) вызван для текста:', ctx.message.text);
-
-        // Пропускаем команды - они должны обрабатываться через bot.command()
-        if (ctx.message.text && ctx.message.text.startsWith('/')) {
-            console.log('[UserHandlers] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
-            return next(); // позволяем другим middleware (командам) обработать
-        }
-
-        // Проверяем, находится ли пользователь в режиме поддержки
-        if (supportMode.has(ctx.from.id)) {
-            // Сохраняем сообщение пользователя
-            await userService.saveOrUpdate(ctx.from.id, {
-                username: ctx.from.username,
-                first_name: ctx.from.first_name,
-                last_name: ctx.from.last_name
-            });
-
-            await supportService.saveUserMessage(ctx.from.id, ctx.message.text);
-            await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!');
-            supportMode.delete(ctx.from.id);
-            return;
-        }
-
-        // Обработка ввода промокода
-        if (promocodeInputMode.has(ctx.from.id)) {
-            const productId = promocodeInputMode.get(ctx.from.id);
-            const promocodeText = ctx.message.text.trim().toUpperCase();
-
-            // Валидация промокода
-            const validation = await promocodeService.validatePromocodeForUser(ctx.from.id, promocodeText);
-            if (!validation.valid) {
-                await ctx.reply(`❌ ${validation.reason}\n\nПопробуйте ввести промо-код еще раз или нажмите "Продолжить без промо".`, {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '◀️ Вернуться к товару', callback_data: `back_to_product_${productId}` }]
-                        ]
-                    }
-                });
-                return;
-            }
-
-            // Создаем заказ с промокодом
-            await createOrder(ctx, productId, validation.promocode.id);
-            promocodeInputMode.delete(ctx.from.id);
-            return;
-        }
-
-        // Обработка динамических кнопок меню
-        console.log('[UserHandlers] Проверка динамических кнопок для текста:', ctx.message.text);
-        const menuButtons = await menuButtonService.getAll(true);
-        console.log('[UserHandlers] Найдено динамических кнопок:', menuButtons.length);
-        console.log('[UserHandlers] Названия кнопок:', menuButtons.map(btn => btn.name));
-
-        const clickedButton = menuButtons.find(btn => btn.name === ctx.message.text);
-        console.log('[UserHandlers] Найдена кнопка?', !!clickedButton);
-
-        if (clickedButton) {
-            console.log('[UserHandlers] Обработка нажатия на кнопку:', clickedButton.name);
-            await userService.saveOrUpdate(ctx.from.id, {
-                username: ctx.from.username,
-                first_name: ctx.from.first_name,
-                last_name: ctx.from.last_name
-            });
-            await ctx.reply(clickedButton.message, { parse_mode: 'HTML' });
-            return;
-        }
-
-        // Если не обработано, передаем дальше
-        console.log('[UserHandlers] Текст не обработан, передаем дальше');
-        return next();
-    });
 }
 
 async function showCabinetMenu(ctx) {
