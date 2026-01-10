@@ -43,6 +43,20 @@ export class SettingsService {
   async setWelcomeMessage(message) {
     return await this.set('welcome_message', message);
   }
+
+  /**
+   * Получает иконку для городов
+   */
+  async getCityIcon() {
+    return await this.get('city_icon', '📍');
+  }
+
+  /**
+   * Устанавливает иконку для городов
+   */
+  async setCityIcon(icon) {
+    return await this.set('city_icon', icon);
+  }
 }
 
 export const settingsService = new SettingsService();

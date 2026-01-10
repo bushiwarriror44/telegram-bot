@@ -323,6 +323,23 @@ class Database {
       await this.run("ALTER TABLE payment_methods ADD COLUMN type TEXT DEFAULT 'crypto'");
     }
 
+    // Таблица просмотров товаров
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS product_views (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        user_chat_id INTEGER,
+        viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_chat_id) REFERENCES users(chat_id) ON DELETE SET NULL
+      )
+    `);
+
+    // Индекс для быстрого поиска просмотров по товару
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_product_views_product_id ON product_views(product_id)'
+    );
+
     // Миграция: добавляем колонку balance в существующую таблицу users при необходимости
     const userColumns = await this.db.all('PRAGMA table_info(users)');
     const hasBalance = userColumns.some((col) => col.name === 'balance');

@@ -7,6 +7,7 @@ import { userService } from '../services/userService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
 import { supportService } from '../services/supportService.js';
 import { settingsService } from '../services/settingsService.js';
+import { statisticsService } from '../services/statisticsService.js';
 import { menuButtonService } from '../services/menuButtonService.js';
 import { promocodeService } from '../services/promocodeService.js';
 import { database } from '../database/db.js';
@@ -134,8 +135,9 @@ export function setupAdminHandlers(bot) {
             ['Управление фасовками', 'Управление методами оплаты'],
             ['Управление карточными счетами', 'Чаты'],
             ['Создать уведомление', 'Данные'],
+            ['Статистика'],
             ['Настройка приветственного сообщения', 'Настройка кнопок'],
-            ['Бонусы и промокоды'],
+            ['Настройка иконок', 'Бонусы и промокоды'],
             ['Выход из админ-панели']
         ];
 
@@ -207,8 +209,10 @@ ${addressesText}
                     [{ text: '💬 Чаты', callback_data: 'admin_chats' }],
                     [{ text: '📢 Создать уведомление', callback_data: 'admin_notification' }],
                     [{ text: '💾 Данные', callback_data: 'admin_data' }],
+                    [{ text: '📊 Статистика', callback_data: 'admin_stats' }],
                     [{ text: '👋 Настройка приветственного сообщения', callback_data: 'admin_welcome' }],
                     [{ text: '🔘 Настройка кнопок', callback_data: 'admin_menu_buttons' }],
+                    [{ text: '🎨 Настройка иконок', callback_data: 'admin_icons' }],
                     [{ text: '🎁 Бонусы и промокоды', callback_data: 'admin_promocodes' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
@@ -266,6 +270,16 @@ ${addressesText}
         await showPromocodesAdmin(ctx);
     });
 
+    bot.action('admin_icons', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showIconsSettings(ctx);
+    });
+
+    bot.action('admin_stats', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showStatisticsAdmin(ctx);
+    });
+
     // Обработчики для админских reply keyboard кнопок
     bot.hears('Управление городами', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
@@ -307,6 +321,11 @@ ${addressesText}
         await showDataMenu(ctx);
     });
 
+    bot.hears('Статистика', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showStatisticsAdmin(ctx);
+    });
+
     bot.hears('Настройка приветственного сообщения', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showWelcomeSettings(ctx);
@@ -315,6 +334,11 @@ ${addressesText}
     bot.hears('Настройка кнопок', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showMenuButtonsAdmin(ctx);
+    });
+
+    bot.hears('Настройка иконок', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showIconsSettings(ctx);
     });
 
     bot.hears('Бонусы и промокоды', async (ctx) => {
@@ -1303,6 +1327,7 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
     // Хранит пользователей, которым администратор отвечает
     const adminReplyMode = new Map();
     const welcomeEditMode = new Map(); // userId -> true (режим редактирования приветственного сообщения)
+    const iconEditMode = new Map(); // userId -> true (режим редактирования иконки городов)
     const databaseImportMode = new Map(); // userId -> true (режим загрузки БД)
 
     bot.action(/^admin_reply_(\d+)$/, async (ctx) => {
@@ -1325,6 +1350,7 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 importProductMode.delete(ctx.from.id);
                 adminReplyMode.delete(ctx.from.id);
                 welcomeEditMode.delete(ctx.from.id);
+                iconEditMode.delete(ctx.from.id);
                 databaseImportMode.delete(ctx.from.id);
                 menuButtonEditMode.delete(ctx.from.id);
                 promocodeAddMode.delete(ctx.from.id);
@@ -1358,6 +1384,27 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             } catch (error) {
                 console.error('[AdminHandlers] Ошибка при сохранении приветственного сообщения:', error);
                 await ctx.reply('❌ Ошибка при сохранении приветственного сообщения: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка редактирования иконки городов
+        if (iconEditMode.has(ctx.from.id)) {
+            try {
+                const newIcon = ctx.message.text.trim();
+                // Проверяем, что это одна иконка (эмодзи может быть длиннее из-за суррогатных пар)
+                // Принимаем иконку длиной до 4 символов (для поддержки эмодзи с модификаторами)
+                if (newIcon.length === 0 || newIcon.length > 4) {
+                    await ctx.reply('❌ Пожалуйста, введите только одну иконку (эмодзи или символ).');
+                    return;
+                }
+                await settingsService.setCityIcon(newIcon);
+                iconEditMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Иконка для городов успешно обновлена на: ${newIcon}`);
+                await showIconsSettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении иконки городов:', error);
+                await ctx.reply('❌ Ошибка при сохранении иконки городов: ' + error.message);
             }
             return;
         }
@@ -1854,6 +1901,66 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             { parse_mode: 'HTML' }
         );
         await showWelcomeSettings(ctx);
+    });
+
+    // Настройка иконок
+    async function showIconsSettings(ctx) {
+        const currentIcon = await settingsService.getCityIcon();
+        
+        const text = `🎨 <b>Настройка иконок</b>\n\n` +
+            `Текущая иконка для городов: <b>${currentIcon}</b>\n\n` +
+            `Выберите действие:`;
+
+        const keyboard = {
+            inline_keyboard: [
+                [{ text: '✏️ Изменить иконку городов', callback_data: 'edit_city_icon' }],
+                [{ text: '👁️ Просмотреть текущую иконку', callback_data: 'view_city_icon' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    }
+
+    bot.action('edit_city_icon', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        iconEditMode.set(ctx.from.id, true);
+        await ctx.reply(
+            '✏️ <b>Редактирование иконки для городов</b>\n\n' +
+            'Отправьте новую иконку (эмодзи или символ).\n' +
+            'Например: 📍, 🏙️, 🏛️, 🗺️ и т.д.\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    bot.action('view_city_icon', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const currentIcon = await settingsService.getCityIcon();
+        await ctx.reply(
+            '👁️ <b>Текущая иконка для городов:</b>\n\n' +
+            `<b>${currentIcon}</b>\n\n` +
+            `Пример использования: ${currentIcon} Москва`,
+            { parse_mode: 'HTML' }
+        );
+        await showIconsSettings(ctx);
     });
 
     // Меню работы с данными
@@ -2375,6 +2482,101 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             await ctx.reply(text, {
                 parse_mode: 'HTML',
                 reply_markup: keyboard
+            });
+        }
+    }
+
+    // Статистика
+    async function showStatisticsAdmin(ctx) {
+        if (!isAdmin(ctx.from.id)) {
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
+            } else {
+                await ctx.reply('❌ У вас нет доступа к админ-панели.');
+            }
+            return;
+        }
+
+        // Получаем все необходимые метрики
+        const [
+            userCount,
+            totalProducts,
+            totalProductsValue,
+            averageOrderValue,
+            totalSales,
+            monthlySales,
+            weeklySales,
+            dailySales,
+            mostPopular,
+            leastPopular
+        ] = await Promise.all([
+            statisticsService.getUserCount(),
+            statisticsService.getTotalProductsCount(),
+            statisticsService.getTotalProductsValue(),
+            statisticsService.getAverageOrderValue(),
+            statisticsService.getTotalSales(),
+            statisticsService.getMonthlySales(),
+            statisticsService.getWeeklySales(),
+            statisticsService.getDailySales(),
+            statisticsService.getMostPopularProduct(),
+            statisticsService.getLeastPopularProduct()
+        ]);
+
+        const formatCurrency = (value) =>
+            `${(value || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
+
+        const mostPopularText = mostPopular
+            ? `${mostPopular.name}${mostPopular.packaging_value ? ` (${mostPopular.packaging_value} кг)` : ''} — ${mostPopular.view_count} просмотров`
+            : 'Нет данных';
+
+        const leastPopularText = leastPopular
+            ? `${leastPopular.name}${leastPopular.packaging_value ? ` (${leastPopular.packaging_value} кг)` : ''} — ${leastPopular.view_count} просмотров`
+            : 'Нет данных';
+
+        const text = `
+📊 <b>Статистика бота</b>
+
+👥 <b>Пользователи</b>
+• Всего пользователей: <b>${userCount}</b>
+
+📦 <b>Товары</b>
+• Количество позиций: <b>${totalProducts}</b>
+• Товаров на общую сумму: <b>${formatCurrency(totalProductsValue)}</b>
+
+🛒 <b>Покупки</b>
+• Средний чек: <b>${formatCurrency(averageOrderValue)}</b>
+• Продажи за все время: <b>${formatCurrency(totalSales)}</b>
+• Продажи за этот месяц: <b>${formatCurrency(monthlySales)}</b>
+• Продажи за эту неделю: <b>${formatCurrency(weeklySales)}</b>
+• Продажи за сегодня: <b>${formatCurrency(dailySales)}</b>
+
+🔥 <b>Популярность товаров</b>
+• Самый популярный товар: <b>${mostPopularText}</b>
+• Самый непопулярный товар: <b>${leastPopularText}</b>
+        `.trim();
+
+        const replyMarkup = {
+            inline_keyboard: [
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
             });
         }
     }

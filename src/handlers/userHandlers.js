@@ -7,6 +7,7 @@ import { supportService } from '../services/supportService.js';
 import { settingsService } from '../services/settingsService.js';
 import { menuButtonService } from '../services/menuButtonService.js';
 import { promocodeService } from '../services/promocodeService.js';
+import { statisticsService } from '../services/statisticsService.js';
 
 // Хранит пользователей, которые находятся в режиме поддержки
 const supportMode = new Map();
@@ -29,8 +30,8 @@ function isAdmin(userId) {
 // Функция для получения reply keyboard с кнопками меню
 async function getMenuKeyboard() {
     const topButtons = [
-        ['Каталог', 'Мой кабинет'],
-        ['Помощь', 'Отзывы']
+        ['♻️ Каталог', '⚙️ Мой кабинет'],
+        ['📨 Помощь', '🛟 Отзывы']
     ];
 
     // Получаем динамические кнопки из БД
@@ -167,6 +168,8 @@ export function setupUserHandlers(bot) {
             last_name: ctx.from.last_name
         });
         const productId = parseInt(ctx.match[1]);
+        // Записываем просмотр товара
+        await statisticsService.recordProductView(productId, ctx.from.id);
         await showProductDetails(ctx, productId);
     });
 
@@ -210,10 +213,12 @@ export function setupUserHandlers(bot) {
             await showCitiesMenu(ctx);
         } catch (error) {
             // Если не удалось изменить сообщение, отправляем новое
+            // Получаем иконку для городов из настроек
+            const cityIcon = await settingsService.getCityIcon();
             await ctx.reply('🏙️ Выберите город:', {
                 reply_markup: {
                     inline_keyboard: (await cityService.getAll()).map(city => [
-                        { text: `📍 ${city.name}`, callback_data: `city_${city.id}` }
+                        { text: `${cityIcon} ${city.name}`, callback_data: `city_${city.id}` }
                     ])
                 }
             });
@@ -245,8 +250,8 @@ export function setupUserHandlers(bot) {
         await showHelpMenu(ctx);
     });
 
-    // Обработчики для текстовых кнопок меню
-    bot.hears('Каталог', async (ctx) => {
+    // Обработчики для текстовых кнопок меню (с иконками и без)
+    bot.hears(['♻️ Каталог', 'Каталог'], async (ctx) => {
         await userService.saveOrUpdate(ctx.from.id, {
             username: ctx.from.username,
             first_name: ctx.from.first_name,
@@ -255,15 +260,15 @@ export function setupUserHandlers(bot) {
         await showCitiesMenu(ctx);
     });
 
-    bot.hears('Мой кабинет', async (ctx) => {
+    bot.hears(['⚙️ Мой кабинет', 'Мой кабинет'], async (ctx) => {
         await showCabinetMenu(ctx);
     });
 
-    bot.hears('Помощь', async (ctx) => {
+    bot.hears(['📨 Помощь', 'Помощь'], async (ctx) => {
         await showHelpMenu(ctx);
     });
 
-    bot.hears('Отзывы', async (ctx) => {
+    bot.hears(['🛟 Отзывы', 'Отзывы'], async (ctx) => {
         await ctx.reply('📝 Отзывы:\n\n(Здесь будет информация об отзывах)');
     });
 
@@ -680,8 +685,11 @@ async function showCitiesMenu(ctx) {
         return;
     }
 
+    // Получаем иконку для городов из настроек
+    const cityIcon = await settingsService.getCityIcon();
+
     const keyboard = cities.map(city => [
-        { text: `📍 ${city.name}`, callback_data: `city_${city.id}` }
+        { text: `${cityIcon} ${city.name}`, callback_data: `city_${city.id}` }
     ]);
 
     // Добавляем кнопку "Помощь"
