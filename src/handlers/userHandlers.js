@@ -45,7 +45,13 @@ async function getMenuKeyboard() {
 
     // Получаем динамические кнопки из БД
     const menuButtons = await menuButtonService.getAll(true);
-    const dynamicButtons = menuButtons.map(btn => [btn.name]);
+
+    // Группируем динамические кнопки по 2 в ряд (50% ширины каждая)
+    const dynamicButtons = [];
+    for (let i = 0; i < menuButtons.length; i += 2) {
+        const row = menuButtons.slice(i, i + 2).map(btn => btn.name);
+        dynamicButtons.push(row);
+    }
 
     // Объединяем верхние кнопки и динамические
     const keyboard = [...topButtons, ...dynamicButtons];
