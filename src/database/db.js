@@ -362,7 +362,7 @@ class Database {
     }
 
     // Миграция: добавляем колонку district_id в существующую таблицу products при необходимости
-    const productColumns = await this.db.all('PRAGMA table_info(products)');
+    // Переиспользуем productColumns, объявленную выше
     const hasDistrictId = productColumns.some((col) => col.name === 'district_id');
     if (!hasDistrictId) {
       console.log('[DB.init] Добавление колонки district_id в таблицу products...');
