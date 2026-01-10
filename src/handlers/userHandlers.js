@@ -425,15 +425,15 @@ async function showCabinetMenu(ctx) {
         const text = `👤 ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
 💵 <b>Баланс: ${balance.toFixed(2)} ₽</b>`;
 
-//         const text = `👤 <b>Личный кабинет</b>
+        //         const text = `👤 <b>Личный кабинет</b>
 
-// 🆔 ID: <code>${ctx.from.id}</code>
-// 👤 Имя: ${ctx.from.first_name || 'Не указано'} ${ctx.from.last_name || ''}
-// 📱 Username: ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
-// 📅 Дата регистрации: ${user?.created_at ? new Date(user.created_at).toLocaleDateString('ru-RU') : 'Неизвестно'}
-// 🕐 Последняя активность: ${user?.last_active ? new Date(user.last_active).toLocaleDateString('ru-RU') + ' ' + new Date(user.last_active).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Неизвестно'}
+        // 🆔 ID: <code>${ctx.from.id}</code>
+        // 👤 Имя: ${ctx.from.first_name || 'Не указано'} ${ctx.from.last_name || ''}
+        // 📱 Username: ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
+        // 📅 Дата регистрации: ${user?.created_at ? new Date(user.created_at).toLocaleDateString('ru-RU') : 'Неизвестно'}
+        // 🕐 Последняя активность: ${user?.last_active ? new Date(user.last_active).toLocaleDateString('ru-RU') + ' ' + new Date(user.last_active).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Неизвестно'}
 
-// 💰 <b>Баланс: ${balance.toFixed(2)} ₽</b>`;
+        // 💰 <b>Баланс: ${balance.toFixed(2)} ₽</b>`;
 
         const keyboard = [
             [{ text: '💳 Пополнить', callback_data: 'topup_balance' }],
@@ -963,8 +963,8 @@ async function showProductDetails(ctx, productId) {
     const text = `Вы выбрали: ${product.name}${packagingLabel}
 
 
-Цена (без комиссии): ${product.price.toLocaleString('ru-RU')} ₽
-Описание: ${product.description || 'Описание отсутствует'}
+<b>Цена (без комиссии):</b> ${product.price.toLocaleString('ru-RU')} ₽
+<b>Описание:</b> ${product.description || 'Описание отсутствует'}
 
 ❔ У вас есть промо-код ❔`;
 
@@ -1118,21 +1118,29 @@ async function showOrderDetails(ctx, orderId) {
         const promocodeText = order.promocode_code ? order.promocode_code : 'Нет';
         const discountText = order.discount > 0 ? `${order.discount.toLocaleString('ru-RU')} ₽` : '0 ₽';
 
-        const text = `<b>Создан заказ #${order.id}</b> \n
-Витрина: Hitpoint \n
-Категория: ${order.city_name} \n
-Раздел: ${order.district_name} \n
-Товар: ${order.product_name} ${packagingLabel} \n
-Кол-во: 1 \n
-Стоимость: ${order.price.toLocaleString('ru-RU')} ₽ \n
-Промокод: ${promocodeText} \n
-Скидка: ${discountText} \n
-Финальная сумма: ${order.total_price.toLocaleString('ru-RU')} <b><i>₽</i></b>`;
+        const text = `<b>Создан заказ #12${order.id}</b>
+
+<b>Витрина:</b> Hitpoint 
+<b>Категория:</b> ${order.city_name} 
+<b>Раздел:</b> ${order.district_name} 
+
+<b>Товар:</b> ${order.product_name} ${packagingLabel} 
+<b>Кол-во:</b> 1 
+<b>Стоимость:</b> ${order.price.toLocaleString('ru-RU')} ₽ 
+
+<b>Промокод:</b> ${promocodeText} 
+<b>Скидка:</b> ${discountText} 
+<b>Финальная сумма:</b> ${order.total_price.toLocaleString('ru-RU')} <b><i>₽</i></b>`;
+
+        // Отправляем детали заказа без кнопок
+        await ctx.reply(text, {
+            parse_mode: 'HTML'
+        });
 
         const paymentMethods = await paymentService.getAllMethods();
         if (paymentMethods.length === 0) {
             await ctx.reply(
-                text + '\n\n❌ Методы оплаты пока не настроены. Обратитесь к администратору.',
+                '❌ Методы оплаты пока не настроены. Обратитесь к администратору.',
                 {
                     reply_markup: {
                         inline_keyboard: [
@@ -1148,8 +1156,9 @@ async function showOrderDetails(ctx, orderId) {
             { text: method.name, callback_data: `pay_order_${order.id}_${method.id}` }
         ]);
 
+        // Отправляем отдельный блок с выбором способа оплаты
         await ctx.reply(
-            `💰 Выберите способ пополнения:\n\n${text}`,
+            '💰 Выберите способ пополнения:',
             {
                 reply_markup: {
                     inline_keyboard: keyboard
