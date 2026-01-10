@@ -225,14 +225,20 @@ class Database {
         user_chat_id INTEGER NOT NULL,
         product_id INTEGER NOT NULL,
         city_id INTEGER NOT NULL,
+        district_id INTEGER NOT NULL,
         quantity REAL DEFAULT 1,
+        price REAL NOT NULL,
+        discount REAL DEFAULT 0,
         total_price REAL NOT NULL,
+        promocode_id INTEGER,
         payment_method_id INTEGER,
         status TEXT DEFAULT 'pending',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_chat_id) REFERENCES users(chat_id) ON DELETE CASCADE,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-        FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE
+        FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE,
+        FOREIGN KEY (district_id) REFERENCES districts(id) ON DELETE CASCADE,
+        FOREIGN KEY (promocode_id) REFERENCES promocodes(id) ON DELETE SET NULL
       )
     `);
 
@@ -390,6 +396,35 @@ class Database {
     const hasImagePath = productColumns.some((col) => col.name === 'image_path');
     if (!hasImagePath) {
       await this.run('ALTER TABLE products ADD COLUMN image_path TEXT');
+    }
+
+    // Миграция: обновляем таблицу orders - добавляем новые поля
+    const orderColumns = await this.db.all('PRAGMA table_info(orders)');
+    const hasDistrictIdInOrders = orderColumns.some((col) => col.name === 'district_id');
+    if (!hasDistrictIdInOrders) {
+      await this.run('ALTER TABLE orders ADD COLUMN district_id INTEGER');
+      // Обновляем существующие заказы - находим district_id по product_id
+      const orders = await this.db.all('SELECT id, product_id FROM orders WHERE district_id IS NULL');
+      for (const order of orders) {
+        const product = await this.db.get('SELECT district_id FROM products WHERE id = ?', [order.product_id]);
+        if (product && product.district_id) {
+          await this.run('UPDATE orders SET district_id = ? WHERE id = ?', [product.district_id, order.id]);
+        }
+      }
+    }
+    const hasPromocodeId = orderColumns.some((col) => col.name === 'promocode_id');
+    if (!hasPromocodeId) {
+      await this.run('ALTER TABLE orders ADD COLUMN promocode_id INTEGER');
+    }
+    const hasDiscount = orderColumns.some((col) => col.name === 'discount');
+    if (!hasDiscount) {
+      await this.run('ALTER TABLE orders ADD COLUMN discount REAL DEFAULT 0');
+    }
+    const hasPrice = orderColumns.some((col) => col.name === 'price');
+    if (!hasPrice) {
+      await this.run('ALTER TABLE orders ADD COLUMN price REAL');
+      // Обновляем существующие заказы - берем цену из total_price
+      await this.run('UPDATE orders SET price = total_price WHERE price IS NULL');
     }
 
     // Миграция: добавляем колонку district_id в существующую таблицу products при необходимости

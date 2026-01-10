@@ -21,6 +21,11 @@ export class PaymentService {
         return addresses[0] || null;
     }
 
+    async getPaymentAddress(methodId) {
+        const address = await this.getAddressForMethod(methodId);
+        return address ? address.address : null;
+    }
+
     async getCryptoMethods() {
         return await database.all(
             "SELECT * FROM payment_methods WHERE type = 'crypto' AND enabled = 1 ORDER BY name"

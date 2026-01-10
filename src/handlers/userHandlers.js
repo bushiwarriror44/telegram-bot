@@ -10,6 +10,7 @@ import { menuButtonService } from '../services/menuButtonService.js';
 import { promocodeService } from '../services/promocodeService.js';
 import { statisticsService } from '../services/statisticsService.js';
 import { referralService } from '../services/referralService.js';
+import { orderService } from '../services/orderService.js';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -233,24 +234,33 @@ export function setupUserHandlers(bot) {
         await showProductDetails(ctx, productId);
     });
 
-    // Обработка использования промокода
-    bot.action(/^use_promocode_(\d+)$/, async (ctx) => {
+    // Обработка ввода промокода
+    bot.action(/^enter_promo_(\d+)$/, async (ctx) => {
         const productId = parseInt(ctx.match[1]);
-        await showPromocodeInput(ctx, productId);
+        promocodeInputMode.set(ctx.from.id, productId);
+        await ctx.reply(
+            '✏️ Введите промо-код:\n\nОтправьте промо-код текстом.',
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Отмена', callback_data: `back_to_product_${productId}` }]
+                    ]
+                }
+            }
+        );
     });
 
-    // Обработка применения промокода
-    bot.action(/^apply_promocode_(\d+)_(.+)$/, async (ctx) => {
+    // Обработка продолжения без промокода
+    bot.action(/^continue_no_promo_(\d+)$/, async (ctx) => {
         const productId = parseInt(ctx.match[1]);
-        const promocode = ctx.match[2];
-        await applyPromocode(ctx, productId, promocode);
+        await createOrder(ctx, productId, null);
     });
 
-    // Обработка выбора метода оплаты
-    bot.action(/^pay_(\d+)_(\d+)$/, async (ctx) => {
-        const productId = parseInt(ctx.match[1]);
+    // Обработка выбора метода оплаты для заказа
+    bot.action(/^pay_order_(\d+)_(\d+)$/, async (ctx) => {
+        const orderId = parseInt(ctx.match[1]);
         const methodId = parseInt(ctx.match[2]);
-        await showPaymentAddress(ctx, productId, methodId);
+        await showPaymentAddressForOrder(ctx, orderId, methodId);
     });
 
     // Обработка выбора метода пополнения баланса в личном кабинете
@@ -259,13 +269,6 @@ export function setupUserHandlers(bot) {
         await showTopupMethod(ctx, methodId);
     });
 
-    // Обработка выбора метода оплаты с промокодом
-    bot.action(/^pay_with_promo_(\d+)_(\d+)_(\d+)$/, async (ctx) => {
-        const productId = parseInt(ctx.match[1]);
-        const methodId = parseInt(ctx.match[2]);
-        const promocodeId = parseInt(ctx.match[3]);
-        await showPaymentAddress(ctx, productId, methodId, promocodeId);
-    });
 
     // Вернуться к городам
     bot.action('back_to_cities', async (ctx) => {
@@ -371,16 +374,16 @@ export function setupUserHandlers(bot) {
         if (promocodeInputMode.has(ctx.from.id)) {
             const productId = promocodeInputMode.get(ctx.from.id);
             const promocodeText = ctx.message.text.trim().toUpperCase();
-            await applyPromocode(ctx, productId, promocodeText);
-            promocodeInputMode.delete(ctx.from.id);
-            return;
-        }
 
-        // Обработка ввода промокода
-        if (promocodeInputMode.has(ctx.from.id)) {
-            const productId = promocodeInputMode.get(ctx.from.id);
-            const promocodeText = ctx.message.text.trim().toUpperCase();
-            await applyPromocode(ctx, productId, promocodeText);
+            // Валидация промокода
+            const validation = await promocodeService.validatePromocodeForUser(ctx.from.id, promocodeText);
+            if (!validation.valid) {
+                await ctx.reply(`❌ ${validation.reason}`);
+                return;
+            }
+
+            // Создаем заказ с промокодом
+            await createOrder(ctx, productId, validation.promocode.id);
             promocodeInputMode.delete(ctx.from.id);
             return;
         }
@@ -961,7 +964,7 @@ ${paymentMethods.length === 0 ? '❌ Методы оплаты пока не н�
   `.trim();
 
     const keyboard = paymentMethods.map(method => [
-        { text: `💳 ${method.name}`, callback_data: `pay_${product.id}_${method.id}` }
+        { text: `${method.name}`, callback_data: `pay_${product.id}_${method.id}` }
     ]);
 
     // Добавляем кнопку "Использовать промокод"
@@ -1037,6 +1040,176 @@ ${paymentMethods.length === 0 ? '❌ Методы оплаты пока не н�
             });
         }
     }
+}
+
+// Создание заказа
+async function createOrder(ctx, productId, promocodeId = null) {
+    try {
+        const product = await productService.getById(productId);
+        if (!product) {
+            await ctx.reply('Товар не найден.');
+            return;
+        }
+
+        // Показываем сообщение о создании заказа
+        const loadingMsg = await ctx.reply('♻️ 1 минуту, создаём заказ...');
+
+        // Рассчитываем цену и скидку
+        let price = product.price;
+        let discount = 0;
+        let promocode = null;
+
+        // Применяем промокод, если есть
+        if (promocodeId) {
+            promocode = await promocodeService.getById(promocodeId);
+            if (promocode) {
+                discount = (price * promocode.discount_percent) / 100;
+            }
+        }
+
+        // Применяем реферальную скидку
+        const referral = await referralService.getReferrer(ctx.from.id);
+        if (referral && referral.referrer_chat_id) {
+            const referrals = await referralService.getReferralsByReferrer(referral.referrer_chat_id);
+            const referralCount = referrals.length;
+            const discountPercent = await settingsService.getReferralDiscountPercent();
+            const maxDiscount = await settingsService.getMaxReferralDiscountPercent();
+            const referralDiscount = Math.min(referralCount * discountPercent, maxDiscount);
+            const referralDiscountAmount = (price * referralDiscount) / 100;
+            discount += referralDiscountAmount;
+        }
+
+        const totalPrice = price - discount;
+
+        // Создаем заказ
+        const order = await orderService.create(
+            ctx.from.id,
+            productId,
+            product.city_id,
+            product.district_id,
+            price,
+            discount,
+            totalPrice,
+            promocodeId
+        );
+
+        // Удаляем сообщение о загрузке
+        await ctx.deleteMessage(loadingMsg.message_id);
+
+        // Показываем детали заказа
+        await showOrderDetails(ctx, order.id);
+    } catch (error) {
+        console.error('[UserHandlers] Ошибка при создании заказа:', error);
+        await ctx.reply('❌ Произошла ошибка при создании заказа. Попробуйте позже.');
+    }
+}
+
+// Показ деталей заказа
+async function showOrderDetails(ctx, orderId) {
+    try {
+        const order = await orderService.getById(orderId);
+        if (!order) {
+            await ctx.reply('Заказ не найден.');
+            return;
+        }
+
+        const packagingLabel = order.packaging_value ? ` ${order.packaging_value}г` : '';
+        const promocodeText = order.promocode_code ? order.promocode_code : 'Нет';
+        const discountText = order.discount > 0 ? `${order.discount.toLocaleString('ru-RU')} ₽` : '0 ₽';
+
+        const text = `Создан заказ #${order.id}
+Витрина: Hitpoint
+Категория: ${order.city_name}
+Раздел: ${order.district_name}
+Товар: 🪨 ${order.product_name} 🪨${packagingLabel}
+Кол-во: 1
+Стоимость: ${order.price.toLocaleString('ru-RU')} ₽
+Промокод: ${promocodeText}
+Скидка: ${discountText}
+Финальная сумма: ${order.total_price.toLocaleString('ru-RU')} ₽`;
+
+        const paymentMethods = await paymentService.getAllMethods();
+        if (paymentMethods.length === 0) {
+            await ctx.reply(
+                text + '\n\n❌ Методы оплаты пока не настроены. Обратитесь к администратору.',
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Назад', callback_data: 'back_to_cities' }]
+                        ]
+                    }
+                }
+            );
+            return;
+        }
+
+        const keyboard = paymentMethods.map(method => [
+            { text: method.name, callback_data: `pay_order_${order.id}_${method.id}` }
+        ]);
+
+        await ctx.reply(
+            `💰 Выберите способ пополнения:\n\n${text}`,
+            {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            }
+        );
+    } catch (error) {
+        console.error('[UserHandlers] Ошибка при показе деталей заказа:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+}
+
+// Показ адреса оплаты для заказа
+async function showPaymentAddressForOrder(ctx, orderId, methodId) {
+    const order = await orderService.getById(orderId);
+    const method = await paymentService.getMethodById(methodId);
+
+    if (!order || !method) {
+        await ctx.reply('Ошибка: заказ или метод оплаты не найден.');
+        return;
+    }
+
+    // Обновляем метод оплаты в заказе
+    await orderService.updatePaymentMethod(orderId, methodId);
+
+    // Обновляем активность пользователя
+    await userService.saveOrUpdate(ctx.from.id, {
+        username: ctx.from.username,
+        first_name: ctx.from.first_name,
+        last_name: ctx.from.last_name
+    });
+
+    // Получаем адрес оплаты
+    const address = await paymentService.getPaymentAddress(methodId);
+
+    if (!address) {
+        await ctx.reply('Адрес оплаты не настроен. Обратитесь к администратору.');
+        return;
+    }
+
+    const text = `
+💳 <b>Оплата заказа #${order.id}</b>
+
+Метод оплаты: <b>${method.name}</b>
+Сумма: <b>${order.total_price.toLocaleString('ru-RU')} ₽</b>
+
+<b>Адрес для оплаты:</b>
+<code>${address}</code>
+
+После оплаты отправьте скриншот или подтверждение оплаты.
+    `.trim();
+
+    await ctx.reply(text, {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '✅ Оплатил', callback_data: `confirm_payment_${orderId}` }],
+                [{ text: '◀️ Назад', callback_data: `back_to_cities` }]
+            ]
+        }
+    });
 }
 
 async function showPaymentAddress(ctx, productId, methodId, promocodeId = null) {
