@@ -346,13 +346,22 @@ export function setupUserHandlers(bot) {
 
     // Обработка пагинации отзывов
     bot.action(/^reviews_page_(\d+)$/, async (ctx) => {
-        const page = parseInt(ctx.match[1]);
-        await showReviews(ctx, page);
+        try {
+            const page = parseInt(ctx.match[1]);
+            await showReviews(ctx, page);
+        } catch (error) {
+            console.error('[UserHandlers] Ошибка при обработке пагинации отзывов:', error);
+            await ctx.answerCbQuery('Ошибка при загрузке страницы');
+        }
     });
 
     // Обработчик для текущей страницы (неактивная кнопка)
     bot.action('reviews_current', async (ctx) => {
-        await ctx.answerCbQuery();
+        try {
+            await ctx.answerCbQuery();
+        } catch (error) {
+            console.error('[UserHandlers] Ошибка при обработке reviews_current:', error);
+        }
     });
 }
 
@@ -364,7 +373,7 @@ async function showReviews(ctx, page = 1) {
         console.log('[UserHandlers] Получено отзывов:', reviews.length, 'Всего страниц:', totalPages);
 
         if (reviews.length === 0) {
-            const text = '❤️ Отзывы:\n\nПока нет отзывов.';
+            const text = '💌 Отзывы:\n\nПока нет отзывов.';
             const keyboard = {
                 inline_keyboard: [
                     [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
@@ -379,16 +388,27 @@ async function showReviews(ctx, page = 1) {
             return;
         }
 
-        let text = '❤️ Отзывы:\n\n';
+        let text = '💌 Отзывы:\n\n';
 
         for (const review of reviews) {
             // Форматируем звезды
             const stars = '⭐️'.repeat(review.rating);
 
-            text += `Товар: ${review.product_name}\n`;
-            text += `Дата: ${review.review_date.split('-').reverse().join('.')}\n`;
+            // Безопасное форматирование даты
+            let formattedDate = review.review_date;
+            if (review.review_date && typeof review.review_date === 'string') {
+                try {
+                    formattedDate = review.review_date.split('-').reverse().join('.');
+                } catch (dateError) {
+                    console.error('[UserHandlers] Ошибка при форматировании даты:', dateError);
+                    formattedDate = review.review_date;
+                }
+            }
+
+            text += `<b></b>Товар: ${review.product_name || 'Не указан'}\n`;
+            text += `Дата: ${formattedDate}\n`;
             text += `Оценка: ${stars}\n`;
-            text += `Отзыв: ${review.review_text}\n\n`;
+            text += `Отзыв: ${review.review_text || 'Нет текста'}\n\n`;
         }
 
         // Кнопки пагинации
@@ -414,10 +434,18 @@ async function showReviews(ctx, page = 1) {
                 await ctx.editMessageText(text, {
                     reply_markup: { inline_keyboard: keyboard }
                 });
+                await ctx.answerCbQuery(); // Подтверждаем обработку callback query
             } catch (error) {
-                await ctx.reply(text, {
-                    reply_markup: { inline_keyboard: keyboard }
-                });
+                console.error('[UserHandlers] Ошибка при редактировании сообщения с отзывами:', error);
+                try {
+                    await ctx.reply(text, {
+                        reply_markup: { inline_keyboard: keyboard }
+                    });
+                    await ctx.answerCbQuery();
+                } catch (replyError) {
+                    console.error('[UserHandlers] Ошибка при отправке нового сообщения с отзывами:', replyError);
+                    await ctx.answerCbQuery('Ошибка при отображении отзывов');
+                }
             }
         } else {
             await ctx.reply(text, {
@@ -426,7 +454,15 @@ async function showReviews(ctx, page = 1) {
         }
     } catch (error) {
         console.error('[UserHandlers] Ошибка при показе отзывов:', error);
-        await ctx.reply('Произошла ошибка при загрузке отзывов. Попробуйте позже.');
+        console.error('[UserHandlers] Stack trace:', error.stack);
+        try {
+            if (ctx.callbackQuery) {
+                await ctx.answerCbQuery('Ошибка при загрузке отзывов');
+            }
+            await ctx.reply('Произошла ошибка при загрузке отзывов. Попробуйте позже.');
+        } catch (replyError) {
+            console.error('[UserHandlers] Ошибка при отправке сообщения об ошибке:', replyError);
+        }
     }
 
     // Обработка текстовых сообщений от пользователей (когда они пишут в поддержку)
