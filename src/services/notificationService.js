@@ -102,6 +102,3 @@ export class NotificationService {
         }
     }
 }
-
-// Экспортируем класс, экземпляр будет создан после инициализации bot
-export { NotificationService };
