@@ -754,7 +754,7 @@ ${cards.map(card => `• ${card.name}: <code>${card.account_number}</code> ${car
 
 Список городов:
 ${cities.map(c => `• ${c.name}`).join('\n') || 'Городов пока нет'}
-        `.trim();
+    `.trim();
 
         const replyMarkup = {
             inline_keyboard: [
@@ -1201,7 +1201,7 @@ ${products.map(p => {
             const packagingLabel = p.packaging_value ? ` (${p.packaging_value} кг)` : '';
             return `• ${p.name}${packagingLabel} - ${p.price} ₽`;
         }).join('\n') || 'Товаров пока нет'}
-        `.trim();
+    `.trim();
 
         const keyboard = [
             [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }],
@@ -1842,6 +1842,8 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
 
     // Обработка ответов администратора и загрузки данных
     bot.on('text', async (ctx, next) => {
+        console.log('[AdminHandlers] bot.on(text) вызван для текста:', ctx.message.text, 'User ID:', ctx.from.id, 'Is Admin:', isAdmin(ctx.from.id));
+
         // ВАЖНО: Пропускаем команды для ВСЕХ пользователей, чтобы они обрабатывались через bot.command()
         if (ctx.message.text && ctx.message.text.startsWith('/')) {
             // Обрабатываем только /cancel для админов
@@ -1875,8 +1877,11 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
         // чтобы их текстовые сообщения (в том числе нажатия на reply‑кнопки)
         // обрабатывались в userHandlers (bot.hears и bot.on('text'))
         if (!isAdmin(ctx.from.id)) {
+            console.log('[AdminHandlers] Пользователь не админ, передаем управление дальше через next()');
             return next();
         }
+
+        console.log('[AdminHandlers] Пользователь админ, продолжаем обработку');
 
         // Обработка редактирования приветственного сообщения
         if (welcomeEditMode.has(ctx.from.id)) {
@@ -2404,6 +2409,7 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
                 console.error('[AdminHandlers] Ошибка при привязке канала через пересылку:', error);
             }
         }
+        console.log('[AdminHandlers] Конец обработчика, вызываем next()');
         return next();
     });
 
