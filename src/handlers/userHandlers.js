@@ -739,28 +739,6 @@ async function showReferrals(ctx) {
     }
 }
 
-bot.action('generate_referral_link', async (ctx) => {
-    try {
-        const referralCode = await referralService.getOrCreateReferralCode(ctx.from.id);
-        const botUsername = ctx.botInfo?.username || 'your_bot';
-        const referralLink = `https://t.me/${botUsername}?start=ref_${referralCode}`;
-
-        const text = `🔗 <b>Ваша реферальная ссылка:</b>\n\n<code>${referralLink}</code>\n\n📋 Скопируйте ссылку и отправьте другу. Когда он перейдет по ссылке и зарегистрируется, он станет вашим рефералом!`;
-
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '◀️ Назад к рефералам', callback_data: 'my_referrals' }]
-                ]
-            }
-        });
-    } catch (error) {
-        console.error('[UserHandlers] ОШИБКА в generate_referral_link:', error);
-        await ctx.reply('Произошла ошибка при генерации ссылки. Попробуйте позже.');
-    }
-});
-
 async function getOrdersByUser(chatId) {
     const { database } = await import('../database/db.js');
     try {
