@@ -57,6 +57,48 @@ export class SettingsService {
   async setCityIcon(icon) {
     return await this.set('city_icon', icon);
   }
+
+  /**
+   * Получает процент скидки за реферала
+   */
+  async getReferralDiscountPercent() {
+    return parseFloat(await this.get('referral_discount_percent', '1.5'));
+  }
+
+  /**
+   * Устанавливает процент скидки за реферала
+   */
+  async setReferralDiscountPercent(percent) {
+    return await this.set('referral_discount_percent', percent.toString());
+  }
+
+  /**
+   * Получает максимальный процент скидки
+   */
+  async getMaxReferralDiscountPercent() {
+    return parseFloat(await this.get('max_referral_discount_percent', '8'));
+  }
+
+  /**
+   * Устанавливает максимальный процент скидки
+   */
+  async setMaxReferralDiscountPercent(percent) {
+    return await this.set('max_referral_discount_percent', percent.toString());
+  }
+
+  /**
+   * Получает процент кешбека при покупке реферала
+   */
+  async getReferralCashbackPercent() {
+    return parseFloat(await this.get('referral_cashback_percent', '5'));
+  }
+
+  /**
+   * Устанавливает процент кешбека при покупке реферала
+   */
+  async setReferralCashbackPercent(percent) {
+    return await this.set('referral_cashback_percent', percent.toString());
+  }
 }
 
 export const settingsService = new SettingsService();

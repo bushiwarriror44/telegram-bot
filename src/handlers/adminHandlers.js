@@ -139,6 +139,7 @@ export function setupAdminHandlers(bot) {
             ['Статистика'],
             ['Настройка приветственного сообщения', 'Настройка кнопок'],
             ['Настройка иконок', 'Бонусы и промокоды'],
+            ['Настройка реферальной системы'],
             ['Выход из админ-панели']
         ];
 
@@ -215,6 +216,7 @@ ${addressesText}
                     [{ text: '🔘 Настройка кнопок', callback_data: 'admin_menu_buttons' }],
                     [{ text: '🎨 Настройка иконок', callback_data: 'admin_icons' }],
                     [{ text: '🎁 Бонусы и промокоды', callback_data: 'admin_promocodes' }],
+                    [{ text: '👥 Настройка реферальной системы', callback_data: 'admin_referrals' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
             }
@@ -274,6 +276,11 @@ ${addressesText}
     bot.action('admin_icons', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showIconsSettings(ctx);
+    });
+
+    bot.action('admin_referrals', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showReferralSettings(ctx);
     });
 
     bot.action('admin_stats', async (ctx) => {
@@ -345,6 +352,11 @@ ${addressesText}
     bot.hears('Бонусы и промокоды', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showPromocodesAdmin(ctx);
+    });
+
+    bot.hears('Настройка реферальной системы', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showReferralSettings(ctx);
     });
 
     bot.hears('Выход из админ-панели', async (ctx) => {
@@ -1745,6 +1757,37 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             return;
         }
 
+        // Обработка редактирования настроек реферальной системы
+        if (referralDiscountEditMode.has(ctx.from.id)) {
+            try {
+                const editType = referralDiscountEditMode.get(ctx.from.id);
+                const value = parseFloat(ctx.message.text.trim());
+
+                if (isNaN(value) || value < 0 || value > 100) {
+                    await ctx.reply('❌ Пожалуйста, введите корректное число от 0 до 100.');
+                    return;
+                }
+
+                if (editType === 'discount') {
+                    await settingsService.setReferralDiscountPercent(value);
+                    await ctx.reply(`✅ Скидка за реферала успешно обновлена на: ${value}%`);
+                } else if (editType === 'max_discount') {
+                    await settingsService.setMaxReferralDiscountPercent(value);
+                    await ctx.reply(`✅ Максимальная скидка успешно обновлена на: ${value}%`);
+                } else if (editType === 'cashback') {
+                    await settingsService.setReferralCashbackPercent(value);
+                    await ctx.reply(`✅ Процент кешбека успешно обновлен на: ${value}%`);
+                }
+
+                referralDiscountEditMode.delete(ctx.from.id);
+                await showReferralSettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении настроек реферальной системы:', error);
+                await ctx.reply('❌ Ошибка при сохранении настроек: ' + error.message);
+            }
+            return;
+        }
+
         // Обработка добавления промокода
         if (promocodeAddMode.has(ctx.from.id)) {
             try {
@@ -2297,6 +2340,86 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             { parse_mode: 'HTML' }
         );
         await showIconsSettings(ctx);
+    });
+
+    // Настройка реферальной системы
+    async function showReferralSettings(ctx) {
+        const discountPercent = await settingsService.getReferralDiscountPercent();
+        const maxDiscount = await settingsService.getMaxReferralDiscountPercent();
+        const cashbackPercent = await settingsService.getReferralCashbackPercent();
+
+        const text = `👥 <b>Настройка реферальной системы</b>\n\n` +
+            `Текущие настройки:\n` +
+            `• Скидка за реферала: <b>${discountPercent}%</b>\n` +
+            `• Максимальная скидка: <b>${maxDiscount}%</b>\n` +
+            `• Кешбек при покупке реферала: <b>${cashbackPercent}%</b>\n\n` +
+            `Выберите настройку для изменения:`;
+
+        const keyboard = {
+            inline_keyboard: [
+                [{ text: '✏️ Изменить скидку за реферала', callback_data: 'edit_referral_discount' }],
+                [{ text: '✏️ Изменить максимальную скидку', callback_data: 'edit_max_referral_discount' }],
+                [{ text: '✏️ Изменить процент кешбека', callback_data: 'edit_referral_cashback' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    }
+
+    const referralDiscountEditMode = new Map(); // userId -> 'discount' | 'max_discount' | 'cashback'
+
+    bot.action('edit_referral_discount', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        referralDiscountEditMode.set(ctx.from.id, 'discount');
+        await ctx.reply(
+            '✏️ <b>Редактирование скидки за реферала</b>\n\n' +
+            'Введите новый процент скидки за каждого реферала (например: 1.5).\n' +
+            'Текущее значение: ' + (await settingsService.getReferralDiscountPercent()) + '%\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    bot.action('edit_max_referral_discount', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        referralDiscountEditMode.set(ctx.from.id, 'max_discount');
+        await ctx.reply(
+            '✏️ <b>Редактирование максимальной скидки</b>\n\n' +
+            'Введите максимальный процент скидки (например: 8).\n' +
+            'Текущее значение: ' + (await settingsService.getMaxReferralDiscountPercent()) + '%\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    bot.action('edit_referral_cashback', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        referralDiscountEditMode.set(ctx.from.id, 'cashback');
+        await ctx.reply(
+            '✏️ <b>Редактирование процента кешбека</b>\n\n' +
+            'Введите процент кешбека, который будет начисляться при покупке реферала (например: 5).\n' +
+            'Текущее значение: ' + (await settingsService.getReferralCashbackPercent()) + '%\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
     });
 
     // Меню работы с данными

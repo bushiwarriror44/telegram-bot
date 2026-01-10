@@ -193,6 +193,30 @@ class Database {
       )
     `);
 
+    // Таблица рефералов
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS referrals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referrer_chat_id INTEGER NOT NULL,
+        referred_chat_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (referrer_chat_id) REFERENCES users(chat_id) ON DELETE CASCADE,
+        FOREIGN KEY (referred_chat_id) REFERENCES users(chat_id) ON DELETE CASCADE,
+        UNIQUE(referred_chat_id)
+      )
+    `);
+
+    // Таблица реферальных кодов пользователей
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS user_referral_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_chat_id INTEGER NOT NULL UNIQUE,
+        code TEXT NOT NULL UNIQUE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_chat_id) REFERENCES users(chat_id) ON DELETE CASCADE
+      )
+    `);
+
     // Таблица заказов
     await this.run(`
       CREATE TABLE IF NOT EXISTS orders (
