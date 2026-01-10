@@ -422,15 +422,18 @@ async function showCabinetMenu(ctx) {
         const user = await userService.getByChatId(ctx.from.id);
         const balance = user?.balance || 0;
 
-        const text = `👤 <b>Личный кабинет</b>
+        const text = `👤 ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
+💵 <b>Баланс: ${balance.toFixed(2)} ₽</b>`;
 
-🆔 ID: <code>${ctx.from.id}</code>
-👤 Имя: ${ctx.from.first_name || 'Не указано'} ${ctx.from.last_name || ''}
-📱 Username: ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
-📅 Дата регистрации: ${user?.created_at ? new Date(user.created_at).toLocaleDateString('ru-RU') : 'Неизвестно'}
-🕐 Последняя активность: ${user?.last_active ? new Date(user.last_active).toLocaleDateString('ru-RU') + ' ' + new Date(user.last_active).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Неизвестно'}
+//         const text = `👤 <b>Личный кабинет</b>
 
-💰 <b>Баланс: ${balance.toFixed(2)} ₽</b>`;
+// 🆔 ID: <code>${ctx.from.id}</code>
+// 👤 Имя: ${ctx.from.first_name || 'Не указано'} ${ctx.from.last_name || ''}
+// 📱 Username: ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
+// 📅 Дата регистрации: ${user?.created_at ? new Date(user.created_at).toLocaleDateString('ru-RU') : 'Неизвестно'}
+// 🕐 Последняя активность: ${user?.last_active ? new Date(user.last_active).toLocaleDateString('ru-RU') + ' ' + new Date(user.last_active).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Неизвестно'}
+
+// 💰 <b>Баланс: ${balance.toFixed(2)} ₽</b>`;
 
         const keyboard = [
             [{ text: '💳 Пополнить', callback_data: 'topup_balance' }],
@@ -960,12 +963,8 @@ async function showProductDetails(ctx, productId) {
     const text = `Вы выбрали: ${product.name}${packagingLabel}
 
 
-
-
 Цена (без комиссии): ${product.price.toLocaleString('ru-RU')} ₽
 Описание: ${product.description || 'Описание отсутствует'}
-
-
 
 ❔ У вас есть промо-код ❔`;
 
@@ -1054,7 +1053,7 @@ async function createOrder(ctx, productId, promocodeId = null) {
         }
 
         // Показываем сообщение о создании заказа
-        const loadingMsg = await ctx.reply('♻️ 1 минуту, создаём заказ...');
+        await ctx.reply('♻️ 1 минуту, создаём заказ...');
 
         // Рассчитываем цену и скидку
         let price = product.price;
@@ -1095,12 +1094,8 @@ async function createOrder(ctx, productId, promocodeId = null) {
             promocodeId
         );
 
-        // Удаляем сообщение о загрузке
-        try {
-            await ctx.deleteMessage(loadingMsg.message_id);
-        } catch (error) {
-            console.error('[UserHandlers] Ошибка при удалении сообщения о загрузке:', error);
-        }
+        // Ждем 5 секунд перед показом заказа
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         // Показываем детали заказа
         await showOrderDetails(ctx, order.id);
@@ -1123,16 +1118,16 @@ async function showOrderDetails(ctx, orderId) {
         const promocodeText = order.promocode_code ? order.promocode_code : 'Нет';
         const discountText = order.discount > 0 ? `${order.discount.toLocaleString('ru-RU')} ₽` : '0 ₽';
 
-        const text = `Создан заказ #${order.id}
-Витрина: Hitpoint
-Категория: ${order.city_name}
-Раздел: ${order.district_name}
-Товар: 🪨 ${order.product_name} 🪨${packagingLabel}
-Кол-во: 1
-Стоимость: ${order.price.toLocaleString('ru-RU')} ₽
-Промокод: ${promocodeText}
-Скидка: ${discountText}
-Финальная сумма: ${order.total_price.toLocaleString('ru-RU')} ₽`;
+        const text = `<b>Создан заказ #${order.id}</b> \n
+Витрина: Hitpoint \n
+Категория: ${order.city_name} \n
+Раздел: ${order.district_name} \n
+Товар: ${order.product_name} ${packagingLabel} \n
+Кол-во: 1 \n
+Стоимость: ${order.price.toLocaleString('ru-RU')} ₽ \n
+Промокод: ${promocodeText} \n
+Скидка: ${discountText} \n
+Финальная сумма: ${order.total_price.toLocaleString('ru-RU')} <b><i>₽</i></b>`;
 
         const paymentMethods = await paymentService.getAllMethods();
         if (paymentMethods.length === 0) {
