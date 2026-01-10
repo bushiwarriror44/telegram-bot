@@ -180,29 +180,6 @@ export function setupUserHandlers(bot) {
         await showReferrals(ctx);
     });
 
-    // Обработчик генерации реферальной ссылки
-    bot.action('generate_referral_link', async (ctx) => {
-        try {
-            const referralCode = await referralService.getOrCreateReferralCode(ctx.from.id);
-            const botUsername = ctx.botInfo?.username || 'your_bot';
-            const referralLink = `https://t.me/${botUsername}?start=ref_${referralCode}`;
-
-            const text = `🔗 <b>Ваша реферальная ссылка:</b>\n\n<code>${referralLink}</code>\n\n📋 Скопируйте ссылку и отправьте другу. Когда он перейдет по ссылке и зарегистрируется, он станет вашим рефералом!`;
-
-            await ctx.editMessageText(text, {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '◀️ Назад к рефералам', callback_data: 'my_referrals' }]
-                    ]
-                }
-            });
-        } catch (error) {
-            console.error('[UserHandlers] ОШИБКА в generate_referral_link:', error);
-            await ctx.reply('Произошла ошибка при генерации ссылки. Попробуйте позже.');
-        }
-    });
-
     // Обработка выбора города
     bot.action(/^city_(\d+)$/, async (ctx) => {
         await userService.saveOrUpdate(ctx.from.id, {
@@ -716,52 +693,37 @@ async function showTopupHistory(ctx) {
 
 async function showReferrals(ctx) {
     try {
-        const referrals = await referralService.getReferralsByReferrer(ctx.from.id);
-        const referralCount = referrals.length;
-        const discountPercent = await settingsService.getReferralDiscountPercent();
-        const maxDiscount = await settingsService.getMaxReferralDiscountPercent();
-        const cashbackPercent = await settingsService.getReferralCashbackPercent();
+        // Генерируем или получаем реферальную ссылку
+        const referralCode = await referralService.getOrCreateReferralCode(ctx.from.id);
+        const botUsername = ctx.botInfo?.username || (await ctx.telegram.getMe()).username || 'your_bot';
+        const referralLink = `https://t.me/${botUsername}?start=ref_${referralCode}`;
 
-        // Рассчитываем текущую скидку
-        const currentDiscount = Math.min(referralCount * discountPercent, maxDiscount);
-
-        let text = `👥 <b>Мои рефералы</b>\n\n`;
-        text += `📊 Количество рефералов: <b>${referralCount}</b>\n\n`;
-
-        if (referrals.length > 0) {
-            text += `<b>Список рефералов:</b>\n`;
-            referrals.slice(0, 10).forEach((ref, index) => {
-                const username = ref.username ? `@${ref.username}` : 'Без username';
-                const name = ref.first_name || 'Неизвестно';
-                text += `${index + 1}. ${name} (${username})\n`;
-            });
-            if (referrals.length > 10) {
-                text += `\n... и еще ${referrals.length - 10} рефералов\n`;
-            }
-        } else {
-            text += `У вас пока нет рефералов.\n`;
-        }
-
-        text += `\n💰 <b>Ваша текущая скидка: ${currentDiscount.toFixed(1)}%</b>\n`;
-        text += `\n📝 <b>Как работает система:</b>\n`;
-        text += `• За каждого приглашенного пользователя вы получаете скидку <b>${discountPercent}%</b>\n`;
-        text += `• Максимальная скидка: <b>${maxDiscount}%</b>\n`;
-        text += `• Если приглашенный пользователь совершит покупку, вам вернется <b>${cashbackPercent}%</b> от суммы покупки кешбеком на баланс\n`;
+        const text = `🌶 Ваша реферральная ссылка:\n\n${referralLink}`;
 
         const keyboard = [
-            [{ text: '🔗 Сгенерировать ссылку для друга', callback_data: 'generate_referral_link' }],
             [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
         ];
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: keyboard
-            }
-        });
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(text, {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            });
+        } else {
+            await ctx.reply(text, {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            });
+        }
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showReferrals:', error);
-        await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+        } else {
+            await ctx.reply('Произошла ошибка. Попробуйте позже.');
+        }
     }
 }
 
@@ -1241,7 +1203,7 @@ async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     }
 
     const text = `
-💳 <b>Оплата заказа #${order.id}</b>
+💳 <b>Оплата заказа 12#${order.id}</b>
 
 Метод оплаты: <b>${method.name}</b>
 Сумма: <b>${order.total_price.toLocaleString('ru-RU')} ₽</b>
