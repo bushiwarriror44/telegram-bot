@@ -391,6 +391,10 @@ class Database {
     if (!hasBalance) {
       await this.run('ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0');
     }
+    const hasUnpaidAttempts = userColumns.some((col) => col.name === 'unpaid_attempts');
+    if (!hasUnpaidAttempts) {
+      await this.run('ALTER TABLE users ADD COLUMN unpaid_attempts INTEGER DEFAULT 10');
+    }
 
     // Миграция: добавляем колонку image_path в существующую таблицу products при необходимости
     const hasImagePath = productColumns.some((col) => col.name === 'image_path');

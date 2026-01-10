@@ -61,6 +61,35 @@ export class OrderService {
         );
         return await this.getById(orderId);
     }
+
+    /**
+     * Получает неоплаченные заказы пользователя старше указанного времени (в минутах)
+     */
+    async getUnpaidOrdersOlderThan(userChatId, minutes) {
+        return await database.all(
+            `SELECT * FROM orders 
+             WHERE user_chat_id = ? 
+             AND status = 'pending' 
+             AND payment_method_id IS NOT NULL
+             AND datetime(created_at, '+' || ? || ' minutes') < datetime('now')`,
+            [userChatId, minutes]
+        );
+    }
+
+    /**
+     * Получает последний неоплаченный заказ пользователя
+     */
+    async getLastUnpaidOrder(userChatId) {
+        return await database.get(
+            `SELECT * FROM orders 
+             WHERE user_chat_id = ? 
+             AND status = 'pending' 
+             AND payment_method_id IS NOT NULL
+             ORDER BY created_at DESC 
+             LIMIT 1`,
+            [userChatId]
+        );
+    }
 }
 
 export const orderService = new OrderService();

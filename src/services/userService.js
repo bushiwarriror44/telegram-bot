@@ -45,6 +45,30 @@ export class UserService {
   async getByChatId(chatId) {
     return await database.get('SELECT * FROM users WHERE chat_id = ?', [chatId]);
   }
+
+  /**
+   * Уменьшает количество попыток пользователя
+   */
+  async decreaseUnpaidAttempts(chatId) {
+    const user = await this.getByChatId(chatId);
+    if (!user) {
+      await this.saveOrUpdate(chatId);
+    }
+    const currentAttempts = (user?.unpaid_attempts || 10) - 1;
+    await database.run(
+      'UPDATE users SET unpaid_attempts = ? WHERE chat_id = ?',
+      [Math.max(0, currentAttempts), chatId]
+    );
+    return Math.max(0, currentAttempts);
+  }
+
+  /**
+   * Получает количество оставшихся попыток
+   */
+  async getUnpaidAttempts(chatId) {
+    const user = await this.getByChatId(chatId);
+    return user?.unpaid_attempts || 10;
+  }
 }
 
 export const userService = new UserService();

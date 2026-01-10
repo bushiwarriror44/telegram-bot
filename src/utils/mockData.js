@@ -42,11 +42,22 @@ const mockProducts = {
   ]
 };
 
+// Криптовалютные методы оплаты
 const paymentMethods = [
-  { name: 'Bitcoin', network: 'BTC' },
-  { name: 'Ethereum', network: 'ETH' },
-  { name: 'Tron', network: 'TRC' },
-  { name: 'USDT', network: 'USDT' }
+  { name: 'BTC', network: 'BTC' },
+  { name: 'LTC', network: 'LTC' },
+  { name: 'USDT TRC20', network: 'TRC20' }
+];
+
+// Карточные методы оплаты
+const cardPaymentMethods = [
+  { name: 'СБП', network: 'SBP' },
+  { name: 'Банковская карта', network: 'CARD' },
+  { name: 'Оплата с мобильного', network: 'MOBILE' },
+  { name: 'Трансгран', network: 'TRANSGRAN' },
+  { name: 'Альфа-Альфа', network: 'ALFA' },
+  { name: 'Сбер-Сбер', network: 'SBER' },
+  { name: 'Озон-озон', network: 'OZON' }
 ];
 
 // Базовый набор фасовок
@@ -202,10 +213,14 @@ export async function initializeMockData() {
     const existingPayments = await paymentService.getAllMethods(true);
     if (existingPayments.length === 0) {
       console.log('[MOCK] Создание методов оплаты...');
+      // Создаем криптовалютные методы
       for (const method of paymentMethods) {
         await paymentService.createMethod(method.name, method.network, 'crypto');
       }
-      await paymentService.createMethod('Карта', 'CARD', 'card');
+      // Создаем карточные методы
+      for (const method of cardPaymentMethods) {
+        await paymentService.createMethod(method.name, method.network, 'card');
+      }
     }
     
     // Создаем карточные счета если их нет
@@ -303,15 +318,17 @@ export async function initializeMockData() {
     }
   }
 
-  // Создаем методы оплаты
+  // Создаем криптовалютные методы оплаты
   for (const method of paymentMethods) {
     await paymentService.createMethod(method.name, method.network, 'crypto');
     console.log(`Создан метод оплаты: ${method.name} (${method.network})`);
   }
 
-  // Создаем метод оплаты картой
-  await paymentService.createMethod('Карта', 'CARD', 'card');
-  console.log('Создан метод оплаты: Карта');
+  // Создаем карточные методы оплаты
+  for (const method of cardPaymentMethods) {
+    await paymentService.createMethod(method.name, method.network, 'card');
+    console.log(`Создан метод оплаты: ${method.name} (${method.network})`);
+  }
 
   // Создаем моковые карточные счета
   const mockCardAccounts = [

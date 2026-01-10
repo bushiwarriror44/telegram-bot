@@ -99,6 +99,20 @@ export class SettingsService {
   async setReferralCashbackPercent(percent) {
     return await this.set('referral_cashback_percent', percent.toString());
   }
+
+  /**
+   * Получает время блокировки в часах за неоплаченные заказы
+   */
+  async getBlockTimeHours() {
+    return parseFloat(await this.get('block_time_hours', '12'));
+  }
+
+  /**
+   * Устанавливает время блокировки в часах за неоплаченные заказы
+   */
+  async setBlockTimeHours(hours) {
+    return await this.set('block_time_hours', hours.toString());
+  }
 }
 
 export const settingsService = new SettingsService();

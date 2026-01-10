@@ -84,8 +84,10 @@ export class PaymentService {
         // Генерация моковых адресов для разных сетей
         const prefixMap = {
             'BTC': '1',
+            'LTC': 'L',
             'ETH': '0x',
             'TRC': 'T',
+            'TRC20': 'T',
             'USDT': '0x'
         };
 
@@ -94,7 +96,9 @@ export class PaymentService {
 
         if (network === 'BTC') {
             return prefix + randomBytes.substring(0, 33);
-        } else if (network === 'TRC') {
+        } else if (network === 'LTC') {
+            return prefix + randomBytes.substring(0, 33);
+        } else if (network === 'TRC' || network === 'TRC20') {
             return prefix + randomBytes.substring(0, 33).toUpperCase();
         } else {
             return prefix + randomBytes;
