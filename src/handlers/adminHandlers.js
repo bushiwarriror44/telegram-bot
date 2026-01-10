@@ -285,6 +285,78 @@ ${addressesText}
         await showReferralSettings(ctx);
     });
 
+    // Привязка Telegram-канала
+    bot.action('admin_bind_channel', async (ctx) => {
+        console.log('[AdminHandlers] Обработчик admin_bind_channel вызван');
+        if (!isAdmin(ctx.from.id)) {
+            console.log('[AdminHandlers] Пользователь не является админом');
+            return;
+        }
+
+        try {
+            console.log('[AdminHandlers] Получение текущего ID канала...');
+            const currentChannelId = await settingsService.getNotificationChannelId();
+            console.log('[AdminHandlers] Текущий ID канала:', currentChannelId);
+            const text = currentChannelId
+                ? `📢 <b>Привязка Telegram-канала</b>\n\n` +
+                `Текущий канал: <code>${currentChannelId}</code>\n\n` +
+                `Для привязки нового канала:\n` +
+                `1. Добавьте бота в канал как администратора\n` +
+                `2. Отправьте в канал любое сообщение\n` +
+                `3. Перешлите это сообщение сюда\n\n` +
+                `Или отправьте ID канала в формате: <code>-1001234567890</code>`
+                : `📢 <b>Привязка Telegram-канала</b>\n\n` +
+                `Канал не привязан.\n\n` +
+                `Для привязки канала:\n` +
+                `1. Добавьте бота в канал как администратора\n` +
+                `2. Отправьте в канал любое сообщение\n` +
+                `3. Перешлите это сообщение сюда\n\n` +
+                `Или отправьте ID канала в формате: <code>-1001234567890</code>`;
+
+            channelBindMode.set(ctx.from.id, true);
+            console.log('[AdminHandlers] Режим привязки канала активирован для пользователя:', ctx.from.id);
+
+            if (ctx.callbackQuery) {
+                console.log('[AdminHandlers] Редактирование сообщения через callback_query');
+                try {
+                    await ctx.answerCbQuery();
+                    await ctx.editMessageText(text, {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                            ]
+                        }
+                    });
+                    console.log('[AdminHandlers] Сообщение успешно отредактировано');
+                } catch (error) {
+                    console.error('[AdminHandlers] Ошибка при редактировании сообщения:', error);
+                    await ctx.reply(text, {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                            ]
+                        }
+                    });
+                }
+            } else {
+                console.log('[AdminHandlers] Отправка нового сообщения');
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                        ]
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('[AdminHandlers] Ошибка при показе настроек привязки канала:', error);
+            await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+        }
+    });
+
     bot.action('admin_stats', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showStatisticsAdmin(ctx);
