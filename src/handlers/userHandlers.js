@@ -469,6 +469,8 @@ async function showReviews(ctx, page = 1) {
     // ВАЖНО: Этот обработчик должен регистрироваться ПОСЛЕ всех bot.command(),
     // чтобы команды обрабатывались первыми
     bot.on('text', async (ctx, next) => {
+        console.log('[UserHandlers] bot.on(text) вызван для текста:', ctx.message.text);
+
         // Пропускаем команды - они должны обрабатываться через bot.command()
         if (ctx.message.text && ctx.message.text.startsWith('/')) {
             console.log('[UserHandlers] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
@@ -515,10 +517,16 @@ async function showReviews(ctx, page = 1) {
         }
 
         // Обработка динамических кнопок меню
+        console.log('[UserHandlers] Проверка динамических кнопок для текста:', ctx.message.text);
         const menuButtons = await menuButtonService.getAll(true);
+        console.log('[UserHandlers] Найдено динамических кнопок:', menuButtons.length);
+        console.log('[UserHandlers] Названия кнопок:', menuButtons.map(btn => btn.name));
+
         const clickedButton = menuButtons.find(btn => btn.name === ctx.message.text);
+        console.log('[UserHandlers] Найдена кнопка?', !!clickedButton);
 
         if (clickedButton) {
+            console.log('[UserHandlers] Обработка нажатия на кнопку:', clickedButton.name);
             await userService.saveOrUpdate(ctx.from.id, {
                 username: ctx.from.username,
                 first_name: ctx.from.first_name,
@@ -527,6 +535,10 @@ async function showReviews(ctx, page = 1) {
             await ctx.reply(clickedButton.message, { parse_mode: 'HTML' });
             return;
         }
+
+        // Если не обработано, передаем дальше
+        console.log('[UserHandlers] Текст не обработан, передаем дальше');
+        return next();
     });
 }
 
