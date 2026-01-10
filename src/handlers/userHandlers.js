@@ -65,7 +65,7 @@ async function showMenuKeyboard(ctx) {
     }
 
     const keyboard = await getMenuKeyboard();
-    await ctx.reply('Выберите действие:', {
+    await ctx.reply('🕹 Главное меню:', {
         reply_markup: keyboard
     });
 }
@@ -113,10 +113,6 @@ export function setupUserHandlers(bot) {
 
             // Показываем reply keyboard с кнопками меню (если пользователь не админ)
             await showMenuKeyboard(ctx);
-
-            console.log('[UserHandlers] Показ меню городов...');
-            await showCitiesMenu(ctx);
-            console.log('[UserHandlers] Меню городов показано');
         } catch (error) {
             console.error('[UserHandlers] ОШИБКА в обработчике /start:', error);
             console.error('[UserHandlers] Stack:', error.stack);
