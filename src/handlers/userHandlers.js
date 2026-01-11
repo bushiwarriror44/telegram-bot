@@ -1094,27 +1094,8 @@ async function showMyOrders(ctx) {
             return `${hours}:${minutes} ${day}.${month}.${year}`;
         }
 
-        // Отправляем заголовок
-        const headerText = `📄 Список заказов:`;
-
-        if (ctx.callbackQuery) {
-            try {
-                await ctx.answerCbQuery();
-                await ctx.editMessageText(headerText, {
-                    parse_mode: 'HTML'
-                });
-            } catch (error) {
-                await ctx.reply(headerText, {
-                    parse_mode: 'HTML'
-                });
-            }
-        } else {
-            await ctx.reply(headerText, {
-                parse_mode: 'HTML'
-            });
-        }
-
-        // Отправляем каждый заказ отдельным сообщением только с кнопкой
+        // Собираем все кнопки заказов
+        const orderButtons = [];
         for (const order of orders) {
             const formattedDate = formatOrderDate(order.created_at);
             const orderText = `Заказ #${order.id} | ${formattedDate}`;
@@ -1129,15 +1110,41 @@ async function showMyOrders(ctx) {
                 ? `🔴 ${orderText}`
                 : `🟢 ${orderText}`;
 
-            const keyboard = [[{
+            // Каждая кнопка на отдельной строке (100% ширины)
+            orderButtons.push([{
                 text: buttonText,
                 callback_data: `view_order_${order.id}`
-            }]];
+            }]);
+        }
 
-            // Отправляем сообщение только с кнопкой (без текста)
-            await ctx.reply('•', {
+        // Добавляем кнопку "Назад" в конец
+        orderButtons.push([{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]);
+
+        // Отправляем заголовок со всеми кнопками
+        const headerText = `📄 Список заказов:`;
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.answerCbQuery();
+                await ctx.editMessageText(headerText, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: orderButtons
+                    }
+                });
+            } catch (error) {
+                await ctx.reply(headerText, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: orderButtons
+                    }
+                });
+            }
+        } else {
+            await ctx.reply(headerText, {
+                parse_mode: 'HTML',
                 reply_markup: {
-                    inline_keyboard: keyboard
+                    inline_keyboard: orderButtons
                 }
             });
         }
