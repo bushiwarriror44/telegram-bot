@@ -197,6 +197,17 @@ export function registerSettingsHandlers(bot) {
         await ctx.answerCbQuery();
         await showStorefrontNameSettings(ctx);
     });
+
+    // Обработчик для управления предустановленными товарами
+    bot.action('admin_predefined_products', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.answerCbQuery('❌ У вас нет доступа');
+            return;
+        }
+        await ctx.answerCbQuery();
+        const { showPredefinedProductsManagement } = await import('./productsHandler.js');
+        await showPredefinedProductsManagement(ctx);
+    });
 }
 
 /**
@@ -227,6 +238,7 @@ export async function showSettingsMenu(ctx) {
             [{ text: '👥 Реферальная система', callback_data: 'admin_settings_referral' }],
             [{ text: '📢 Привязать телеграм-канал', callback_data: 'admin_bind_channel' }],
             [{ text: '💬 Управление отзывами', callback_data: 'admin_reviews' }],
+            [{ text: '📦 Предустановленные товары', callback_data: 'admin_predefined_products' }],
             [{ text: '🏪 Изменить название витрины', callback_data: 'admin_storefront_name' }],
             [{ text: '💱 Изменить валюту', callback_data: 'admin_currency' }],
             [{ text: '📊 Статистика', callback_data: 'admin_stats' }],

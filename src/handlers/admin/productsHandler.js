@@ -23,6 +23,7 @@ export const predefinedProductSelectMode = new Map(); // userId -> true (выб�
 export const predefinedProductCityMode = new Map(); // userId -> { productName, description, price } (выбор города)
 export const predefinedProductDistrictMode = new Map(); // userId -> { productName, description, price, cityId, cityName } (выбор района)
 export const predefinedProductAddMode = new Map(); // userId -> 'name' | 'description' | 'price' (добавление нового предустановленного товара)
+export const predefinedProductAddSource = new Map(); // userId -> 'settings' | 'products' (источник вызова добавления товара)
 
 /**
  * Регистрирует обработчики управления товарами
@@ -359,12 +360,69 @@ export function registerProductsHandlers(bot) {
     bot.action('admin_predefined_add_new', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         predefinedProductAddMode.set(ctx.from.id, 'name');
-        await ctx.editMessageText(
-            '➕ <b>Добавление нового предустановленного товара</b>\n\n' +
-            'Введите название товара:\n\n' +
-            'Для отмены отправьте /cancel',
-            { parse_mode: 'HTML' }
-        );
+        // Определяем источник вызова по callback_data предыдущего сообщения
+        // Если это из меню управления (admin_predefined_products), то source = 'settings'
+        // Если это из списка товаров (admin_products_add_predefined), то source = 'products'
+        let source = 'products'; // По умолчанию из товаров
+        if (ctx.callbackQuery?.message?.reply_markup?.inline_keyboard) {
+            const hasSettingsButton = ctx.callbackQuery.message.reply_markup.inline_keyboard.some(
+                row => row.some(btn => btn.callback_data === 'admin_predefined_products' || btn.callback_data === 'admin_settings')
+            );
+            if (hasSettingsButton) {
+                source = 'settings';
+            }
+        }
+        predefinedProductAddSource.set(ctx.from.id, source);
+        await ctx.answerCbQuery();
+        try {
+            await ctx.editMessageText(
+                '➕ <b>Добавление нового предустановленного товара</b>\n\n' +
+                'Введите название товара:\n\n' +
+                'Для отмены отправьте /cancel',
+                { parse_mode: 'HTML' }
+            );
+        } catch (error) {
+            await ctx.reply(
+                '➕ <b>Добавление нового предустановленного товара</b>\n\n' +
+                'Введите название товара:\n\n' +
+                'Для отмены отправьте /cancel',
+                { parse_mode: 'HTML' }
+            );
+        }
+    });
+
+    // Обработчик для просмотра списка предустановленных товаров
+    bot.action('admin_predefined_list', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await ctx.answerCbQuery();
+        await showPredefinedProductsList(ctx);
+    });
+
+    // Обработчик для удаления предустановленного товара
+    bot.action('admin_predefined_delete', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await ctx.answerCbQuery();
+        await showPredefinedProductsDeleteMenu(ctx);
+    });
+
+    // Обработчик для подтверждения удаления товара
+    bot.action(/^admin_predefined_delete_confirm_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const productIndex = parseInt(ctx.match[1]);
+        const products = getMockProducts();
+        if (productIndex < 0 || productIndex >= products.length) {
+            await ctx.answerCbQuery('❌ Товар не найден');
+            return;
+        }
+        const product = products[productIndex];
+        const { removeMockProduct } = await import('../../utils/mockData.js');
+        const removed = removeMockProduct(product.name);
+        if (removed) {
+            await ctx.answerCbQuery('✅ Товар удален!');
+            await showPredefinedProductsManagement(ctx);
+        } else {
+            await ctx.answerCbQuery('❌ Ошибка при удалении');
+        }
     });
 }
 
@@ -383,7 +441,7 @@ export async function showProductsAdmin(ctx) {
     const keyboard = cities.map(city => [
         { text: `🏙️ ${city.name}`, callback_data: `admin_products_city_${city.id}` }
     ]);
-    keyboard.push([{ text: '➕ Добавить', callback_data: 'admin_products_add_predefined' }]);
+    keyboard.push([{ text: '➕ Добавить из шаблона', callback_data: 'admin_products_add_predefined' }]);
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_panel' }]);
 
     const replyMarkup = { inline_keyboard: keyboard };
@@ -558,7 +616,7 @@ export async function showPredefinedProducts(ctx) {
 export async function showCitiesForPredefinedProduct(ctx) {
     const cities = await cityService.getAll();
     const productData = predefinedProductCityMode.get(ctx.from.id);
-    
+
     if (!productData) {
         await ctx.reply('❌ Ошибка: данные товара не найдены');
         return;
@@ -610,7 +668,7 @@ export async function showDistrictsForPredefinedProduct(ctx, cityId) {
 
     const districts = await districtService.getByCityId(cityId);
     const productData = predefinedProductDistrictMode.get(ctx.from.id);
-    
+
     if (!productData) {
         await ctx.reply('❌ Ошибка: данные товара не найдены');
         return;
@@ -692,5 +750,195 @@ export async function placePredefinedProduct(ctx, districtId, productData) {
             await ctx.reply(`❌ Ошибка: ${error.message}`);
         }
         console.error('[ProductsHandler] Ошибка при размещении предустановленного товара:', error);
+    }
+}
+
+/**
+ * Показ списка всех предустановленных товаров
+ */
+export async function showPredefinedProductsList(ctx) {
+    const products = getMockProducts();
+    const currencySymbol = await settingsService.getCurrencySymbol();
+
+    if (products.length === 0) {
+        const text = `
+📦 <b>Предустановленные товары</b>
+
+Товаров пока нет.
+        `.trim();
+
+        const keyboard = [
+            [{ text: '➕ Добавить товар', callback_data: 'admin_predefined_add_new' }],
+            [{ text: '◀️ Назад', callback_data: 'admin_predefined_products' }]
+        ];
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+        return;
+    }
+
+    const text = `
+📦 <b>Предустановленные товары</b>
+
+Список всех товаров:
+${products.map((product, index) =>
+        `${index + 1}. <b>${product.name}</b>\n   Описание: ${product.description}\n   Цена: ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`
+    ).join('\n\n')}
+    `.trim();
+
+    const keyboard = [
+        [{ text: '➕ Добавить товар', callback_data: 'admin_predefined_add_new' }],
+        [{ text: '🗑️ Удалить товар', callback_data: 'admin_predefined_delete' }],
+        [{ text: '◀️ Назад', callback_data: 'admin_predefined_products' }]
+    ];
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    } else {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    }
+}
+
+/**
+ * Показ меню удаления предустановленных товаров
+ */
+export async function showPredefinedProductsDeleteMenu(ctx) {
+    const products = getMockProducts();
+    const currencySymbol = await settingsService.getCurrencySymbol();
+
+    if (products.length === 0) {
+        const text = `
+🗑️ <b>Удаление предустановленных товаров</b>
+
+Товаров для удаления нет.
+        `.trim();
+
+        const keyboard = [
+            [{ text: '◀️ Назад', callback_data: 'admin_predefined_products' }]
+        ];
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+        return;
+    }
+
+    const text = `
+🗑️ <b>Удаление предустановленного товара</b>
+
+Выберите товар для удаления:
+    `.trim();
+
+    const keyboard = products.map((product, index) => [
+        {
+            text: `🗑️ ${product.name} - ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`,
+            callback_data: `admin_predefined_delete_confirm_${index}`
+        }
+    ]);
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_predefined_products' }]);
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    } else {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    }
+}
+
+/**
+ * Показ меню управления предустановленными товарами (из настроек)
+ */
+export async function showPredefinedProductsManagement(ctx) {
+    const products = getMockProducts();
+    const currencySymbol = await settingsService.getCurrencySymbol();
+
+    const text = `
+📦 <b>Управление предустановленными товарами</b>
+
+Всего товаров: ${products.length}
+
+Выберите действие:
+    `.trim();
+
+    const keyboard = [
+        [{ text: '📋 Список товаров', callback_data: 'admin_predefined_list' }],
+        [{ text: '➕ Добавить товар', callback_data: 'admin_predefined_add_new' }],
+        [{ text: '🗑️ Удалить товар', callback_data: 'admin_predefined_delete' }],
+        [{ text: '◀️ Назад', callback_data: 'admin_settings' }]
+    ];
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    } else {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
     }
 }

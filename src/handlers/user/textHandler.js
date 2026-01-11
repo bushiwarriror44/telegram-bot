@@ -12,6 +12,8 @@ import { showStorefrontMenu } from './catalogHandler.js';
 import { showCabinetMenu } from './cabinetHandler.js';
 import { showHelpMenu } from './supportHandler.js';
 import { showReviews } from './reviewsHandler.js';
+import { config } from '../../config/index.js';
+import { validateCaptcha, hasActiveCaptcha, generateCaptcha, saveCaptcha, getStartParam } from '../../utils/captchaHelper.js';
 
 /**
  * Регистрирует обработчики текстовых сообщений
@@ -28,6 +30,42 @@ export function registerTextHandlers(bot) {
         if (ctx.message.text && ctx.message.text.startsWith('/')) {
             console.log('[TextHandler] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
             return next(); // позволяем другим middleware (командам) обработать
+        }
+
+        // Обработка ответа на капчу (если капча включена)
+        if (config.captchaEnabled && hasActiveCaptcha(ctx.from.id)) {
+            const userAnswer = ctx.message.text.trim();
+            const isValid = validateCaptcha(ctx.from.id, userAnswer);
+
+            if (isValid) {
+                // Капча пройдена, выполняем логику команды /start
+                await ctx.reply('✅ Капча пройдена!');
+                
+                try {
+                    // Импортируем функцию обработки start
+                    const { processStartCommand } = await import('./commandsHandler.js');
+                    const { getIsAdminFunction } = await import('../userHandlers.js');
+                    const isAdmin = getIsAdminFunction();
+                    
+                    // Выполняем логику start
+                    await processStartCommand(ctx, isAdmin);
+                } catch (error) {
+                    console.error('[TextHandler] Ошибка при обработке start после капчи:', error);
+                    await ctx.reply('Произошла ошибка. Попробуйте позже.');
+                }
+            } else {
+                // Неверный ответ, генерируем новую капчу
+                const captcha = generateCaptcha();
+                saveCaptcha(ctx.from.id, captcha.question, captcha.answer);
+                await ctx.reply(
+                    `❌ <b>Неверный ответ</b>\n\n` +
+                    `Попробуйте еще раз:\n\n` +
+                    `<b>${captcha.question}</b>\n\n` +
+                    `Отправьте только число (ответ).`,
+                    { parse_mode: 'HTML' }
+                );
+            }
+            return; // Прерываем обработку, не передаем дальше
         }
 
         // Проверяем, находится ли пользователь в режиме поддержки

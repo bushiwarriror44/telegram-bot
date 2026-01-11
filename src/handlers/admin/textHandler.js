@@ -62,6 +62,7 @@ export function registerTextHandlers(bot) {
                 predefinedProductCityMode.delete(ctx.from.id);
                 predefinedProductDistrictMode.delete(ctx.from.id);
                 predefinedProductAddMode.delete(ctx.from.id);
+                predefinedProductAddSource.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showAdminPanel(ctx);
                 return; // Не передаем дальше, так как команда обработана
@@ -716,23 +717,30 @@ export function registerTextHandlers(bot) {
                     }
 
                     // Добавляем товар в mockProducts (в первый доступный город для примера)
-                    const firstCity = Object.keys(mockProducts)[0];
-                    if (firstCity) {
-                        mockProducts[firstCity].push({
-                            name: productData.name,
-                            description: productData.description,
-                            price: price
-                        });
-                    }
+                    const { addMockProduct } = await import('../../utils/mockData.js');
+                    addMockProduct({
+                        name: productData.name,
+                        description: productData.description,
+                        price: price
+                    });
 
                     predefinedProductAddMode.delete(ctx.from.id);
                     predefinedProductCityMode.delete(ctx.from.id);
+
+                    const source = predefinedProductAddSource.get(ctx.from.id) || 'products';
+                    predefinedProductAddSource.delete(ctx.from.id);
 
                     await ctx.reply(
                         `✅ Предустановленный товар "${productData.name}" успешно добавлен!\n\n` +
                         `Он будет доступен в списке предустановленных товаров.`
                     );
-                    await showPredefinedProducts(ctx);
+
+                    // Возвращаемся в правильное меню в зависимости от источника
+                    if (source === 'settings') {
+                        await showPredefinedProductsManagement(ctx);
+                    } else {
+                        await showPredefinedProducts(ctx);
+                    }
                 }
             } catch (error) {
                 console.error('[AdminHandlers] Ошибка при добавлении предустановленного товара:', error);

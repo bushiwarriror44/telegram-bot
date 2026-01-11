@@ -65,6 +65,38 @@ export function getMockProducts() {
   return uniqueProducts;
 }
 
+/**
+ * Удаляет предустановленный товар по имени из всех городов
+ */
+export function removeMockProduct(productName) {
+  let removed = false;
+  for (const cityName in mockProducts) {
+    const index = mockProducts[cityName].findIndex(p => p.name === productName);
+    if (index !== -1) {
+      mockProducts[cityName].splice(index, 1);
+      removed = true;
+    }
+  }
+  return removed;
+}
+
+/**
+ * Добавляет предустановленный товар в указанный город (или первый доступный)
+ */
+export function addMockProduct(product, cityName = null) {
+  if (cityName && mockProducts[cityName]) {
+    mockProducts[cityName].push(product);
+    return true;
+  }
+  // Если город не указан или не найден, добавляем в первый доступный
+  const firstCity = Object.keys(mockProducts)[0];
+  if (firstCity) {
+    mockProducts[firstCity].push(product);
+    return true;
+  }
+  return false;
+}
+
 // Криптовалютные методы оплаты
 const paymentMethods = [
   { name: 'BTC', network: 'BTC' },
