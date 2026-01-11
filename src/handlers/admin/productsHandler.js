@@ -511,6 +511,146 @@ ${products.map(p => {
 }
 
 /**
+ * Показ списка предустановленных товаров
+ */
+export async function showPredefinedProducts(ctx) {
+    const products = getMockProducts();
+    const currencySymbol = await settingsService.getCurrencySymbol();
+
+    const text = `
+📦 <b>Предустановленные товары</b>
+
+Выберите товар для добавления:
+    `.trim();
+
+    const keyboard = products.map((product, index) => [
+        {
+            text: `${product.name} - ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`,
+            callback_data: `admin_predefined_product_${index}`
+        }
+    ]);
+    keyboard.push([{ text: '➕ Добавить новый предустановленный товар', callback_data: 'admin_predefined_add_new' }]);
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_products' }]);
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    } else {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    }
+}
+
+/**
+ * Показ городов для выбора места размещения предустановленного товара
+ */
+export async function showCitiesForPredefinedProduct(ctx) {
+    const cities = await cityService.getAll();
+    const productData = predefinedProductCityMode.get(ctx.from.id);
+    
+    if (!productData) {
+        await ctx.reply('❌ Ошибка: данные товара не найдены');
+        return;
+    }
+
+    const text = `
+📦 <b>Выбран товар: ${productData.name}</b>
+💰 Цена: ${productData.price.toLocaleString('ru-RU')} ${await settingsService.getCurrencySymbol()}
+
+Выберите город для размещения товара:
+(Если города нет в списке, введите его название)
+    `.trim();
+
+    const keyboard = cities.map(city => [
+        { text: `🏙️ ${city.name}`, callback_data: `admin_predefined_city_${city.id}` }
+    ]);
+    keyboard.push([{ text: '✏️ Ввести город вручную', callback_data: 'admin_predefined_city_manual' }]);
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_products_add_predefined' }]);
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    } else {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    }
+}
+
+/**
+ * Показ районов для выбора места размещения предустановленного товара
+ */
+export async function showDistrictsForPredefinedProduct(ctx, cityId) {
+    const city = await cityService.getById(cityId);
+    if (!city) {
+        await ctx.reply('Город не найден.');
+        return;
+    }
+
+    const districts = await districtService.getByCityId(cityId);
+    const productData = predefinedProductDistrictMode.get(ctx.from.id);
+    
+    if (!productData) {
+        await ctx.reply('❌ Ошибка: данные товара не найдены');
+        return;
+    }
+
+    const text = `
+📦 <b>Выбран товар: ${productData.name}</b>
+🏙️ <b>Город: ${city.name}</b>
+
+Выберите район для размещения товара:
+(Если района нет в списке, введите его название)
+    `.trim();
+
+    const keyboard = districts.map(district => [
+        { text: `📍 ${district.name}`, callback_data: `admin_predefined_district_${district.id}` }
+    ]);
+    keyboard.push([{ text: '✏️ Ввести район вручную', callback_data: 'admin_predefined_district_manual' }]);
+    keyboard.push([{ text: '◀️ Назад к городам', callback_data: 'admin_products_add_predefined' }]);
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    } else {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    }
+}
+
+/**
  * Размещение предустановленного товара в районе
  */
 export async function placePredefinedProduct(ctx, districtId, productData) {
