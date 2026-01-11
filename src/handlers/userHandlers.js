@@ -678,46 +678,39 @@ async function showTopupMenu(ctx) {
             return;
         }
 
-        const text = `
-💵 Выберите способ пополнения:
+        const text = `💵 Выберите способ пополнения:`;
 
-
-        `.trim();
-
-        const keyboard = [];
-        for (const method of paymentMethods) {
-            keyboard.push([{
-                text: `${method.name} (${method.network})`,
-                callback_data: `topup_method_${method.id}`
-            }]);
-        }
-        // keyboard.push([{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]);
-
-        // Если пришло из callback, пытаемся отредактировать, иначе отправляем новое сообщение
+        // Сначала отправляем основное сообщение без кнопок
         if (ctx.callbackQuery) {
             try {
                 await ctx.editMessageText(text, {
-                    parse_mode: 'HTML',
-                    reply_markup: {
-                        inline_keyboard: keyboard
-                    }
+                    parse_mode: 'HTML'
                 });
             } catch (error) {
                 await ctx.reply(text, {
-                    parse_mode: 'HTML',
-                    reply_markup: {
-                        inline_keyboard: keyboard
-                    }
+                    parse_mode: 'HTML'
                 });
             }
         } else {
             await ctx.reply(text, {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    inline_keyboard: keyboard
-                }
+                parse_mode: 'HTML'
             });
         }
+
+        // Затем отправляем отдельное сообщение с кнопками оплаты внизу
+        const keyboard = [];
+        for (const method of paymentMethods) {
+            keyboard.push([{
+                text: method.name,
+                callback_data: `topup_method_${method.id}`
+            }]);
+        }
+
+        await ctx.reply(' ', {
+            reply_markup: {
+                inline_keyboard: keyboard
+            }
+        });
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showTopupMenu:', error);
         if (ctx.callbackQuery) {
@@ -836,43 +829,107 @@ async function showMyOrders(ctx) {
         const orders = await getOrdersByUser(ctx.from.id);
 
         if (orders.length === 0) {
-            const text = `
-📦 <b>Мои заказы</b>
+            const text = `📄 Список заказов:\n\nУ вас пока нет заказов.`;
 
-У вас пока нет заказов.
-            `.trim();
-
-            await ctx.editMessageText(text, {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
-                    ]
+            if (ctx.callbackQuery) {
+                try {
+                    await ctx.answerCbQuery();
+                    await ctx.editMessageText(text, {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                            ]
+                        }
+                    });
+                } catch (error) {
+                    await ctx.reply(text, {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                            ]
+                        }
+                    });
                 }
-            });
+            } else {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                        ]
+                    }
+                });
+            }
             return;
         }
 
-        let text = `<b>📦 Мои заказы</b>\n\n`;
-        for (let i = 0; i < Math.min(orders.length, 10); i++) {
-            const order = orders[i];
-            const status = order.status === 'completed' ? '✅' : order.status === 'pending' ? '⏳' : '❌';
-            text += `${status} Заказ #${order.id}\n`;
-            text += `💰 ${order.total_price} ₽\n`;
-            text += `📅 ${new Date(order.created_at).toLocaleDateString('ru-RU')}\n\n`;
+        // Форматируем дату в формат "22:57 10.01.2026"
+        function formatOrderDate(dateString) {
+            const date = new Date(dateString);
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            return `${hours}:${minutes} ${day}.${month}.${year}`;
         }
 
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
-                ]
+        // Отправляем заголовок
+        const headerText = `📄 Список заказов:`;
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.answerCbQuery();
+                await ctx.editMessageText(headerText, {
+                    parse_mode: 'HTML'
+                });
+            } catch (error) {
+                await ctx.reply(headerText, {
+                    parse_mode: 'HTML'
+                });
             }
-        });
+        } else {
+            await ctx.reply(headerText, {
+                parse_mode: 'HTML'
+            });
+        }
+
+        // Отправляем каждый заказ отдельным сообщением с кнопкой
+        for (const order of orders) {
+            const formattedDate = formatOrderDate(order.created_at);
+            const orderText = `Заказ #${order.id} | ${formattedDate}`;
+
+            // Красная кнопка для неоплаченных, зеленая для оплаченных
+            const statusIcon = order.status === 'completed' || order.status === 'paid'
+                ? '🟢'
+                : '🔴';
+
+            const keyboard = [[{
+                text: `${statusIcon} ${orderText}`,
+                callback_data: `view_order_${order.id}`
+            }]];
+
+            // Отправляем сообщение только с кнопкой (без текста)
+            await ctx.reply(' ', {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            });
+        }
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showMyOrders:', error);
-        await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.answerCbQuery();
+                await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+            } catch (e) {
+                await ctx.reply('Произошла ошибка. Попробуйте позже.');
+            }
+        } else {
+            await ctx.reply('Произошла ошибка. Попробуйте позже.');
+        }
     }
 }
 
@@ -1162,7 +1219,7 @@ async function showCitiesMenu(ctx) {
     keyboard.push([{ text: 'Вернуться назад', callback_data: 'back_to_storefront' }]);
 
     await ctx.reply(
-        '🛍 Каталог товаров::',
+        '🛍 Каталог товаров:',
         {
             reply_markup: {
                 inline_keyboard: keyboard
@@ -1196,7 +1253,7 @@ async function showDistrictsMenu(ctx, cityId) {
     }
 
     const keyboard = districts.map(district => [
-        { text: `📍 ${district.name}`, callback_data: `district_${district.id}` }
+        { text: `${district.name}`, callback_data: `district_${district.id}` }
     ]);
 
     keyboard.push([{ text: 'Вернуться назад', callback_data: 'back_to_cities' }]);
@@ -1204,7 +1261,7 @@ async function showDistrictsMenu(ctx, cityId) {
 
     try {
         await ctx.editMessageText(
-            `Категории товаров: "${city.name}"`,
+            `🛍 Категории товаров: "${city.name}"`,
             {
                 reply_markup: {
                     inline_keyboard: keyboard
@@ -1259,11 +1316,11 @@ async function showProductsMenu(ctx, districtId) {
         ];
     });
 
-    keyboard.push([{ text: '◀️ Назад к районам', callback_data: `back_to_districts_${city.id}` }]);
+    keyboard.push([{ text: 'Вернуться назад', callback_data: `back_to_districts_${city.id}` }]);
 
     try {
         await ctx.editMessageText(
-            `🛍️ Товары в районе ${district.name} (${city.name}):\n\nВыберите товар:`,
+            `🛍️ Раздел "${district.name}" `,
             {
                 reply_markup: {
                     inline_keyboard: keyboard
@@ -1272,7 +1329,7 @@ async function showProductsMenu(ctx, districtId) {
         );
     } catch (error) {
         await ctx.reply(
-            `🛍️ Товары в районе ${district.name} (${city.name}):\n\nВыберите товар:`,
+            `🛍️ Раздел "${district.name}"`,
             {
                 reply_markup: {
                     inline_keyboard: keyboard
