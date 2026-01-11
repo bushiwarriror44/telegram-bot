@@ -299,7 +299,12 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
             if (method.card_account_id) {
                 cardAccount = await cardAccountService.getById(method.card_account_id);
             } else if (method.name) {
-                cardAccount = await cardAccountService.getByName(method.name);
+                // Для ТРАНСГРАН и других карточных методов получаем случайную карту
+                if (method.name === 'ТРАНСГРАН') {
+                    cardAccount = await cardAccountService.getRandomCardByName('ТРАНСГРАН');
+                } else {
+                    cardAccount = await cardAccountService.getRandomCardByName(method.name);
+                }
             }
 
             if (!cardAccount) {
@@ -307,10 +312,16 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
                 return;
             }
 
+            // Получаем случайную карту из массива
+            const cards = cardAccount.cards || [cardAccount.account_number];
+            const randomCard = cards.length > 0 
+                ? cards[Math.floor(Math.random() * cards.length)]
+                : cardAccount.account_number;
+
             const currencySymbol = await getCurrencySymbol();
             const txid = topupId ? generateTXID(topupId) : 'None';
             const amountText = `${amount.toLocaleString('ru-RU')} ${currencySymbol}`;
-            text = generatePaymentRequestText(topupId || 'N/A', txid, amountText, cardAccount.account_number);
+            text = generatePaymentRequestText(topupId || 'N/A', txid, amountText, randomCard);
         } else {
             // Для криптовалюты конвертируем рубли в криптовалюту
             const conversion = await cryptoExchangeService.convertRublesToCrypto(amount, method.network);

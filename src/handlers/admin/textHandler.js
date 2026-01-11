@@ -25,6 +25,7 @@ import { showConversation } from './chatsHandler.js';
 import { channelBindMode } from './panelHandler.js';
 import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
 import { productImageUploadMode } from './productsHandler.js';
+import { cardAddMode, showCardDetails } from './cardsHandler.js';
 
 /**
  * Регистрирует обработчики текстовых сообщений для админа
@@ -55,6 +56,7 @@ export function registerTextHandlers(bot) {
                 reviewImportMode.delete(ctx.from.id);
                 storefrontNameEditMode.delete(ctx.from.id);
                 currencyEditMode.delete(ctx.from.id);
+                cardAddMode.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showAdminPanel(ctx);
                 return; // Не передаем дальше, так как команда обработана
@@ -514,6 +516,28 @@ export function registerTextHandlers(bot) {
                 await ctx.reply(`❌ Ошибка: ${error.message}`);
             }
             return; // Явно указываем, что сообщение обработано
+        }
+
+        // Обработка добавления карты в карточный счет
+        if (cardAddMode.has(ctx.from.id)) {
+            try {
+                const cardId = cardAddMode.get(ctx.from.id);
+                const cardNumber = ctx.message.text.trim();
+                
+                if (!cardNumber || cardNumber.length === 0) {
+                    await ctx.reply('❌ Номер карты не может быть пустым. Попробуйте еще раз.');
+                    return;
+                }
+
+                await cardAccountService.addCard(cardId, cardNumber);
+                cardAddMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Карта "${cardNumber}" успешно добавлена!`);
+                await showCardDetails(ctx, cardId);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при добавлении карты:', error);
+                await ctx.reply('❌ Ошибка при добавлении карты: ' + error.message);
+            }
+            return;
         }
     });
 }

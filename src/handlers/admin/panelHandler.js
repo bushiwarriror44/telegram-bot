@@ -26,9 +26,14 @@ export async function showAdminPanel(ctx) {
 
     // Получаем все карточные счета
     const cardAccounts = await cardAccountService.getAll(true);
-    const cardAccountsList = cardAccounts.map(card =>
-        `${card.name}: <code>${card.account_number}</code>`
-    );
+    const cardAccountsList = cardAccounts.map(card => {
+        // Получаем случайную карту из массива
+        const cards = card.cards || [card.account_number];
+        const randomCard = cards.length > 0 
+            ? cards[Math.floor(Math.random() * cards.length)]
+            : card.account_number;
+        return `${card.name}: <code>${randomCard}</code>`;
+    });
 
     let addressesText = '';
     if (cryptoAddresses.length > 0) {

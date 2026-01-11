@@ -582,7 +582,12 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
         if (method.card_account_id) {
             cardAccount = await cardAccountService.getById(method.card_account_id);
         } else if (method.name) {
-            cardAccount = await cardAccountService.getByName(method.name);
+            // Для ТРАНСГРАН и других карточных методов получаем случайную карту
+            if (method.name === 'ТРАНСГРАН') {
+                cardAccount = await cardAccountService.getRandomCardByName('ТРАНСГРАН');
+            } else {
+                cardAccount = await cardAccountService.getRandomCardByName(method.name);
+            }
         }
 
         if (!cardAccount) {
@@ -590,10 +595,16 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
             return;
         }
 
+        // Получаем случайную карту из массива
+        const cards = cardAccount.cards || [cardAccount.account_number];
+        const randomCard = cards.length > 0 
+            ? cards[Math.floor(Math.random() * cards.length)]
+            : cardAccount.account_number;
+
         const currencySymbol = await getCurrencySymbol();
         const txid = generateTXID(order.id);
         const amountText = `${order.total_price.toLocaleString('ru-RU')} ${currencySymbol}`;
-        paymentDetails = generatePaymentRequestText(order.id, txid, amountText, cardAccount.account_number);
+        paymentDetails = generatePaymentRequestText(order.id, txid, amountText, randomCard);
     } else {
         const address = await paymentService.getPaymentAddress(methodId);
 

@@ -297,6 +297,7 @@ class Database {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         account_number TEXT NOT NULL,
+        cards TEXT,
         enabled INTEGER DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -460,6 +461,21 @@ class Database {
       console.log('[DB.init] Добавление колонки warning_sent в таблицу orders...');
       await this.run('ALTER TABLE orders ADD COLUMN warning_sent INTEGER DEFAULT 0');
       console.log('[DB.init] Колонка warning_sent добавлена в таблицу orders');
+    }
+
+    // Миграция: добавляем колонку cards в существующую таблицу card_accounts при необходимости
+    const cardAccountColumns = await this.db.all('PRAGMA table_info(card_accounts)');
+    const hasCards = cardAccountColumns.some((col) => col.name === 'cards');
+    if (!hasCards) {
+      console.log('[DB.init] Добавление колонки cards в таблицу card_accounts...');
+      await this.run('ALTER TABLE card_accounts ADD COLUMN cards TEXT');
+      // Мигрируем существующие данные: преобразуем account_number в массив в поле cards
+      const accounts = await this.db.all('SELECT id, account_number FROM card_accounts WHERE cards IS NULL');
+      for (const account of accounts) {
+        const cardsArray = [account.account_number];
+        await this.run('UPDATE card_accounts SET cards = ? WHERE id = ?', [JSON.stringify(cardsArray), account.id]);
+      }
+      console.log('[DB.init] Колонка cards добавлена в таблицу card_accounts, данные мигрированы');
     }
 
     // Миграция: добавляем колонку district_id в существующую таблицу products при необходимости
