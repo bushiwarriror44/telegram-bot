@@ -26,8 +26,6 @@ import { channelBindMode } from './panelHandler.js';
 import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
 import { productImageUploadMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts } from './productsHandler.js';
 import { mockProducts } from '../../utils/mockData.js';
-import { cityService } from '../../services/cityService.js';
-import { districtService } from '../../services/districtService.js';
 import { cardAddMode, showCardDetails } from './cardsHandler.js';
 
 /**
