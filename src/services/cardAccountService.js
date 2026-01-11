@@ -29,6 +29,13 @@ export class CardAccountService {
   }
 
   /**
+   * Получает карточный счет по имени
+   */
+  async getByName(name) {
+    return await database.get('SELECT * FROM card_accounts WHERE name = ? AND enabled = 1', [name]);
+  }
+
+  /**
    * Создает новый карточный счет
    */
   async create(name, accountNumber) {

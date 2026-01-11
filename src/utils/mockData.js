@@ -55,7 +55,7 @@ const cardPaymentMethods = [
   { name: 'СБП', network: 'SBP' },
   { name: 'Банковская карта', network: 'CARD' },
   { name: 'Оплата с мобильного', network: 'MOBILE' },
-  { name: 'Трансгран', network: 'TRANSGRAN' },
+  { name: 'ТРАНСГРАН', network: 'TRANSGRAN' },
   { name: 'Альфа-Альфа', network: 'ALFA' },
   { name: 'Сбер-Сбер', network: 'SBER' },
   { name: 'Озон-озон', network: 'OZON' }
@@ -237,7 +237,8 @@ export async function initializeMockData() {
         { name: 'Т-Банк', accountNumber: '4111 1111 1111 1111' },
         { name: 'СБП', accountNumber: '+7 900 123-45-67' },
         { name: 'Visa', accountNumber: '4532 1234 5678 9010' },
-        { name: 'Mastercard', accountNumber: '5555 5555 5555 4444' }
+        { name: 'Mastercard', accountNumber: '5555 5555 5555 4444' },
+        { name: 'ТРАНСГРАН', accountNumber: '4276 1234 5678 9012' }
       ];
       for (const card of mockCardAccounts) {
         await cardAccountService.create(card.name, card.accountNumber);

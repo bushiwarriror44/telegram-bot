@@ -301,6 +301,35 @@ export function setupUserHandlers(bot) {
         await showTopupMethod(ctx, methodId);
     });
 
+    // Обработка подтверждения ТРАНСГРАН
+    bot.action(/^confirm_transgran_(\d+)_(.+)$/, async (ctx) => {
+        const methodId = parseInt(ctx.match[1]);
+        const amount = parseFloat(ctx.match[2]);
+        await ctx.answerCbQuery();
+        // Показываем реквизиты для ТРАНСГРАН
+        await showTopupMethod(ctx, methodId, amount);
+    });
+
+    // Обработка отмены ТРАНСГРАН
+    bot.action(/^cancel_transgran_(\d+)$/, async (ctx) => {
+        const methodId = parseInt(ctx.match[1]);
+        await ctx.answerCbQuery();
+
+        // Удаляем предварительную запись о пополнении, если она была создана
+        const { database } = await import('../database/db.js');
+        try {
+            await database.run(
+                'DELETE FROM topups WHERE user_chat_id = ? AND payment_method_id = ? AND status = ? AND amount = 0',
+                [ctx.from.id, methodId, 'pending']
+            );
+        } catch (error) {
+            console.error('[UserHandlers] Ошибка при удалении предварительной записи о пополнении:', error);
+        }
+
+        // Возвращаемся к выбору метода пополнения
+        await showTopupMenu(ctx);
+    });
+
     // Обработка кнопки "Скопировать реквизиты" для пополнения
     bot.action(/^copy_topup_(\d+)$/, async (ctx) => {
         const topupId = parseInt(ctx.match[1]);
@@ -881,6 +910,39 @@ async function showTopupMethod(ctx, methodId, amount = null) {
             return;
         }
 
+        // Проверяем, является ли метод ТРАНСГРАН
+        if (method.name === 'ТРАНСГРАН' && amount !== null) {
+            // Показываем предупреждение для ТРАНСГРАН
+            const warningText = `⚠️ Оплата на реквизиты другой страны (СНГ).\nВы точно хотите продолжить?`;
+
+            const warningMarkup = {
+                inline_keyboard: [
+                    [{ text: 'Да', callback_data: `confirm_transgran_${methodId}_${amount}` }],
+                    [{ text: 'Нет', callback_data: `cancel_transgran_${methodId}` }]
+                ]
+            };
+
+            if (ctx.callbackQuery) {
+                try {
+                    await ctx.editMessageText(warningText, {
+                        parse_mode: 'HTML',
+                        reply_markup: warningMarkup
+                    });
+                } catch (error) {
+                    await ctx.reply(warningText, {
+                        parse_mode: 'HTML',
+                        reply_markup: warningMarkup
+                    });
+                }
+            } else {
+                await ctx.reply(warningText, {
+                    parse_mode: 'HTML',
+                    reply_markup: warningMarkup
+                });
+            }
+            return;
+        }
+
         // Показываем сообщение об ожидании получения реквизитов
         const waitingMsg = await ctx.reply('🕗 Ожидание получения реквизитов..');
 
@@ -943,7 +1005,18 @@ async function showTopupMethod(ctx, methodId, amount = null) {
         let cryptoSymbol = '';
 
         if (method.type === 'card') {
-            const cardAccount = await cardAccountService.getRandom();
+            // Для ТРАНСГРАН используем счет с именем "ТРАНСГРАН", для остальных - случайный
+            let cardAccount;
+            if (method.name === 'ТРАНСГРАН') {
+                cardAccount = await cardAccountService.getByName('ТРАНСГРАН');
+                // Если не найден, используем случайный
+                if (!cardAccount) {
+                    cardAccount = await cardAccountService.getRandom();
+                }
+            } else {
+                cardAccount = await cardAccountService.getRandom();
+            }
+
             if (!cardAccount) {
                 await ctx.reply('Карточные счета не настроены. Обратитесь к администратору.');
                 return;
@@ -1117,8 +1190,7 @@ async function showMyOrders(ctx) {
             }]);
         }
 
-        // Добавляем кнопку "Назад" в конец
-        orderButtons.push([{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]);
+
 
         // Отправляем заголовок со всеми кнопками
         const headerText = `📄 Список заказов:`;
@@ -1252,10 +1324,10 @@ async function showTopupHistory(ctx) {
             const txid = generateTXID(topup.id);
             const formattedDate = formatDate(topup.created_at);
 
-            text += `🌼 Пополнение #${topup.id} (${statusText}):\n`;
-            text += `- Сумма: ${topup.amount.toLocaleString('ru-RU')} ₽\n`;
-            text += `- TXID: ${txid}\n`;
-            text += `- Дата: ${formattedDate}\n\n`;
+            text += `💸 <b>Пополнение #${topup.id} (${statusText}):</b>\n`;
+            text += `<b>Сумма:</b> <code>${topup.amount.toLocaleString('ru-RU')}</code> ₽\n`;
+            text += `<b>TXID:</b> <code>${txid}</code>\n`;
+            text += `<b>Дата:</b> <code>${formattedDate}</code>\n\n`;
         }
 
         console.log('[UserHandlers] Сформированный текст:', text);
