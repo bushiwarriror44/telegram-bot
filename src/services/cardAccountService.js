@@ -97,9 +97,13 @@ export class CardAccountService {
 
   /**
    * Получает карточный счет по имени (без случайной карты, для внутреннего использования)
+   * @param {boolean} includeDisabled - включать ли отключенные счета
    */
-  async getByName(name) {
-    const account = await database.get('SELECT * FROM card_accounts WHERE name = ? AND enabled = 1', [name]);
+  async getByName(name, includeDisabled = false) {
+    const query = includeDisabled
+      ? 'SELECT * FROM card_accounts WHERE name = ?'
+      : 'SELECT * FROM card_accounts WHERE name = ? AND enabled = 1';
+    const account = await database.get(query, [name]);
     if (!account) return null;
     return {
       ...account,
@@ -109,8 +113,15 @@ export class CardAccountService {
 
   /**
    * Создает новый карточный счет
+   * Проверяет, не существует ли уже счет с таким именем
    */
   async create(name, accountNumber) {
+    // Проверяем, не существует ли уже счет с таким именем
+    const existing = await this.getByName(name, true);
+    if (existing) {
+      throw new Error(`Карточный счет с именем "${name}" уже существует. Используйте команду для добавления карты в существующий счет.`);
+    }
+    
     const cards = Array.isArray(accountNumber) ? accountNumber : [accountNumber];
     const result = await database.run(
       'INSERT INTO card_accounts (name, account_number, cards) VALUES (?, ?, ?)',

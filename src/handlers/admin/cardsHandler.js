@@ -19,7 +19,7 @@ export function registerCardsHandlers(bot) {
     bot.action('admin_card_add', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await ctx.editMessageText(
-            'Введите данные нового карточного счета:\n\nФормат: <code>/addcard Название|Номер счета</code>\n\nПример: /addcard Альфа-Банк|5536 9141 2345 6789',
+            'Введите данные нового карточного счета:\n\nФормат: <code>/addcard Название|Номер счета</code>\n\nПример: <code>/addcard Альфа-Банк|5536 9141 2345 6789</code>',
             { parse_mode: 'HTML' }
         );
     });
@@ -38,10 +38,22 @@ export function registerCardsHandlers(bot) {
         }
 
         const [name, accountNumber] = args;
+        const trimmedName = name.trim();
+        const trimmedCardNumber = accountNumber.trim();
 
         try {
-            await cardAccountService.create(name.trim(), accountNumber.trim());
-            await ctx.reply(`✅ Карточный счет "${name}" успешно добавлен!`);
+            // Проверяем, существует ли карточный счет с таким именем (включая отключенные)
+            const existingAccount = await cardAccountService.getByName(trimmedName, true);
+
+            if (existingAccount) {
+                // Если счет существует, добавляем карту в массив
+                await cardAccountService.addCard(existingAccount.id, trimmedCardNumber);
+                await ctx.reply(`✅ Карта "${trimmedCardNumber}" успешно добавлена в счет "${trimmedName}"!`);
+            } else {
+                // Если счета нет, создаем новый счет с этой картой
+                await cardAccountService.create(trimmedName, trimmedCardNumber);
+                await ctx.reply(`✅ Карточный счет "${trimmedName}" успешно создан с картой "${trimmedCardNumber}"!`);
+            }
             await showCardsAdmin(ctx);
         } catch (error) {
             await ctx.reply(`❌ Ошибка: ${error.message}`);
@@ -163,7 +175,7 @@ export async function showCardsAdmin(ctx) {
         cardsText = 'Карточных счетов пока нет';
     } else {
         for (const card of cards) {
-            const randomCard = card.cards && card.cards.length > 0 
+            const randomCard = card.cards && card.cards.length > 0
                 ? card.cards[Math.floor(Math.random() * card.cards.length)]
                 : card.account_number;
             const cardsCount = card.cards ? card.cards.length : 1;

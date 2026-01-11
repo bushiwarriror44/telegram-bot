@@ -515,8 +515,8 @@ export async function ensureTransgranExists() {
       }
     }
 
-    // Проверяем карточный счет ТРАНСГРАН
-    const transgranCard = await cardAccountService.getByName('ТРАНСГРАН');
+    // Проверяем карточный счет ТРАНСГРАН (включая отключенные)
+    const transgranCard = await cardAccountService.getByName('ТРАНСГРАН', true);
     if (!transgranCard) {
       console.log('[MOCK] Карточный счет ТРАНСГРАН не найден. Создаю...');
       try {
