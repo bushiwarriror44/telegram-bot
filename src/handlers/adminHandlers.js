@@ -28,6 +28,7 @@ const importProductMode = new Map(); // userId -> true (режим загруз�
 const channelBindMode = new Map(); // userId -> true (режим привязки канала)
 const reviewCreateMode = new Map(); // userId -> {step: 'product'|'rating'|'text'|'date', data: {}}
 const reviewImportMode = new Map(); // userId -> true (режим загрузки отзывов)
+const storefrontNameMode = new Map(); // userId -> true (режим изменения названия витрины)
 
 // Шаблоны товаров по умолчанию
 const PRODUCT_TEMPLATES = [
@@ -223,6 +224,7 @@ ${addressesText}
                     [{ text: '👥 Настройка реферальной системы', callback_data: 'admin_referrals' }],
                     [{ text: '📢 Привязать телеграм-канал', callback_data: 'admin_bind_channel' }],
                     [{ text: '💬 Управление отзывами', callback_data: 'admin_reviews' }],
+                    [{ text: '🏪 Изменить название витрины', callback_data: 'admin_storefront_name' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
             }
@@ -370,6 +372,28 @@ ${addressesText}
     bot.action('admin_reviews', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showReviewsAdmin(ctx);
+    });
+
+    // Настройка названия витрины
+    bot.action('admin_storefront_name', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showStorefrontNameSettings(ctx);
+    });
+
+    bot.action('edit_storefront_name', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        storefrontNameMode.set(ctx.from.id, true);
+        await ctx.answerCbQuery();
+        await ctx.editMessageText(
+            '✏️ Введите новое название витрины:',
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Отмена', callback_data: 'admin_storefront_name' }]
+                    ]
+                }
+            }
+        );
     });
 
     // Обработчики для админских reply keyboard кнопок
@@ -1898,6 +1922,25 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             return;
         }
 
+        // Обработка изменения названия витрины
+        if (storefrontNameMode.has(ctx.from.id)) {
+            try {
+                const newName = ctx.message.text.trim();
+                if (newName.length === 0) {
+                    await ctx.reply('❌ Название витрины не может быть пустым. Попробуйте еще раз.');
+                    return;
+                }
+                await settingsService.setStorefrontName(newName);
+                storefrontNameMode.delete(ctx.from.id);
+                await ctx.reply('✅ Название витрины успешно обновлено!');
+                await showStorefrontNameSettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении названия витрины:', error);
+                await ctx.reply('❌ Ошибка при сохранении названия витрины: ' + error.message);
+            }
+            return;
+        }
+
         // Обработка редактирования иконки городов
         if (iconEditMode.has(ctx.from.id)) {
             try {
@@ -2700,6 +2743,55 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             return;
         }
     });
+
+    // Настройка названия витрины
+    async function showStorefrontNameSettings(ctx) {
+        if (!isAdmin(ctx.from.id)) {
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
+            } else {
+                await ctx.reply('❌ У вас нет доступа к админ-панели.');
+            }
+            return;
+        }
+
+        const currentName = await settingsService.getStorefrontName();
+
+        const text = `
+🏪 <b>Настройка названия витрины</b>
+
+Текущее название витрины: <b>${currentName}</b>
+
+Выберите действие:
+        `.trim();
+
+        const keyboard = {
+            inline_keyboard: [
+                [{ text: '✏️ Изменить название', callback_data: 'edit_storefront_name' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.answerCbQuery();
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    }
 
     // Настройка приветственного сообщения
     async function showWelcomeSettings(ctx) {

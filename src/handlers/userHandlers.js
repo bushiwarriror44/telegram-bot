@@ -143,7 +143,7 @@ export function setupUserHandlers(bot) {
     });
     console.log('[UserHandlers] Обработчик /start зарегистрирован');
 
-    // Команда /catalog - каталог товаров (показ меню городов)
+    // Команда /catalog - каталог товаров (показ меню витрины)
     bot.command('catalog', async (ctx) => {
         console.log('[UserHandlers] Команда /catalog получена');
         try {
@@ -152,7 +152,7 @@ export function setupUserHandlers(bot) {
                 first_name: ctx.from.first_name,
                 last_name: ctx.from.last_name
             });
-            await showCitiesMenu(ctx);
+            await showStorefrontMenu(ctx);
         } catch (error) {
             console.error('[UserHandlers] ОШИБКА в обработчике /catalog:', error);
             await ctx.reply('Произошла ошибка. Попробуйте позже.');
@@ -190,6 +190,16 @@ export function setupUserHandlers(bot) {
     // Обработчик кнопки "Мои рефералы"
     bot.action('my_referrals', async (ctx) => {
         await showReferrals(ctx);
+    });
+
+    // Обработка выбора витрины
+    bot.action('select_storefront', async (ctx) => {
+        await userService.saveOrUpdate(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            last_name: ctx.from.last_name
+        });
+        await showCitiesMenu(ctx);
     });
 
     // Обработка выбора города
@@ -262,6 +272,16 @@ export function setupUserHandlers(bot) {
         await showTopupMethod(ctx, methodId);
     });
 
+
+    // Вернуться к витрине
+    bot.action('back_to_storefront', async (ctx) => {
+        try {
+            await showStorefrontMenu(ctx);
+        } catch (error) {
+            console.error('[UserHandlers] Ошибка при возврате к витрине:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.');
+        }
+    });
 
     // Вернуться к городам
     bot.action('back_to_cities', async (ctx) => {
@@ -399,7 +419,7 @@ export function setupUserHandlers(bot) {
             first_name: ctx.from.first_name,
             last_name: ctx.from.last_name
         });
-        await showCitiesMenu(ctx);
+        await showStorefrontMenu(ctx);
     });
 
     bot.hears(['⚙️ Мой кабинет', 'Мой кабинет'], async (ctx) => {
@@ -932,6 +952,29 @@ async function showHelpMenu(ctx) {
     });
 }
 
+// Показ меню выбора витрины
+async function showStorefrontMenu(ctx) {
+    try {
+        const storefrontName = await settingsService.getStorefrontName();
+
+        const keyboard = [
+            [{ text: storefrontName, callback_data: 'select_storefront' }]
+        ];
+
+        await ctx.reply(
+            'Каталог товаров:',
+            {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            }
+        );
+    } catch (error) {
+        console.error('[UserHandlers] Ошибка при показе меню витрины:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+}
+
 async function showCitiesMenu(ctx) {
     const cities = await cityService.getAll();
 
@@ -949,6 +992,8 @@ async function showCitiesMenu(ctx) {
 
     // Добавляем кнопку "Помощь"
     keyboard.push([{ text: '💬 Помощь', callback_data: 'help_support' }]);
+    // Добавляем кнопку "Назад к витрине"
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'back_to_storefront' }]);
 
     await ctx.reply(
         '🏙️ Выберите город:',
@@ -975,7 +1020,8 @@ async function showDistrictsMenu(ctx, cityId) {
             {
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]
+                        [{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }],
+                        [{ text: '🏠 На главную', callback_data: 'back_to_storefront' }]
                     ]
                 }
             }
@@ -988,6 +1034,7 @@ async function showDistrictsMenu(ctx, cityId) {
     ]);
 
     keyboard.push([{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]);
+    keyboard.push([{ text: '🏠 На главную', callback_data: 'back_to_storefront' }]);
 
     try {
         await ctx.editMessageText(
@@ -1267,9 +1314,10 @@ async function showOrderDetails(ctx, orderId) {
         const promocodeText = order.promocode_code ? order.promocode_code : 'Нет';
         const discountText = order.discount > 0 ? `${order.discount.toLocaleString('ru-RU')} ₽` : '0 ₽';
 
+        const storefrontName = await settingsService.getStorefrontName();
         const text = `<b>Создан заказ #12${order.id}</b>
 
-<b>Витрина:</b> Hitpoint 
+<b>Витрина:</b> ${storefrontName} 
 <b>Категория:</b> ${order.city_name} 
 <b>Раздел:</b> ${order.district_name} 
 

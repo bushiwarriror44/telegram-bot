@@ -141,6 +141,20 @@ export class SettingsService {
   async setPaymentTimeMinutes(minutes) {
     return await this.set('payment_time_minutes', minutes.toString());
   }
+
+  /**
+   * Получает название витрины
+   */
+  async getStorefrontName() {
+    return await this.get('storefront_name', 'Hitpoint');
+  }
+
+  /**
+   * Устанавливает название витрины
+   */
+  async setStorefrontName(name) {
+    return await this.set('storefront_name', name);
+  }
 }
 
 export const settingsService = new SettingsService();
