@@ -509,3 +509,48 @@ ${products.map(p => {
         });
     }
 }
+
+/**
+ * Размещение предустановленного товара в районе
+ */
+export async function placePredefinedProduct(ctx, districtId, productData) {
+    try {
+        const district = await districtService.getById(districtId);
+        if (!district) {
+            await ctx.reply('❌ Район не найден');
+            return;
+        }
+
+        // Получаем фасовку по умолчанию (1 кг)
+        let packaging = await packagingService.getByValue(1);
+        if (!packaging) {
+            // Если фасовки нет, создаем её
+            packaging = await packagingService.create(1);
+        }
+
+        await productService.create(
+            district.city_id,
+            districtId,
+            productData.name,
+            productData.description,
+            productData.price,
+            packaging.id,
+            null // imagePath
+        );
+
+        predefinedProductDistrictMode.delete(ctx.from.id);
+        predefinedProductSelectMode.delete(ctx.from.id);
+
+        if (ctx.callbackQuery) {
+            await ctx.answerCbQuery('✅ Товар успешно добавлен!');
+        }
+        await showDistrictProductsAdmin(ctx, districtId);
+    } catch (error) {
+        if (ctx.callbackQuery) {
+            await ctx.answerCbQuery(`❌ Ошибка: ${error.message}`);
+        } else {
+            await ctx.reply(`❌ Ошибка: ${error.message}`);
+        }
+        console.error('[ProductsHandler] Ошибка при размещении предустановленного товара:', error);
+    }
+}
