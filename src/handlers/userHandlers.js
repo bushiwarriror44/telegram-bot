@@ -262,6 +262,32 @@ export function setupUserHandlers(bot) {
         await createOrder(ctx, productId, null);
     });
 
+    // Обработка просмотра заказа
+    bot.action(/^view_order_(\d+)$/, async (ctx) => {
+        const orderId = parseInt(ctx.match[1]);
+        const order = await orderService.getById(orderId);
+
+        if (!order) {
+            await ctx.answerCbQuery('Заказ не найден');
+            return;
+        }
+
+        // Проверяем, является ли заказ отмененным или неоплаченным
+        // Красная кнопка означает, что заказ отменен или не оплачен вовремя
+        const isCancelledOrUnpaid = order.status === 'cancelled' ||
+            order.status === 'pending' ||
+            (order.status !== 'completed' && order.status !== 'paid');
+
+        await ctx.answerCbQuery();
+
+        if (isCancelledOrUnpaid) {
+            await ctx.reply(`Заказ №${order.id} был отменен`);
+        } else {
+            // Для оплаченных заказов показываем детали
+            await showOrderDetails(ctx, orderId);
+        }
+    });
+
     // Обработка выбора метода оплаты для заказа
     bot.action(/^pay_order_(\d+)_(\d+)$/, async (ctx) => {
         const orderId = parseInt(ctx.match[1]);
@@ -965,7 +991,13 @@ async function showTopupMethod(ctx, methodId, amount = null) {
                 `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
                 `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
                 `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
-                `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.`;
+                `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.\n` +
+                `https://bestchange.com - инструкция 🫱 - https://telegra.ph/INSTRUKCIYA-PO-OPLATE-LTC-CHEREZ-07-16\n` +
+                `@bot_abcobmen_bot - инструкция 🫱 https://telegra.ph/Kak-obmenyat-rubli-na-Litecoin-cherez-obmennik-bota-07-12\n` +
+                `@BTC_MONOPOLY_BTC_BOT- инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-07-12\n` +
+                `https://sova.gg/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-sovagg-07-12\n` +
+                `https://alt-coin.cc/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-alt-coincc-07-12\n` +
+                `https://pocket-exchange.com/ инструкция🫱  https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-pocket-exchangecom-07-12`
         }
 
         // Создаем кнопки согласно изображению
@@ -1082,26 +1114,28 @@ async function showMyOrders(ctx) {
             });
         }
 
-        // Отправляем каждый заказ отдельным сообщением с кнопкой
+        // Отправляем каждый заказ отдельным сообщением только с кнопкой
         for (const order of orders) {
             const formattedDate = formatOrderDate(order.created_at);
             const orderText = `Заказ #${order.id} | ${formattedDate}`;
 
-            // Красная кнопка для неоплаченных, зеленая для оплаченных
-            const statusIcon = order.status === 'completed' || order.status === 'paid'
-                ? '🟢'
-                : '🔴';
+            // Определяем, является ли заказ отмененным или неоплаченным
+            const isCancelledOrUnpaid = order.status === 'cancelled' ||
+                order.status === 'pending' ||
+                (order.status !== 'completed' && order.status !== 'paid');
 
-            // Текст сообщения с иконкой статуса
-            const messageText = `${statusIcon} ${orderText}`;
+            // Красная кнопка для неоплаченных/отмененных, зеленая для оплаченных
+            const buttonText = isCancelledOrUnpaid
+                ? `🔴 ${orderText}`
+                : `🟢 ${orderText}`;
 
             const keyboard = [[{
-                text: orderText,
+                text: buttonText,
                 callback_data: `view_order_${order.id}`
             }]];
 
-            // Отправляем сообщение с текстом и кнопкой
-            await ctx.reply(messageText, {
+            // Отправляем сообщение только с кнопкой (без текста)
+            await ctx.reply('•', {
                 reply_markup: {
                     inline_keyboard: keyboard
                 }
