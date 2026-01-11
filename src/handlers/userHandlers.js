@@ -736,17 +736,15 @@ async function showTopupMenu(ctx) {
             try {
                 await ctx.answerCbQuery();
                 await ctx.editMessageText(text, {
-                    parse_mode: 'HTML'
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
                 });
             } catch (error) {
                 await ctx.reply(text, {
-                    parse_mode: 'HTML'
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
                 });
             }
-            // Устанавливаем reply keyboard отдельным сообщением
-            await ctx.telegram.sendMessage(ctx.chat.id, 'Выберите способ:', {
-                reply_markup: replyMarkup
-            });
         } else {
             await ctx.reply(text, {
                 parse_mode: 'HTML',
