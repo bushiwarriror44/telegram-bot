@@ -54,102 +54,39 @@ export function setupAdminHandlers(bot) {
     registerUsersHandlers(bot);
 
     // Обработчики для админских reply keyboard кнопок
-    bot.hears('Управление городами', async (ctx) => {
+    bot.hears('Города', async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showCitiesAdmin } = await import('./admin/citiesHandler.js');
         await showCitiesAdmin(ctx);
     });
 
-    bot.hears('Управление товарами', async (ctx) => {
-        const { isAdmin } = await import('./admin/authHandler.js');
-        if (!isAdmin(ctx.from.id)) return;
-        const { showProductsAdmin } = await import('./admin/productsHandler.js');
-        await showProductsAdmin(ctx);
-    });
-
-    bot.hears('Управление фасовками', async (ctx) => {
-        const { isAdmin } = await import('./admin/authHandler.js');
-        if (!isAdmin(ctx.from.id)) return;
-        const { showPackagingsAdmin } = await import('./admin/packagingsHandler.js');
-        await showPackagingsAdmin(ctx);
-    });
-
-    bot.hears('Управление методами оплаты', async (ctx) => {
-        const { isAdmin } = await import('./admin/authHandler.js');
-        if (!isAdmin(ctx.from.id)) return;
-        const { showPaymentsAdmin } = await import('./admin/paymentsHandler.js');
-        await showPaymentsAdmin(ctx);
-    });
-
-    bot.hears('Управление карточными счетами', async (ctx) => {
-        const { isAdmin } = await import('./admin/authHandler.js');
-        if (!isAdmin(ctx.from.id)) return;
-        const { showCardsAdmin } = await import('./admin/cardsHandler.js');
-        await showCardsAdmin(ctx);
-    });
-
-    bot.hears('Чаты', async (ctx) => {
-        const { isAdmin } = await import('./admin/authHandler.js');
-        if (!isAdmin(ctx.from.id)) return;
-        const { showChatsMenu } = await import('./admin/chatsHandler.js');
-        await showChatsMenu(ctx);
-    });
-
-    bot.hears('Создать уведомление', async (ctx) => {
-        const { isAdmin } = await import('./admin/authHandler.js');
-        if (!isAdmin(ctx.from.id)) return;
-        const { showNotificationMenu } = await import('./admin/notificationsHandler.js');
-        await showNotificationMenu(ctx);
-    });
-
-    bot.hears('Данные', async (ctx) => {
-        const { isAdmin } = await import('./admin/authHandler.js');
-        if (!isAdmin(ctx.from.id)) return;
-        const { showDataMenu } = await import('./admin/dataHandler.js');
-        await showDataMenu(ctx);
-    });
-
-    bot.hears('Статистика', async (ctx) => {
-        const { isAdmin } = await import('./admin/authHandler.js');
-        if (!isAdmin(ctx.from.id)) return;
-        const { showStatisticsAdmin } = await import('./admin/statisticsHandler.js');
-        await showStatisticsAdmin(ctx);
-    });
-
-    bot.hears('Настройка приветственного сообщения', async (ctx) => {
+    bot.hears('Прив. сообщение', async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showWelcomeSettings } = await import('./admin/settingsHandler.js');
         await showWelcomeSettings(ctx);
     });
 
-    bot.hears('Настройка кнопок', async (ctx) => {
+    bot.hears('Районы', async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
-        const { showMenuButtonsAdmin } = await import('./admin/menuButtonsHandler.js');
-        await showMenuButtonsAdmin(ctx);
+        const { showDistrictsAdmin } = await import('./admin/citiesHandler.js');
+        await showDistrictsAdmin(ctx);
     });
 
-    bot.hears('Настройка иконок', async (ctx) => {
+    bot.hears('Товар', async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
-        const { showIconsSettings } = await import('./admin/settingsHandler.js');
-        await showIconsSettings(ctx);
+        const { showProductsAdmin } = await import('./admin/productsHandler.js');
+        await showProductsAdmin(ctx);
     });
 
-    bot.hears('Бонусы и промокоды', async (ctx) => {
+    bot.hears('Фасовки', async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
-        const { showPromocodesAdmin } = await import('./admin/promocodesHandler.js');
-        await showPromocodesAdmin(ctx);
-    });
-
-    bot.hears('Настройка реферальной системы', async (ctx) => {
-        const { isAdmin } = await import('./admin/authHandler.js');
-        if (!isAdmin(ctx.from.id)) return;
-        const { showReferralSettings } = await import('./admin/settingsHandler.js');
-        await showReferralSettings(ctx);
+        const { showPackagingsAdmin } = await import('./admin/packagingsHandler.js');
+        await showPackagingsAdmin(ctx);
     });
 
     bot.hears('Пользователи', async (ctx) => {
@@ -157,6 +94,48 @@ export function setupAdminHandlers(bot) {
         if (!isAdmin(ctx.from.id)) return;
         const { showUsersAdmin } = await import('./admin/usersHandler.js');
         await showUsersAdmin(ctx);
+    });
+
+    bot.hears('Рассылка', async (ctx) => {
+        const { isAdmin } = await import('./admin/authHandler.js');
+        if (!isAdmin(ctx.from.id)) return;
+        const { showNotificationMenu } = await import('./admin/notificationsHandler.js');
+        await showNotificationMenu(ctx);
+    });
+
+    bot.hears('Валюта', async (ctx) => {
+        const { isAdmin } = await import('./admin/authHandler.js');
+        if (!isAdmin(ctx.from.id)) return;
+        const { showCurrencySettings } = await import('./admin/settingsHandler.js');
+        await showCurrencySettings(ctx);
+    });
+
+    bot.hears('Реквизиты оплаты', async (ctx) => {
+        const { isAdmin } = await import('./admin/authHandler.js');
+        if (!isAdmin(ctx.from.id)) return;
+        const { showPaymentsAdmin } = await import('./admin/paymentsHandler.js');
+        await showPaymentsAdmin(ctx);
+    });
+
+    bot.hears('Кнопки', async (ctx) => {
+        const { isAdmin } = await import('./admin/authHandler.js');
+        if (!isAdmin(ctx.from.id)) return;
+        const { showMenuButtonsAdmin } = await import('./admin/menuButtonsHandler.js');
+        await showMenuButtonsAdmin(ctx);
+    });
+
+    bot.hears('Карты', async (ctx) => {
+        const { isAdmin } = await import('./admin/authHandler.js');
+        if (!isAdmin(ctx.from.id)) return;
+        const { showCardsAdmin } = await import('./admin/cardsHandler.js');
+        await showCardsAdmin(ctx);
+    });
+
+    bot.hears('Настройки', async (ctx) => {
+        const { isAdmin } = await import('./admin/authHandler.js');
+        if (!isAdmin(ctx.from.id)) return;
+        const { showSettingsMenu } = await import('./admin/settingsHandler.js');
+        await showSettingsMenu(ctx);
     });
 
     bot.hears('Выход из админ-панели', async (ctx) => {

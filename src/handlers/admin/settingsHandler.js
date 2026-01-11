@@ -221,10 +221,18 @@ export async function showSettingsMenu(ctx) {
     const keyboard = {
         inline_keyboard: [
             [{ text: '👋 Приветственное сообщение', callback_data: 'admin_settings_welcome' }],
+            [{ text: '🔘 Настройка кнопок', callback_data: 'admin_menu_buttons' }],
             [{ text: '🎨 Иконки', callback_data: 'admin_settings_icons' }],
+            [{ text: '🎁 Бонусы и промокоды', callback_data: 'admin_promocodes' }],
             [{ text: '👥 Реферальная система', callback_data: 'admin_settings_referral' }],
-            [{ text: '🏪 Название витрины', callback_data: 'admin_settings_storefront' }],
-            [{ text: '💱 Валюта', callback_data: 'admin_settings_currency' }],
+            [{ text: '📢 Привязать телеграм-канал', callback_data: 'admin_bind_channel' }],
+            [{ text: '💬 Управление отзывами', callback_data: 'admin_reviews' }],
+            [{ text: '🏪 Изменить название витрины', callback_data: 'admin_storefront_name' }],
+            [{ text: '💱 Изменить валюту', callback_data: 'admin_currency' }],
+            [{ text: '📊 Статистика', callback_data: 'admin_stats' }],
+            [{ text: '💾 Данные', callback_data: 'admin_data' }],
+            [{ text: '💬 Чаты', callback_data: 'admin_chats' }],
+            [{ text: '📢 Создать уведомление', callback_data: 'admin_notification' }],
             [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
         ]
     };
