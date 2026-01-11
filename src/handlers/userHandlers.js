@@ -818,6 +818,9 @@ async function showTopupMenu(ctx) {
     try {
         const paymentMethods = await paymentService.getAllMethods();
 
+        // Логируем все методы для отладки
+        console.log('[UserHandlers] Все методы оплаты:', paymentMethods.map(m => `${m.name} (${m.type}, enabled: ${m.enabled})`));
+
         if (paymentMethods.length === 0) {
             if (ctx.callbackQuery) {
                 await ctx.editMessageText('❌ Методы оплаты пока не настроены. Обратитесь к администратору.');
@@ -834,6 +837,10 @@ async function showTopupMenu(ctx) {
         for (const method of paymentMethods) {
             keyboard.push([method.name]); // Каждая кнопка в отдельном ряду
         }
+
+        // Проверяем наличие ТРАНСГРАН и логируем
+        const hasTransgran = paymentMethods.some(m => m.name === 'ТРАНСГРАН');
+        console.log('[UserHandlers] ТРАНСГРАН найден в списке методов:', hasTransgran);
 
         const replyMarkup = {
             keyboard: keyboard,

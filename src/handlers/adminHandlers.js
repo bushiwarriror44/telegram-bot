@@ -1558,6 +1558,65 @@ ${methods.map(m => `• ${m.name} (${m.network})`).join('\n') || 'Методов
         }
     });
 
+    // Команда для проверки и создания ТРАНСГРАН
+    bot.command('checktransgran', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.reply('❌ У вас нет доступа.');
+            return;
+        }
+
+        try {
+            const { cardAccountService } = await import('../services/cardAccountService.js');
+            const allMethods = await paymentService.getAllMethods(true);
+            const transgranMethod = allMethods.find(m => m.name === 'ТРАНСГРАН');
+
+            let message = '📋 Проверка ТРАНСГРАН:\n\n';
+
+            if (transgranMethod) {
+                message += `✅ Метод оплаты ТРАНСГРАН найден:\n`;
+                message += `   - ID: ${transgranMethod.id}\n`;
+                message += `   - Тип: ${transgranMethod.type}\n`;
+                message += `   - Сеть: ${transgranMethod.network}\n`;
+                message += `   - Включен: ${transgranMethod.enabled ? 'Да' : 'Нет'}\n\n`;
+
+                if (!transgranMethod.enabled) {
+                    // Включаем метод
+                    await paymentService.enableMethod(transgranMethod.id, true);
+                    message += `✅ Метод ТРАНСГРАН включен!\n\n`;
+                }
+            } else {
+                message += `❌ Метод оплаты ТРАНСГРАН не найден. Создаю...\n\n`;
+                try {
+                    await paymentService.createMethod('ТРАНСГРАН', 'TRANSGRAN', 'card');
+                    message += `✅ Метод ТРАНСГРАН создан!\n\n`;
+                } catch (error) {
+                    message += `❌ Ошибка при создании: ${error.message}\n\n`;
+                }
+            }
+
+            // Проверяем карточный счет
+            const transgranCard = await cardAccountService.getByName('ТРАНСГРАН');
+            if (transgranCard) {
+                message += `✅ Карточный счет ТРАНСГРАН найден:\n`;
+                message += `   - Номер: ${transgranCard.account_number}\n`;
+                message += `   - Включен: ${transgranCard.enabled ? 'Да' : 'Нет'}\n`;
+            } else {
+                message += `❌ Карточный счет ТРАНСГРАН не найден. Создаю...\n`;
+                try {
+                    await cardAccountService.create('ТРАНСГРАН', '4276 1234 5678 9012');
+                    message += `✅ Карточный счет ТРАНСГРАН создан!\n`;
+                } catch (error) {
+                    message += `❌ Ошибка при создании счета: ${error.message}\n`;
+                }
+            }
+
+            await ctx.reply(message);
+        } catch (error) {
+            console.error('[AdminHandlers] Ошибка при проверке ТРАНСГРАН:', error);
+            await ctx.reply(`❌ Ошибка: ${error.message}`);
+        }
+    });
+
     bot.action('admin_payment_address', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         const methods = await paymentService.getAllMethods();
