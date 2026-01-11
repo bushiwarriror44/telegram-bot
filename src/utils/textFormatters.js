@@ -1,0 +1,74 @@
+/**
+ * Утилиты для форматирования текстов
+ */
+
+/**
+ * Генерирует TXID на основе ID (формат: gt{2 цифры из ID}-{4 hex}-{4 hex}-{4 hex}-{4 hex}-{12 hex})
+ * @param {number|string} id - ID для генерации TXID
+ * @returns {string} Сгенерированный TXID
+ */
+export function generateTXID(id) {
+    const idHex = id.toString(16).padStart(8, '0');
+    let hash = 0;
+    for (let i = 0; i < idHex.length; i++) {
+        hash = ((hash * 1103515245) + 12345) & 0x7fffffff;
+    }
+    const hashHex = hash.toString(16).padStart(8, '0');
+    // Формат: gt{2 цифры из ID}-{4 hex}-{4 hex}-{4 hex}-{4 hex}-{12 hex}
+    const part1 = idHex.substring(0, 2);
+    const part2 = idHex.substring(2, 6);
+    const part3 = hashHex.substring(0, 4);
+    const part4 = hashHex.substring(4, 8);
+    const part5 = (idHex + hashHex).substring(0, 4);
+    const part6 = (idHex + hashHex).substring(4, 16);
+    return `gt${part1}-${part2}-${part3}-${part4}-${part5}-${part6}`;
+}
+
+/**
+ * Генерирует текст заявки на оплату
+ * @param {number|string} orderId - ID заказа/заявки
+ * @param {string} txid - TXID транзакции
+ * @param {string} amountText - Текст с суммой (уже отформатированный)
+ * @param {string} paymentDetails - Реквизиты для оплаты (номер карты или адрес)
+ * @returns {string} Отформатированный текст заявки
+ */
+export function generatePaymentRequestText(orderId, txid, amountText, paymentDetails) {
+    return `<b>Создана заявка #${orderId}</b>\n\n` +
+        `TxID: <code>${txid}</code>\n\n` +
+        `💵 Переведите: <code>${amountText}</code>\n\n` +
+        `💳 <b>Реквизиты для оплаты:</b>\n<code>${paymentDetails}</code>\n\n` +
+        `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
+        `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
+        `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
+        `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.\n` +
+        `https://bestchange.com - инструкция 🫱 - https://telegra.ph/INSTRUKCIYA-PO-OPLATE-LTC-CHEREZ-07-16\n` +
+        `@bot_abcobmen_bot - инструкция 🫱 https://telegra.ph/Kak-obmenyat-rubli-na-Litecoin-cherez-obmennik-bota-07-12\n` +
+        `@BTC_MONOPOLY_BTC_BOT- инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-07-12\n` +
+        `https://sova.gg/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-sovagg-07-12\n` +
+        `https://alt-coin.cc/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-alt-coincc-07-12\n` +
+        `https://pocket-exchange.com/ инструкция🫱  https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-pocket-exchangecom-07-12`;
+}
+
+/**
+ * Форматирует дату в формат "17:42 08.01.2026"
+ * @param {string|Date} dateString - Дата для форматирования
+ * @returns {string} Отформатированная дата
+ */
+export function formatDate(dateString) {
+    const date = new Date(dateString);
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${hours}:${minutes} ${day}.${month}.${year}`;
+}
+
+/**
+ * Форматирует дату заказа в формат "22:57 10.01.2026"
+ * @param {string|Date} dateString - Дата для форматирования
+ * @returns {string} Отформатированная дата
+ */
+export function formatOrderDate(dateString) {
+    return formatDate(dateString); // Используем ту же функцию
+}

@@ -1,0 +1,519 @@
+import { settingsService } from '../../services/settingsService.js';
+import { promocodeService } from '../../services/promocodeService.js';
+import { menuButtonService } from '../../services/menuButtonService.js';
+import { reviewService } from '../../services/reviewService.js';
+import { paymentService } from '../../services/paymentService.js';
+import { productService } from '../../services/productService.js';
+import { cityService } from '../../services/cityService.js';
+import { districtService } from '../../services/districtService.js';
+import { packagingService } from '../../services/packagingService.js';
+import { supportService } from '../../services/supportService.js';
+import { database } from '../../database/db.js';
+import { isAdmin } from './authHandler.js';
+import { showAdminPanel } from './panelHandler.js';
+import { showWelcomeSettings, welcomeEditMode, iconEditMode, referralDiscountEditMode, storefrontNameEditMode, currencyEditMode } from './settingsHandler.js';
+import { showIconsSettings } from './settingsHandler.js';
+import { showReferralSettings } from './settingsHandler.js';
+import { showStorefrontNameSettings } from './settingsHandler.js';
+import { showCurrencySettings } from './settingsHandler.js';
+import { promocodeAddMode, promocodeAssignMode } from './promocodesHandler.js';
+import { menuButtonEditMode } from './menuButtonsHandler.js';
+import { reviewCreateMode } from './reviewsHandler.js';
+import { importPaymentMode, importProductMode, databaseImportMode, showDataMenu } from './dataHandler.js';
+import { adminReplyMode } from './chatsHandler.js';
+import { showConversation } from './chatsHandler.js';
+import { channelBindMode } from './panelHandler.js';
+import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
+import { productImageUploadMode } from './productsHandler.js';
+
+/**
+ * Регистрирует обработчики текстовых сообщений для админа
+ * @param {Object} bot - Экземпляр Telegraf бота
+ */
+export function registerTextHandlers(bot) {
+    bot.on('text', async (ctx, next) => {
+        console.log('[AdminHandlers] bot.on(text) вызван для текста:', ctx.message.text, 'User ID:', ctx.from.id, 'Is Admin:', isAdmin(ctx.from.id));
+
+        // ВАЖНО: Пропускаем команды для ВСЕХ пользователей, чтобы они обрабатывались через bot.command()
+        if (ctx.message.text && ctx.message.text.startsWith('/')) {
+            // Обрабатываем только /cancel для админов
+            if (ctx.message.text === '/cancel' && isAdmin(ctx.from.id)) {
+                // Очищаем все режимы
+                importPaymentMode.delete(ctx.from.id);
+                importProductMode.delete(ctx.from.id);
+                adminReplyMode.delete(ctx.from.id);
+                welcomeEditMode.delete(ctx.from.id);
+                iconEditMode.delete(ctx.from.id);
+                databaseImportMode.delete(ctx.from.id);
+                menuButtonEditMode.delete(ctx.from.id);
+                promocodeAddMode.delete(ctx.from.id);
+                promocodeAssignMode.delete(ctx.from.id);
+                referralDiscountEditMode.delete(ctx.from.id);
+                productImageUploadMode.delete(ctx.from.id);
+                channelBindMode.delete(ctx.from.id);
+                reviewCreateMode.delete(ctx.from.id);
+                reviewImportMode.delete(ctx.from.id);
+                storefrontNameEditMode.delete(ctx.from.id);
+                currencyEditMode.delete(ctx.from.id);
+                await ctx.reply('❌ Операция отменена.');
+                await showAdminPanel(ctx);
+                return; // Не передаем дальше, так как команда обработана
+            }
+            // Для всех остальных команд передаем управление дальше через next()
+            console.log('[AdminHandlers] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
+            return next(); // Позволяем другим обработчикам (bot.command()) обработать команду
+        }
+
+        // Далее обрабатываем только для админов
+        // ВАЖНО: для обычных пользователей обязательно вызываем next(),
+        // чтобы их текстовые сообщения (в том числе нажатия на reply‑кнопки)
+        // обрабатывались в userHandlers (bot.hears и bot.on('text'))
+        if (!isAdmin(ctx.from.id)) {
+            console.log('[AdminHandlers] Пользователь не админ, передаем управление дальше через next()');
+            return next();
+        }
+
+        console.log('[AdminHandlers] Пользователь админ, продолжаем обработку');
+
+        // Обработка редактирования приветственного сообщения
+        if (welcomeEditMode.has(ctx.from.id)) {
+            try {
+                const newMessage = ctx.message.text;
+                await settingsService.setWelcomeMessage(newMessage);
+                welcomeEditMode.delete(ctx.from.id);
+                await ctx.reply('✅ Приветственное сообщение успешно обновлено!');
+                await showWelcomeSettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении приветственного сообщения:', error);
+                await ctx.reply('❌ Ошибка при сохранении приветственного сообщения: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка изменения валюты
+        if (currencyEditMode.has(ctx.from.id)) {
+            try {
+                const newSymbol = ctx.message.text.trim();
+                if (!newSymbol || newSymbol.length === 0) {
+                    await ctx.reply('❌ Символ валюты не может быть пустым. Попробуйте еще раз.');
+                    return;
+                }
+                await settingsService.setCurrencySymbol(newSymbol);
+                currencyEditMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Символ валюты успешно изменен на "${newSymbol}"!`);
+                await showCurrencySettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении символа валюты:', error);
+                await ctx.reply('❌ Ошибка при сохранении символа валюты: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка изменения названия витрины
+        if (storefrontNameEditMode.has(ctx.from.id)) {
+            try {
+                const newName = ctx.message.text.trim();
+                if (newName.length === 0) {
+                    await ctx.reply('❌ Название витрины не может быть пустым. Попробуйте еще раз.');
+                    return;
+                }
+                await settingsService.setStorefrontName(newName);
+                storefrontNameEditMode.delete(ctx.from.id);
+                await ctx.reply('✅ Название витрины успешно обновлено!');
+                await showStorefrontNameSettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении названия витрины:', error);
+                await ctx.reply('❌ Ошибка при сохранении названия витрины: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка редактирования иконки городов
+        if (iconEditMode.has(ctx.from.id)) {
+            try {
+                const newIcon = ctx.message.text.trim();
+                // Проверяем, что это одна иконка (эмодзи может быть длиннее из-за суррогатных пар)
+                // Принимаем иконку длиной до 4 символов (для поддержки эмодзи с модификаторами)
+                if (newIcon.length === 0 || newIcon.length > 4) {
+                    await ctx.reply('❌ Пожалуйста, введите только одну иконку (эмодзи или символ).');
+                    return;
+                }
+                await settingsService.setCityIcon(newIcon);
+                iconEditMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Иконка для городов успешно обновлена на: ${newIcon}`);
+                await showIconsSettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении иконки городов:', error);
+                await ctx.reply('❌ Ошибка при сохранении иконки городов: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка редактирования настроек реферальной системы
+        if (referralDiscountEditMode.has(ctx.from.id)) {
+            try {
+                const editType = referralDiscountEditMode.get(ctx.from.id);
+                const value = parseFloat(ctx.message.text.trim());
+
+                if (isNaN(value) || value < 0 || value > 100) {
+                    await ctx.reply('❌ Пожалуйста, введите корректное число от 0 до 100.');
+                    return;
+                }
+
+                if (editType === 'discount') {
+                    await settingsService.setReferralDiscountPercent(value);
+                    await ctx.reply(`✅ Скидка за реферала успешно обновлена на: ${value}%`);
+                } else if (editType === 'max_discount') {
+                    await settingsService.setMaxReferralDiscountPercent(value);
+                    await ctx.reply(`✅ Максимальная скидка успешно обновлена на: ${value}%`);
+                } else if (editType === 'cashback') {
+                    await settingsService.setReferralCashbackPercent(value);
+                    await ctx.reply(`✅ Процент кешбека успешно обновлен на: ${value}%`);
+                }
+
+                referralDiscountEditMode.delete(ctx.from.id);
+                await showReferralSettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении настроек реферальной системы:', error);
+                await ctx.reply('❌ Ошибка при сохранении настроек: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка добавления промокода
+        if (promocodeAddMode.has(ctx.from.id)) {
+            try {
+                const text = ctx.message.text;
+
+                // Парсим формат: "КОД|ПРОЦЕНТ"
+                const parts = text.split('|');
+                if (parts.length !== 2) {
+                    await ctx.reply('❌ Неверный формат. Используйте: <code>КОД|ПРОЦЕНТ</code>\nПример: <code>SUMMER2024|15</code>', { parse_mode: 'HTML' });
+                    return;
+                }
+
+                const code = parts[0].trim().toUpperCase();
+                const discountPercent = parseInt(parts[1].trim());
+
+                if (!code || code.length === 0) {
+                    await ctx.reply('❌ Код промокода не может быть пустым.');
+                    return;
+                }
+
+                if (isNaN(discountPercent) || discountPercent < 1 || discountPercent > 99) {
+                    await ctx.reply('❌ Процент скидки должен быть числом от 1 до 99.');
+                    return;
+                }
+
+                // Проверяем, не существует ли уже такой промокод
+                const existing = await promocodeService.getByCode(code);
+                if (existing) {
+                    await ctx.reply('❌ Промокод с таким кодом уже существует.');
+                    return;
+                }
+
+                await promocodeService.create(code, discountPercent);
+                promocodeAddMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Промокод ${code} успешно создан!`);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при создании промокода:', error);
+                await ctx.reply('❌ Ошибка при создании промокода: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка редактирования кнопок меню
+        if (menuButtonEditMode.has(ctx.from.id)) {
+            try {
+                const editData = menuButtonEditMode.get(ctx.from.id);
+                const text = ctx.message.text;
+
+                // Парсим формат: "НАЗВАНИЕ|СООБЩЕНИЕ"
+                const parts = text.split('|');
+                if (parts.length !== 2) {
+                    await ctx.reply('❌ Неверный формат. Используйте: <code>НАЗВАНИЕ|СООБЩЕНИЕ</code>', { parse_mode: 'HTML' });
+                    return;
+                }
+
+                const name = parts[0].trim();
+                const message = parts[1].trim();
+
+                if (!name || name.length === 0) {
+                    await ctx.reply('❌ Название кнопки не может быть пустым.');
+                    return;
+                }
+
+                if (!message || message.length === 0) {
+                    await ctx.reply('❌ Текст сообщения не может быть пустым.');
+                    return;
+                }
+
+                if (editData.mode === 'add') {
+                    await menuButtonService.create(name, message);
+                    menuButtonEditMode.delete(ctx.from.id);
+                    await ctx.reply(`✅ Кнопка "${name}" успешно добавлена!`);
+                } else if (editData.mode === 'edit' && editData.id) {
+                    await menuButtonService.update(editData.id, name, message);
+                    menuButtonEditMode.delete(ctx.from.id);
+                    await ctx.reply(`✅ Кнопка "${name}" успешно обновлена!`);
+                }
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении кнопки меню:', error);
+                await ctx.reply('❌ Ошибка при сохранении кнопки: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка создания отзыва вручную
+        if (reviewCreateMode.has(ctx.from.id)) {
+            try {
+                const mode = reviewCreateMode.get(ctx.from.id);
+                const step = mode.step;
+                const data = mode.data || {};
+
+                if (step === 'product') {
+                    // Парсим название товара: "Город / Район / Товар фасовка"
+                    const parts = ctx.message.text.split(' / ');
+                    if (parts.length < 3) {
+                        await ctx.reply('❌ Неверный формат. Используйте: <code>Город / Район / Товар фасовка</code>', {
+                            parse_mode: 'HTML'
+                        });
+                        return;
+                    }
+                    data.product_name = ctx.message.text;
+                    data.city_name = parts[0].trim();
+                    data.district_name = parts[1].trim();
+                    mode.step = 'rating';
+                    mode.data = data;
+                    reviewCreateMode.set(ctx.from.id, mode);
+                    await ctx.reply(
+                        '✏️ Введите оценку (от 1 до 5):',
+                        {
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '1 ⭐', callback_data: 'review_rating_1' },
+                                    { text: '2 ⭐', callback_data: 'review_rating_2' },
+                                    { text: '3 ⭐', callback_data: 'review_rating_3' }],
+                                    [{ text: '4 ⭐', callback_data: 'review_rating_4' },
+                                    { text: '5 ⭐', callback_data: 'review_rating_5' }],
+                                    [{ text: '◀️ Отмена', callback_data: 'admin_reviews' }]
+                                ]
+                            }
+                        }
+                    );
+                } else if (step === 'text') {
+                    data.review_text = ctx.message.text;
+                    mode.step = 'date';
+                    mode.data = data;
+                    reviewCreateMode.set(ctx.from.id, mode);
+                    await ctx.reply(
+                        '✏️ Введите дату отзыва в формате <code>ДД.ММ.ГГГГ</code>:\n\n' +
+                        'Пример: <code>30.12.2025</code>',
+                        {
+                            parse_mode: 'HTML',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '◀️ Отмена', callback_data: 'admin_reviews' }]
+                                ]
+                            }
+                        }
+                    );
+                } else if (step === 'date') {
+                    // Парсим дату в формате ДД.ММ.ГГГГ
+                    const dateMatch = ctx.message.text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+                    if (!dateMatch) {
+                        await ctx.reply('❌ Неверный формат даты. Используйте: <code>ДД.ММ.ГГГГ</code>', {
+                            parse_mode: 'HTML'
+                        });
+                        return;
+                    }
+                    const [, day, month, year] = dateMatch;
+                    data.review_date = `${year}-${month}-${day}`;
+
+                    // Создаем отзыв
+                    await reviewService.create(
+                        data.product_name,
+                        data.city_name,
+                        data.district_name,
+                        data.rating,
+                        data.review_text,
+                        data.review_date
+                    );
+
+                    reviewCreateMode.delete(ctx.from.id);
+                    await ctx.reply('✅ Отзыв успешно создан!');
+                    await showReviewsAdmin(ctx);
+                }
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при создании отзыва:', error);
+                await ctx.reply('❌ Ошибка при создании отзыва: ' + error.message);
+                reviewCreateMode.delete(ctx.from.id);
+            }
+            return;
+        }
+
+        // Обработка загрузки товаров
+        if (importProductMode.has(ctx.from.id)) {
+            try {
+                const jsonText = ctx.message.text;
+                const data = JSON.parse(jsonText);
+
+                if (!Array.isArray(data)) {
+                    await ctx.reply('❌ Ошибка: JSON должен быть массивом объектов.');
+                    return;
+                }
+
+                // Удаляем все существующие товары
+                const cities = await cityService.getAll();
+                for (const city of cities) {
+                    const products = await productService.getByCityId(city.id);
+                    for (const product of products) {
+                        await productService.delete(product.id);
+                    }
+                }
+
+                // Создаем новые товары
+                let createdCount = 0;
+                for (const item of data) {
+                    if (!item.city_name || !item.name || item.price === undefined) {
+                        await ctx.reply(`❌ Ошибка: Пропущены обязательные поля (city_name, name, price) в элементе: ${JSON.stringify(item)}`);
+                        continue;
+                    }
+
+                    // Находим или создаем город
+                    const allCities = await cityService.getAll();
+                    let city = allCities.find(c => c.name === item.city_name);
+                    if (!city) {
+                        city = await cityService.create(item.city_name);
+                    }
+
+                    // Находим или создаем фасовку, если указана
+                    let packagingId = null;
+                    if (item.packaging_value !== null && item.packaging_value !== undefined) {
+                        let packaging = await packagingService.getByValue(item.packaging_value);
+                        if (!packaging) {
+                            packaging = await packagingService.create(item.packaging_value);
+                        }
+                        packagingId = packaging.id;
+                    }
+
+                    // Находим район для города (берем первый)
+                    const districts = await districtService.getByCityId(city.id);
+                    const district = districts.length > 0 ? districts[0] : null;
+
+                    if (!district) {
+                        await ctx.reply(`❌ Для города ${city.name} не найден район. Создайте район сначала.`);
+                        continue;
+                    }
+
+                    await productService.create(
+                        city.id,
+                        district.id,
+                        item.name,
+                        item.description || '',
+                        item.price,
+                        packagingId,
+                        null // imagePath
+                    );
+                    createdCount++;
+                }
+
+                importProductMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Успешно загружено ${createdCount} товаров!`);
+                await showDataMenu(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при загрузке товаров:', error);
+                await ctx.reply('❌ Ошибка при загрузке товаров: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка загрузки платежных адресов
+        if (importPaymentMode.has(ctx.from.id)) {
+            try {
+                const jsonText = ctx.message.text;
+                const data = JSON.parse(jsonText);
+
+                if (!Array.isArray(data)) {
+                    await ctx.reply('❌ Ошибка: JSON должен быть массивом объектов.');
+                    return;
+                }
+
+                // Удаляем все существующие методы оплаты
+                const existingMethods = await paymentService.getAllMethods(true);
+                for (const method of existingMethods) {
+                    await paymentService.deleteMethod(method.id);
+                }
+
+                // Создаем новые методы оплаты
+                for (const item of data) {
+                    if (!item.name || !item.network) {
+                        await ctx.reply(`❌ Ошибка: Пропущены обязательные поля (name, network) в элементе: ${JSON.stringify(item)}`);
+                        continue;
+                    }
+
+                    const method = await paymentService.createMethod(
+                        item.name,
+                        item.network,
+                        item.type || 'crypto'
+                    );
+
+                    if (item.enabled === false) {
+                        await paymentService.enableMethod(method.id, false);
+                    }
+
+                    if (item.address) {
+                        await paymentService.setAddressForMethod(method.id, item.address);
+                    }
+                }
+
+                importPaymentMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Успешно загружено ${data.length} платежных методов!`);
+                await showDataMenu(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при загрузке платежных данных:', error);
+                await ctx.reply('❌ Ошибка при загрузке платежных данных: ' + error.message);
+            }
+            return;
+        }
+
+        // Проверяем, находится ли администратор в режиме ответа
+        if (adminReplyMode.has(ctx.from.id)) {
+            const userChatId = adminReplyMode.get(ctx.from.id);
+            let messageText = ctx.message.text;
+
+            // Если это команда /reply, извлекаем текст
+            if (messageText.startsWith('/reply ')) {
+                messageText = messageText.substring(7).trim();
+            }
+
+            if (!messageText || messageText.length === 0) {
+                await ctx.reply('❌ Укажите текст ответа.');
+                return;
+            }
+
+            try {
+                // Сохраняем ответ администратора
+                await supportService.saveAdminMessage(userChatId, ctx.from.id, messageText);
+
+                // Отправляем сообщение пользователю
+                try {
+                    await bot.telegram.sendMessage(
+                        userChatId,
+                        `💬 <b>Ответ от администратора:</b>\n\n${messageText}`,
+                        { parse_mode: 'HTML' }
+                    );
+                    await ctx.reply(`✅ Ответ отправлен пользователю!`);
+                } catch (error) {
+                    await ctx.reply(`✅ Ответ сохранен, но не удалось отправить пользователю: ${error.message}`);
+                }
+
+                adminReplyMode.delete(ctx.from.id);
+                await showConversation(ctx, userChatId);
+            } catch (error) {
+                await ctx.reply(`❌ Ошибка: ${error.message}`);
+            }
+            return; // Явно указываем, что сообщение обработано
+        }
+    });
+}
