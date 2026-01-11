@@ -69,6 +69,35 @@ export class UserService {
     const user = await this.getByChatId(chatId);
     return user?.unpaid_attempts || 10;
   }
+
+  /**
+   * Получает всех пользователей с полной информацией
+   */
+  async getAllUsersWithInfo() {
+    return await database.all('SELECT * FROM users ORDER BY last_active DESC');
+  }
+
+  /**
+   * Блокирует пользователя
+   */
+  async blockUser(chatId) {
+    await database.run('UPDATE users SET blocked = 1 WHERE chat_id = ?', [chatId]);
+  }
+
+  /**
+   * Разблокирует пользователя
+   */
+  async unblockUser(chatId) {
+    await database.run('UPDATE users SET blocked = 0 WHERE chat_id = ?', [chatId]);
+  }
+
+  /**
+   * Проверяет, заблокирован ли пользователь
+   */
+  async isBlocked(chatId) {
+    const user = await this.getByChatId(chatId);
+    return user?.blocked === 1;
+  }
 }
 
 export const userService = new UserService();

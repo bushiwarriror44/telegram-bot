@@ -189,6 +189,7 @@ class Database {
         first_name TEXT,
         last_name TEXT,
         balance REAL DEFAULT 0,
+        blocked INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_active DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -368,6 +369,13 @@ class Database {
       await this.run("ALTER TABLE payment_methods ADD COLUMN type TEXT DEFAULT 'crypto'");
     }
 
+    // Миграция: добавляем колонку blocked в существующую таблицу users при необходимости
+    const userColumns = await this.db.all('PRAGMA table_info(users)');
+    const hasBlocked = userColumns.some((col) => col.name === 'blocked');
+    if (!hasBlocked) {
+      await this.run('ALTER TABLE users ADD COLUMN blocked INTEGER DEFAULT 0');
+    }
+
     // Таблица просмотров товаров
     await this.run(`
       CREATE TABLE IF NOT EXISTS product_views (
@@ -477,7 +485,7 @@ class Database {
       }
 
       // Если остались товары без района, создаем для них дефолтный
-      
+
       // Добавляем поле warning_sent для отслеживания отправленных уведомлений о неоплаченных заказах
       try {
         const orderColumns = await this.db.all("PRAGMA table_info(orders)");

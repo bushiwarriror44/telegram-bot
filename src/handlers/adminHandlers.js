@@ -21,6 +21,7 @@ import { registerStatisticsHandlers } from './admin/statisticsHandler.js';
 import { registerMenuButtonsHandlers } from './admin/menuButtonsHandler.js';
 import { registerTextHandlers } from './admin/textHandler.js';
 import { registerMediaHandlers } from './admin/mediaHandler.js';
+import { registerUsersHandlers } from './admin/usersHandler.js';
 
 // Импортируем adminSessions из authHandler
 import { adminSessions } from './admin/authHandler.js';
@@ -50,6 +51,7 @@ export function setupAdminHandlers(bot) {
     registerMenuButtonsHandlers(bot);
     registerTextHandlers(bot);
     registerMediaHandlers(bot);
+    registerUsersHandlers(bot);
 
     // Обработчики для админских reply keyboard кнопок
     bot.hears('Управление городами', async (ctx) => {
@@ -148,6 +150,13 @@ export function setupAdminHandlers(bot) {
         if (!isAdmin(ctx.from.id)) return;
         const { showReferralSettings } = await import('./admin/settingsHandler.js');
         await showReferralSettings(ctx);
+    });
+
+    bot.hears('Пользователи', async (ctx) => {
+        const { isAdmin } = await import('./admin/authHandler.js');
+        if (!isAdmin(ctx.from.id)) return;
+        const { showUsersAdmin } = await import('./admin/usersHandler.js');
+        await showUsersAdmin(ctx);
     });
 
     bot.hears('Выход из админ-панели', async (ctx) => {

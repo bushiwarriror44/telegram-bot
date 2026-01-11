@@ -24,6 +24,30 @@ let notificationService = null;
 export function setupUserHandlers(bot) {
     console.log('[UserHandlers] Настройка пользовательских обработчиков...');
 
+    // Middleware для проверки блокировки пользователя
+    bot.use(async (ctx, next) => {
+        // Пропускаем админов (проверяем только если функция isAdmin доступна)
+        if (isAdmin && ctx.from?.id && isAdmin(ctx.from.id)) {
+            return next();
+        }
+
+        // Проверяем блокировку
+        if (ctx.from?.id) {
+            try {
+                const blocked = await userService.isBlocked(ctx.from.id);
+                if (blocked) {
+                    await ctx.reply('🚫 Вы заблокированы в этом боте');
+                    return; // Не продолжаем обработку
+                }
+            } catch (error) {
+                // Если ошибка при проверке, пропускаем (чтобы не блокировать работу бота)
+                console.error('[UserHandlers] Ошибка при проверке блокировки:', error);
+            }
+        }
+
+        return next();
+    });
+
     // Инициализируем notificationService с bot
     (async () => {
         const { NotificationService } = await import('../services/notificationService.js');
