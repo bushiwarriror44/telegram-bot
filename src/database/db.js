@@ -369,11 +369,19 @@ class Database {
       await this.run("ALTER TABLE payment_methods ADD COLUMN type TEXT DEFAULT 'crypto'");
     }
 
-    // Миграция: добавляем колонку blocked в существующую таблицу users при необходимости
+    // Миграция: добавляем колонки в существующую таблицу users при необходимости
     const userColumns = await this.db.all('PRAGMA table_info(users)');
     const hasBlocked = userColumns.some((col) => col.name === 'blocked');
     if (!hasBlocked) {
       await this.run('ALTER TABLE users ADD COLUMN blocked INTEGER DEFAULT 0');
+    }
+    const hasBalance = userColumns.some((col) => col.name === 'balance');
+    if (!hasBalance) {
+      await this.run('ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0');
+    }
+    const hasUnpaidAttempts = userColumns.some((col) => col.name === 'unpaid_attempts');
+    if (!hasUnpaidAttempts) {
+      await this.run('ALTER TABLE users ADD COLUMN unpaid_attempts INTEGER DEFAULT 10');
     }
 
     // Таблица просмотров товаров
@@ -412,16 +420,6 @@ class Database {
       'CREATE INDEX IF NOT EXISTS idx_reviews_date ON reviews(review_date DESC)'
     );
 
-    // Миграция: добавляем колонку balance в существующую таблицу users при необходимости
-    const userColumns = await this.db.all('PRAGMA table_info(users)');
-    const hasBalance = userColumns.some((col) => col.name === 'balance');
-    if (!hasBalance) {
-      await this.run('ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0');
-    }
-    const hasUnpaidAttempts = userColumns.some((col) => col.name === 'unpaid_attempts');
-    if (!hasUnpaidAttempts) {
-      await this.run('ALTER TABLE users ADD COLUMN unpaid_attempts INTEGER DEFAULT 10');
-    }
 
     // Миграция: добавляем колонку image_path в существующую таблицу products при необходимости
     const hasImagePath = productColumns.some((col) => col.name === 'image_path');
