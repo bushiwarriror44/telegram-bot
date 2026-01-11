@@ -23,6 +23,8 @@ const __dirname = dirname(__filename);
 const supportMode = new Map();
 // Хранит пользователей, которые вводят промокод (userId -> productId)
 const promocodeInputMode = new Map();
+// Хранит пользователей, которые вводят сумму пополнения (userId -> methodId)
+const topupAmountMode = new Map();
 
 // Импортируем adminSessions для проверки, является ли пользователь админом
 let adminSessions = null;
@@ -291,7 +293,7 @@ export function setupUserHandlers(bot) {
             // Если не удалось изменить сообщение, отправляем новое
             // Получаем иконку для городов из настроек
             const cityIcon = await settingsService.getCityIcon();
-            await ctx.reply('🏙️ Выберите город:', {
+            await ctx.reply('🛍 Каталог товаров::', {
                 reply_markup: {
                     inline_keyboard: (await cityService.getAll()).map(city => [
                         { text: `${cityIcon} ${city.name}`, callback_data: `city_${city.id}` }
@@ -360,6 +362,28 @@ export function setupUserHandlers(bot) {
             await supportService.saveUserMessage(ctx.from.id, ctx.message.text);
             await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!');
             supportMode.delete(ctx.from.id);
+            return;
+        }
+
+        // Обработка ввода суммы пополнения
+        if (topupAmountMode.has(ctx.from.id)) {
+            const methodId = topupAmountMode.get(ctx.from.id);
+            const amountText = ctx.message.text.trim().replace(/[^\d.,]/g, '').replace(',', '.');
+            const amount = parseFloat(amountText);
+
+            if (isNaN(amount) || amount <= 0) {
+                await ctx.reply('❌ Неверная сумма. Введите число больше нуля.\n\nНапример: 1000', {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Отмена', callback_data: 'topup_balance' }]
+                        ]
+                    }
+                });
+                return;
+            }
+
+            topupAmountMode.delete(ctx.from.id);
+            await showTopupMethod(ctx, methodId, amount);
             return;
         }
 
@@ -705,11 +729,30 @@ async function showTopupMenu(ctx) {
 }
 
 // Показ реквизитов для выбранного метода пополнения
-async function showTopupMethod(ctx, methodId) {
+async function showTopupMethod(ctx, methodId, amount = null) {
     try {
         const method = await paymentService.getMethodById(methodId);
         if (!method) {
             await ctx.reply('Метод оплаты не найден.');
+            return;
+        }
+
+        // Если сумма не указана, запрашиваем её
+        if (amount === null) {
+            topupAmountMode.set(ctx.from.id, methodId);
+            await ctx.editMessageText(
+                '💰 <b>Пополнение баланса</b>\n\n' +
+                '✏️ Введите сумму пополнения (в рублях):\n\n' +
+                'Например: 1000',
+                {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Отмена', callback_data: 'topup_balance' }]
+                        ]
+                    }
+                }
+            );
             return;
         }
 
@@ -728,6 +771,7 @@ async function showTopupMethod(ctx, methodId) {
             }
             text = `💳 <b>Пополнение картой</b>\n\n` +
                 `Способ: ${method.name}\n` +
+                `Сумма: ${amount.toLocaleString('ru-RU')} ₽\n\n` +
                 `Реквизиты:\n<b>${cardAccount.name}</b>\n<code>${cardAccount.account_number}</code>`;
         } else {
             const address = await paymentService.getAddressForMethod(methodId);
@@ -736,8 +780,22 @@ async function showTopupMethod(ctx, methodId) {
                 return;
             }
             text = `💳 <b>Пополнение через ${method.name}</b>\n\n` +
+                `Сумма: ${amount.toLocaleString('ru-RU')} ₽\n` +
                 `Сеть: ${method.network}\n` +
                 `Адрес для пополнения:\n<code>${address.address}</code>`;
+        }
+
+        // Создаем запись о пополнении в базе данных
+        const { database } = await import('../database/db.js');
+        try {
+            const result = await database.run(
+                'INSERT INTO topups (user_chat_id, amount, payment_method_id, status) VALUES (?, ?, ?, ?)',
+                [ctx.from.id, amount, methodId, 'pending']
+            );
+            console.log('[UserHandlers] Создана запись о пополнении с ID:', result.lastID, 'Сумма:', amount);
+        } catch (error) {
+            console.error('[UserHandlers] Ошибка при создании записи о пополнении:', error);
+            console.error('[UserHandlers] Stack trace:', error.stack);
         }
 
         // Отправляем уведомление о выборе реквизита для пополнения баланса
@@ -1099,12 +1157,12 @@ async function showCitiesMenu(ctx) {
     ]);
 
     // Добавляем кнопку "Помощь"
-    keyboard.push([{ text: '💬 Помощь', callback_data: 'help_support' }]);
+    // keyboard.push([{ text: '💬 Помощь', callback_data: 'help_support' }]);
     // Добавляем кнопку "Назад к витрине"
     keyboard.push([{ text: 'Вернуться назад', callback_data: 'back_to_storefront' }]);
 
     await ctx.reply(
-        '🏙️ Выберите город:',
+        '🛍 Каталог товаров::',
         {
             reply_markup: {
                 inline_keyboard: keyboard
