@@ -655,9 +655,9 @@ async function showTopupMenu(ctx) {
         }
 
         const text = `
-💳 <b>Пополнение баланса</b>
+💵 Выберите способ пополнения:
 
-Выберите способ пополнения:
+
         `.trim();
 
         const keyboard = [];
@@ -667,7 +667,7 @@ async function showTopupMenu(ctx) {
                 callback_data: `topup_method_${method.id}`
             }]);
         }
-        keyboard.push([{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]);
+        // keyboard.push([{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]);
 
         // Если пришло из callback, пытаемся отредактировать, иначе отправляем новое сообщение
         if (ctx.callbackQuery) {
@@ -897,6 +897,9 @@ async function showTopupHistory(ctx) {
 
         // Показываем все пополнения (или можно добавить пагинацию)
         const totalTopups = topups.length;
+        console.log('[UserHandlers] Количество пополнений:', totalTopups);
+        console.log('[UserHandlers] Пополнения:', JSON.stringify(topups, null, 2));
+
         let text = `🧾 <b>История пополнений [${totalTopups}/${totalTopups}]:</b>\n\n`;
 
         for (const topup of topups) {
@@ -904,11 +907,14 @@ async function showTopupHistory(ctx) {
             const txid = generateTXID(topup.id);
             const formattedDate = formatDate(topup.created_at);
 
-            text += `💸 Пополнение #${topup.id} (${statusText}):\n`;
+            text += `🌼 Пополнение #${topup.id} (${statusText}):\n`;
             text += `- Сумма: ${topup.amount.toLocaleString('ru-RU')} ₽\n`;
             text += `- TXID: ${txid}\n`;
             text += `- Дата: ${formattedDate}\n\n`;
         }
+
+        console.log('[UserHandlers] Сформированный текст:', text);
+        console.log('[UserHandlers] ctx.callbackQuery:', !!ctx.callbackQuery);
 
         if (ctx.callbackQuery) {
             try {
@@ -921,7 +927,9 @@ async function showTopupHistory(ctx) {
                         ]
                     }
                 });
+                console.log('[UserHandlers] Сообщение успешно отредактировано');
             } catch (error) {
+                console.error('[UserHandlers] Ошибка при редактировании сообщения:', error);
                 await ctx.reply(text, {
                     parse_mode: 'HTML',
                     reply_markup: {
@@ -930,6 +938,7 @@ async function showTopupHistory(ctx) {
                         ]
                     }
                 });
+                console.log('[UserHandlers] Сообщение отправлено как новое');
             }
         } else {
             await ctx.reply(text, {
@@ -940,6 +949,7 @@ async function showTopupHistory(ctx) {
                     ]
                 }
             });
+            console.log('[UserHandlers] Сообщение отправлено через reply');
         }
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showTopupHistory:', error);
@@ -1008,12 +1018,16 @@ async function getOrdersByUser(chatId) {
 async function getTopupsByUser(chatId) {
     const { database } = await import('../database/db.js');
     try {
-        return await database.all(
+        console.log('[UserHandlers] Запрос пополнений для пользователя:', chatId);
+        const topups = await database.all(
             'SELECT * FROM topups WHERE user_chat_id = ? ORDER BY created_at DESC LIMIT 20',
             [chatId]
         );
+        console.log('[UserHandlers] Получено пополнений:', topups.length);
+        return topups;
     } catch (error) {
         console.error('[UserHandlers] Ошибка при получении истории пополнений:', error);
+        console.error('[UserHandlers] Stack trace:', error.stack);
         return [];
     }
 }
