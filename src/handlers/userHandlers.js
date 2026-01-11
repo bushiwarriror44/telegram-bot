@@ -306,8 +306,8 @@ export function setupUserHandlers(bot) {
         const methodId = parseInt(ctx.match[1]);
         const amount = parseFloat(ctx.match[2]);
         await ctx.answerCbQuery();
-        // Показываем реквизиты для ТРАНСГРАН
-        await showTopupMethod(ctx, methodId, amount);
+        // Показываем реквизиты для ТРАНСГРАН (skipWarning = true, чтобы не показывать предупреждение снова)
+        await showTopupMethod(ctx, methodId, amount, true);
     });
 
     // Обработка отмены ТРАНСГРАН
@@ -879,7 +879,7 @@ async function showTopupMenu(ctx) {
 }
 
 // Показ реквизитов для выбранного метода пополнения
-async function showTopupMethod(ctx, methodId, amount = null) {
+async function showTopupMethod(ctx, methodId, amount = null, skipWarning = false) {
     try {
         const method = await paymentService.getMethodById(methodId);
         if (!method) {
@@ -917,8 +917,8 @@ async function showTopupMethod(ctx, methodId, amount = null) {
             return;
         }
 
-        // Проверяем, является ли метод ТРАНСГРАН
-        if (method.name === 'ТРАНСГРАН' && amount !== null) {
+        // Проверяем, является ли метод ТРАНСГРАН (только если предупреждение еще не было показано)
+        if (method.name === 'ТРАНСГРАН' && amount !== null && !skipWarning) {
             // Показываем предупреждение для ТРАНСГРАН
             const warningText = `⚠️ Оплата на реквизиты другой страны (СНГ).\nВы точно хотите продолжить?`;
 
