@@ -75,6 +75,52 @@ export function registerTextHandlers(bot) {
             return next();
         }
 
+        // Список админских кнопок reply keyboard - пропускаем их через next(),
+        // чтобы bot.hears() мог их обработать (с иконками и без)
+        const adminButtons = [
+            'Города', '📕 Города',
+            'Прив. сообщение',
+            'Районы', '📗 Районы',
+            'Товар', '📦 Товар',
+            'Фасовки', '🏷️ Фасовки',
+            'Пользователи', '👥 Пользователи',
+            'Рассылка', '✉️ Рассылка',
+            'Валюта', '💱 Валюта',
+            'Реквизиты оплаты', '💳 Реквизиты оплаты',
+            'Кнопки', '🔲 Кнопки',
+            'Карты', '💳 Карты',
+            'Настройки', '⚙️ Настройки',
+            'Выход из админ-панели'
+        ];
+
+        // Если это админская кнопка и пользователь не в режиме редактирования, пропускаем через next()
+        if (adminButtons.includes(ctx.message.text)) {
+            // Проверяем, не находится ли пользователь в каком-либо режиме редактирования
+            const isInEditMode =
+                welcomeEditMode.has(ctx.from.id) ||
+                iconEditMode.has(ctx.from.id) ||
+                referralDiscountEditMode.has(ctx.from.id) ||
+                storefrontNameEditMode.has(ctx.from.id) ||
+                currencyEditMode.has(ctx.from.id) ||
+                importPaymentMode.has(ctx.from.id) ||
+                importProductMode.has(ctx.from.id) ||
+                databaseImportMode.has(ctx.from.id) ||
+                menuButtonEditMode.has(ctx.from.id) ||
+                promocodeAddMode.has(ctx.from.id) ||
+                promocodeAssignMode.has(ctx.from.id) ||
+                productImageUploadMode.has(ctx.from.id) ||
+                channelBindMode.has(ctx.from.id) ||
+                reviewCreateMode.has(ctx.from.id) ||
+                reviewImportMode.has(ctx.from.id) ||
+                adminReplyMode.has(ctx.from.id) ||
+                cardAddMode.has(ctx.from.id);
+
+            if (!isInEditMode) {
+                console.log('[AdminHandlers] bot.on(text): Пропуск админской кнопки (передаем дальше через next()):', ctx.message.text);
+                return next(); // Позволяем bot.hears() обработать кнопку
+            }
+        }
+
         console.log('[AdminHandlers] Пользователь админ, продолжаем обработку');
 
         // Обработка редактирования приветственного сообщения
@@ -523,7 +569,7 @@ export function registerTextHandlers(bot) {
             try {
                 const cardId = cardAddMode.get(ctx.from.id);
                 const cardNumber = ctx.message.text.trim();
-                
+
                 if (!cardNumber || cardNumber.length === 0) {
                     await ctx.reply('❌ Номер карты не может быть пустым. Попробуйте еще раз.');
                     return;

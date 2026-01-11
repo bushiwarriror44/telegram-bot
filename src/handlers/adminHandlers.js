@@ -33,105 +33,86 @@ export function setupAdminHandlers(bot) {
     console.log('[AdminHandlers] Настройка админ-обработчиков...');
     console.log('[AdminHandlers] Регистрация команды /apanel...');
 
-    // Регистрируем все обработчики из модулей
-    registerAuthHandlers(bot, adminSessions, showAdminPanel, showAdminMenuKeyboard);
-    registerPanelHandlers(bot);
-    registerCitiesHandlers(bot);
-    registerProductsHandlers(bot);
-    registerPaymentsHandlers(bot);
-    registerCardsHandlers(bot);
-    registerPackagingsHandlers(bot);
-    registerChatsHandlers(bot);
-    registerNotificationsHandlers(bot);
-    registerDataHandlers(bot);
-    registerSettingsHandlers(bot);
-    registerPromocodesHandlers(bot);
-    registerReviewsHandlers(bot);
-    registerStatisticsHandlers(bot);
-    registerMenuButtonsHandlers(bot);
-    registerTextHandlers(bot);
-    registerMediaHandlers(bot);
-    registerUsersHandlers(bot);
-
-    // Обработчики для админских reply keyboard кнопок
-    bot.hears('Города', async (ctx) => {
+    // ВАЖНО: Сначала регистрируем bot.hears() для кнопок, чтобы они обрабатывались ДО bot.on('text')
+    // Обработчики для админских reply keyboard кнопок (с иконками)
+    bot.hears(['Города', '📕 Города'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showCitiesAdmin } = await import('./admin/citiesHandler.js');
         await showCitiesAdmin(ctx);
     });
 
-    bot.hears('Прив. сообщение', async (ctx) => {
+    bot.hears(['Прив. сообщение'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showWelcomeSettings } = await import('./admin/settingsHandler.js');
         await showWelcomeSettings(ctx);
     });
 
-    bot.hears('Районы', async (ctx) => {
+    bot.hears(['Районы', '📗 Районы'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showDistrictsAdmin } = await import('./admin/citiesHandler.js');
         await showDistrictsAdmin(ctx);
     });
 
-    bot.hears('Товар', async (ctx) => {
+    bot.hears(['Товар', '📦 Товар'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showProductsAdmin } = await import('./admin/productsHandler.js');
         await showProductsAdmin(ctx);
     });
 
-    bot.hears('Фасовки', async (ctx) => {
+    bot.hears(['Фасовки', '🏷️ Фасовки'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showPackagingsAdmin } = await import('./admin/packagingsHandler.js');
         await showPackagingsAdmin(ctx);
     });
 
-    bot.hears('Пользователи', async (ctx) => {
+    bot.hears(['Пользователи', '👥 Пользователи'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showUsersAdmin } = await import('./admin/usersHandler.js');
         await showUsersAdmin(ctx);
     });
 
-    bot.hears('Рассылка', async (ctx) => {
+    bot.hears(['Рассылка', '✉️ Рассылка'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showNotificationMenu } = await import('./admin/notificationsHandler.js');
         await showNotificationMenu(ctx);
     });
 
-    bot.hears('Валюта', async (ctx) => {
+    bot.hears(['Валюта', '💱 Валюта'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showCurrencySettings } = await import('./admin/settingsHandler.js');
         await showCurrencySettings(ctx);
     });
 
-    bot.hears('Реквизиты оплаты', async (ctx) => {
+    bot.hears(['Реквизиты оплаты', '💳 Реквизиты оплаты'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showPaymentsAdmin } = await import('./admin/paymentsHandler.js');
         await showPaymentsAdmin(ctx);
     });
 
-    bot.hears('Кнопки', async (ctx) => {
+    bot.hears(['Кнопки', '🔲 Кнопки'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showMenuButtonsAdmin } = await import('./admin/menuButtonsHandler.js');
         await showMenuButtonsAdmin(ctx);
     });
 
-    bot.hears('Карты', async (ctx) => {
+    bot.hears(['Карты', '💳 Карты'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showCardsAdmin } = await import('./admin/cardsHandler.js');
         await showCardsAdmin(ctx);
     });
 
-    bot.hears('Настройки', async (ctx) => {
+    bot.hears(['Настройки', '⚙️ Настройки'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showSettingsMenu } = await import('./admin/settingsHandler.js');
@@ -183,6 +164,26 @@ export function setupAdminHandlers(bot) {
             }
         });
     });
+
+    // Теперь регистрируем все остальные обработчики из модулей
+    registerAuthHandlers(bot, adminSessions, showAdminPanel, showAdminMenuKeyboard);
+    registerPanelHandlers(bot);
+    registerCitiesHandlers(bot);
+    registerProductsHandlers(bot);
+    registerPaymentsHandlers(bot);
+    registerCardsHandlers(bot);
+    registerPackagingsHandlers(bot);
+    registerChatsHandlers(bot);
+    registerNotificationsHandlers(bot);
+    registerDataHandlers(bot);
+    registerSettingsHandlers(bot);
+    registerPromocodesHandlers(bot);
+    registerReviewsHandlers(bot);
+    registerStatisticsHandlers(bot);
+    registerMenuButtonsHandlers(bot);
+    registerTextHandlers(bot); // bot.on('text') регистрируется ПОСЛЕДНИМ, чтобы не перехватывать bot.hears()
+    registerMediaHandlers(bot);
+    registerUsersHandlers(bot);
 
     console.log('[AdminHandlers] Админ-обработчики успешно настроены');
     console.log('[AdminHandlers] Зарегистрированы команды: /apanel и другие админ-команды');
