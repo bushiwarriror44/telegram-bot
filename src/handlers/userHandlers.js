@@ -440,6 +440,16 @@ export function setupUserHandlers(bot) {
             return;
         }
 
+        // Обработка нажатия на кнопку метода оплаты (reply keyboard)
+        const paymentMethods = await paymentService.getAllMethods();
+        const clickedPaymentMethod = paymentMethods.find(method => method.name === ctx.message.text);
+
+        if (clickedPaymentMethod) {
+            console.log('[UserHandlers] Нажата кнопка метода оплаты:', clickedPaymentMethod.name);
+            await showTopupMethod(ctx, clickedPaymentMethod.id);
+            return;
+        }
+
         // Обработка динамических кнопок меню
         console.log('[UserHandlers] Проверка динамических кнопок для текста:', ctx.message.text);
         const menuButtons = await menuButtonService.getAll(true);
@@ -709,9 +719,22 @@ async function showTopupMenu(ctx) {
 
         const text = `💵 Выберите способ пополнения:`;
 
-        // Сначала отправляем основное сообщение без кнопок
+        // Создаем reply keyboard с методами оплаты (каждая кнопка в отдельном ряду для 100% ширины)
+        const keyboard = [];
+        for (const method of paymentMethods) {
+            keyboard.push([method.name]); // Каждая кнопка в отдельном ряду
+        }
+
+        const replyMarkup = {
+            keyboard: keyboard,
+            resize_keyboard: true,
+            one_time_keyboard: false
+        };
+
+        // Отправляем сообщение с reply keyboard
         if (ctx.callbackQuery) {
             try {
+                await ctx.answerCbQuery();
                 await ctx.editMessageText(text, {
                     parse_mode: 'HTML'
                 });
@@ -720,27 +743,16 @@ async function showTopupMenu(ctx) {
                     parse_mode: 'HTML'
                 });
             }
+            // Устанавливаем reply keyboard отдельным сообщением
+            await ctx.telegram.sendMessage(ctx.chat.id, 'Выберите способ:', {
+                reply_markup: replyMarkup
+            });
         } else {
             await ctx.reply(text, {
-                parse_mode: 'HTML'
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
             });
         }
-
-        // Затем отправляем отдельное сообщение с кнопками оплаты внизу
-        const keyboard = [];
-        for (const method of paymentMethods) {
-            keyboard.push([{
-                text: method.name,
-                callback_data: `topup_method_${method.id}`
-            }]);
-        }
-
-        // Отправляем сообщение с кнопками (используем минимальный текст)
-        await ctx.reply('•', {
-            reply_markup: {
-                inline_keyboard: keyboard
-            }
-        });
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showTopupMenu:', error);
         if (ctx.callbackQuery) {
@@ -776,16 +788,15 @@ async function showTopupMethod(ctx, methodId, amount = null) {
                 console.error('[UserHandlers] Ошибка при создании предварительной записи о пополнении:', error);
             }
 
-            await ctx.editMessageText(
+            // Убираем reply keyboard с методами оплаты при запросе суммы
+            await ctx.reply(
                 '💰 <b>Пополнение баланса</b>\n\n' +
                 '✏️ Введите сумму пополнения (в рублях):\n\n' +
                 'Например: 1000',
                 {
                     parse_mode: 'HTML',
                     reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '◀️ Отмена', callback_data: 'topup_balance' }]
-                        ]
+                        remove_keyboard: true
                     }
                 }
             );
@@ -855,6 +866,9 @@ async function showTopupMethod(ctx, methodId, amount = null) {
             await notificationService.notifyTopupRequest(ctx.from.id, method.name);
         }
 
+        // Возвращаем обычные кнопки меню после показа реквизитов
+        const menuKeyboard = await getMenuKeyboard();
+
         if (ctx.callbackQuery) {
             try {
                 await ctx.editMessageText(text, {
@@ -873,6 +887,11 @@ async function showTopupMethod(ctx, methodId, amount = null) {
                 reply_markup: replyMarkup
             });
         }
+
+        // Возвращаем обычные кнопки меню
+        await ctx.reply('🕹 Главное меню:', {
+            reply_markup: menuKeyboard
+        });
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showTopupMethod:', error);
         if (ctx.callbackQuery) {
