@@ -12,6 +12,15 @@ export function registerStatisticsHandlers(bot) {
         await showStatisticsAdmin(ctx);
     });
 
+    bot.action('admin_stats', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.answerCbQuery('❌ У вас нет доступа');
+            return;
+        }
+        await ctx.answerCbQuery();
+        await showStatisticsAdmin(ctx);
+    });
+
     bot.hears('Статистика', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showStatisticsAdmin(ctx);

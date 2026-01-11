@@ -85,4 +85,55 @@ export function registerPanelHandlers(bot) {
     bot.action('admin_panel', async (ctx) => {
         await showAdminPanel(ctx);
     });
+
+    // Обработчик для привязки канала
+    bot.action('admin_bind_channel', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.answerCbQuery('❌ У вас нет доступа');
+            return;
+        }
+        
+        await ctx.answerCbQuery();
+        
+        const { settingsService } = await import('../../services/settingsService.js');
+        const currentChannelId = await settingsService.getNotificationChannelId();
+        
+        const text = currentChannelId
+            ? `📢 <b>Привязка Telegram-канала</b>\n\n` +
+            `Текущий канал: <code>${currentChannelId}</code>\n\n` +
+            `Для привязки нового канала:\n` +
+            `1. Добавьте бота в канал как администратора\n` +
+            `2. Отправьте в канал любое сообщение\n` +
+            `3. Перешлите это сообщение сюда\n\n` +
+            `Или отправьте ID канала в формате: <code>-1001234567890</code>`
+            : `📢 <b>Привязка Telegram-канала</b>\n\n` +
+            `Канал не привязан.\n\n` +
+            `Для привязки канала:\n` +
+            `1. Добавьте бота в канал как администратора\n` +
+            `2. Отправьте в канал любое сообщение\n` +
+            `3. Перешлите это сообщение сюда\n\n` +
+            `Или отправьте ID канала в формате: <code>-1001234567890</code>`;
+
+        channelBindMode.set(ctx.from.id, true);
+
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                    ]
+                }
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                    ]
+                }
+            });
+        }
+    });
 }

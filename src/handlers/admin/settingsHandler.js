@@ -140,6 +140,15 @@ export function registerSettingsHandlers(bot) {
         await showCurrencySettings(ctx);
     });
 
+    bot.action('admin_currency', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.answerCbQuery('❌ У вас нет доступа');
+            return;
+        }
+        await ctx.answerCbQuery();
+        await showCurrencySettings(ctx);
+    });
+
     bot.action('edit_currency', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         currencyEditMode.set(ctx.from.id, true);
@@ -151,6 +160,42 @@ export function registerSettingsHandlers(bot) {
             'Для отмены отправьте /cancel',
             { parse_mode: 'HTML' }
         );
+    });
+
+    bot.action('admin_welcome', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.answerCbQuery('❌ У вас нет доступа');
+            return;
+        }
+        await ctx.answerCbQuery();
+        await showWelcomeSettings(ctx);
+    });
+
+    bot.action('admin_icons', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.answerCbQuery('❌ У вас нет доступа');
+            return;
+        }
+        await ctx.answerCbQuery();
+        await showIconsSettings(ctx);
+    });
+
+    bot.action('admin_referrals', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.answerCbQuery('❌ У вас нет доступа');
+            return;
+        }
+        await ctx.answerCbQuery();
+        await showReferralSettings(ctx);
+    });
+
+    bot.action('admin_storefront_name', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.answerCbQuery('❌ У вас нет доступа');
+            return;
+        }
+        await ctx.answerCbQuery();
+        await showStorefrontNameSettings(ctx);
     });
 }
 
