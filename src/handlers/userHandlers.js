@@ -12,6 +12,7 @@ import { statisticsService } from '../services/statisticsService.js';
 import { referralService } from '../services/referralService.js';
 import { orderService } from '../services/orderService.js';
 import { reviewService } from '../services/reviewService.js';
+import { cryptoExchangeService } from '../services/cryptoExchangeService.js';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -274,6 +275,60 @@ export function setupUserHandlers(bot) {
         await showTopupMethod(ctx, methodId);
     });
 
+    // Обработка кнопки "Скопировать реквизиты" для пополнения
+    bot.action(/^copy_topup_(\d+)$/, async (ctx) => {
+        const topupId = parseInt(ctx.match[1]);
+        const { database } = await import('../database/db.js');
+        try {
+            const topup = await database.get(
+                'SELECT t.*, pm.type, pm.network, pa.address, ca.account_number FROM topups t ' +
+                'LEFT JOIN payment_methods pm ON pm.id = t.payment_method_id ' +
+                'LEFT JOIN payment_addresses pa ON pa.payment_method_id = t.payment_method_id AND pa.id = (SELECT id FROM payment_addresses WHERE payment_method_id = t.payment_method_id ORDER BY created_at DESC LIMIT 1) ' +
+                'LEFT JOIN card_accounts ca ON ca.id = (SELECT id FROM card_accounts WHERE enabled = 1 ORDER BY RANDOM() LIMIT 1) ' +
+                'WHERE t.id = ?',
+                [topupId]
+            );
+
+            if (!topup) {
+                await ctx.answerCbQuery('Заявка не найдена');
+                return;
+            }
+
+            const address = topup.type === 'card' ? topup.account_number : topup.address;
+            if (address) {
+                await ctx.answerCbQuery(`Реквизиты: ${address}`);
+                await ctx.reply(`<code>${address}</code>`, { parse_mode: 'HTML' });
+            } else {
+                await ctx.answerCbQuery('Реквизиты не найдены');
+            }
+        } catch (error) {
+            console.error('[UserHandlers] Ошибка при копировании реквизитов:', error);
+            await ctx.answerCbQuery('Ошибка при копировании реквизитов');
+        }
+    });
+
+    // Обработка кнопки "Отменить заявку"
+    bot.action(/^cancel_topup_(\d+)$/, async (ctx) => {
+        const topupId = parseInt(ctx.match[1]);
+        const { database } = await import('../database/db.js');
+        try {
+            await database.run(
+                'UPDATE topups SET status = ? WHERE id = ?',
+                ['cancelled', topupId]
+            );
+            await ctx.answerCbQuery('Заявка отменена');
+            await ctx.editMessageText('❌ Заявка на пополнение отменена.');
+
+            // Возвращаем обычные кнопки меню
+            const menuKeyboard = await getMenuKeyboard();
+            await ctx.reply('🕹 Главное меню:', {
+                reply_markup: menuKeyboard
+            });
+        } catch (error) {
+            console.error('[UserHandlers] Ошибка при отмене заявки:', error);
+            await ctx.answerCbQuery('Ошибка при отмене заявки');
+        }
+    });
 
     // Вернуться к витрине
     bot.action('back_to_storefront', async (ctx) => {
@@ -788,9 +843,8 @@ async function showTopupMethod(ctx, methodId, amount = null) {
 
             // Убираем reply keyboard с методами оплаты при запросе суммы
             await ctx.reply(
-                '💰 <b>Пополнение баланса</b>\n\n' +
-                '✏️ Введите сумму пополнения (в рублях):\n\n' +
-                'Например: 1000',
+                '💵 Введите сумму пополнения (В рублях):\n\n',
+
                 {
                     parse_mode: 'HTML',
                     reply_markup: {
@@ -801,37 +855,9 @@ async function showTopupMethod(ctx, methodId, amount = null) {
             return;
         }
 
-        let text = '';
-        let replyMarkup = {
-            inline_keyboard: [
-                [{ text: '◀️ Назад', callback_data: 'topup_balance' }]
-            ]
-        };
-
-        if (method.type === 'card') {
-            const cardAccount = await cardAccountService.getRandom();
-            if (!cardAccount) {
-                await ctx.reply('Карточные счета не настроены. Обратитесь к администратору.');
-                return;
-            }
-            text = `💳 <b>Пополнение картой</b>\n\n` +
-                `Способ: ${method.name}\n` +
-                `Сумма: ${amount.toLocaleString('ru-RU')} ₽\n\n` +
-                `Реквизиты:\n<b>${cardAccount.name}</b>\n<code>${cardAccount.account_number}</code>`;
-        } else {
-            const address = await paymentService.getAddressForMethod(methodId);
-            if (!address) {
-                await ctx.reply('Адрес для пополнения не найден. Обратитесь к администратору.');
-                return;
-            }
-            text = `💳 <b>Пополнение через ${method.name}</b>\n\n` +
-                `Сумма: ${amount.toLocaleString('ru-RU')} ₽\n` +
-                `Сеть: ${method.network}\n` +
-                `Адрес для пополнения:\n<code>${address.address}</code>`;
-        }
-
         // Обновляем запись о пополнении с указанной суммой (запись уже создана при выборе метода)
         const { database } = await import('../database/db.js');
+        let topupId = null;
         try {
             // Ищем последнюю запись о пополнении для этого пользователя и метода
             const lastTopup = await database.get(
@@ -845,6 +871,7 @@ async function showTopupMethod(ctx, methodId, amount = null) {
                     'UPDATE topups SET amount = ? WHERE id = ?',
                     [amount, lastTopup.id]
                 );
+                topupId = lastTopup.id;
                 console.log('[UserHandlers] Обновлена запись о пополнении ID:', lastTopup.id, 'Сумма:', amount);
             } else if (!lastTopup) {
                 // Если записи нет, создаем новую
@@ -852,12 +879,91 @@ async function showTopupMethod(ctx, methodId, amount = null) {
                     'INSERT INTO topups (user_chat_id, amount, payment_method_id, status) VALUES (?, ?, ?, ?)',
                     [ctx.from.id, amount, methodId, 'pending']
                 );
+                topupId = result.lastID;
                 console.log('[UserHandlers] Создана запись о пополнении с ID:', result.lastID, 'Сумма:', amount);
+            } else {
+                topupId = lastTopup.id;
             }
         } catch (error) {
             console.error('[UserHandlers] Ошибка при обновлении/создании записи о пополнении:', error);
             console.error('[UserHandlers] Stack trace:', error.stack);
         }
+
+        // Генерируем TXID для отображения
+        function generateTXID(id) {
+            const hex = id.toString(16).padStart(8, '0');
+            let hash = id;
+            for (let i = 0; i < 3; i++) {
+                hash = ((hash * 1103515245) + 12345) & 0x7fffffff;
+            }
+            const hashHex = hash.toString(16).padStart(8, '0');
+            const part1 = hex.substring(0, 2);
+            const part2 = hex.substring(2, 6);
+            const part3 = hashHex.substring(0, 4);
+            const part4 = hashHex.substring(4, 8);
+            const part5 = (hex + hashHex).substring(0, 4);
+            const part6 = (hex + hashHex).substring(4, 16);
+            return `gt${part1}-${part2}-${part3}-${part4}-${part5}-${part6}`;
+        }
+
+        let text = '';
+        let cryptoAmount = null;
+        let cryptoSymbol = '';
+
+        if (method.type === 'card') {
+            const cardAccount = await cardAccountService.getRandom();
+            if (!cardAccount) {
+                await ctx.reply('Карточные счета не настроены. Обратитесь к администратору.');
+                return;
+            }
+
+            const txid = topupId ? generateTXID(topupId) : 'None';
+            text = `<b>Создана заявка #${topupId || 'N/A'}</b>\n\n` +
+                `TxID: ${txid}\n\n` +
+                `Переведите: ${amount.toLocaleString('ru-RU')} ₽\n\n` +
+                `<b>Реквизиты для оплаты:</b>\n<code>${cardAccount.account_number}</code>\n\n` +
+                `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
+                `!! Контакт указан в кнопке ниже "Поддержка".\n` +
+                `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
+                `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.`;
+        } else {
+            // Для криптовалюты конвертируем рубли в криптовалюту
+            const conversion = await cryptoExchangeService.convertRublesToCrypto(amount, method.network);
+
+            if (conversion.error) {
+                await ctx.reply(`❌ Ошибка при конвертации: ${conversion.error}`);
+                return;
+            }
+
+            cryptoAmount = conversion.amount;
+            cryptoSymbol = cryptoExchangeService.getCryptoSymbol(method.network);
+            const formattedCryptoAmount = cryptoExchangeService.formatCryptoAmount(cryptoAmount, method.network);
+
+            const address = await paymentService.getAddressForMethod(methodId);
+            if (!address) {
+                await ctx.reply('Адрес для пополнения не найден. Обратитесь к администратору.');
+                return;
+            }
+
+            const txid = topupId ? generateTXID(topupId) : 'None';
+            text = `<b>Создана заявка #${topupId || 'N/A'}</b>\n\n` +
+                `TxID: ${txid}\n\n` +
+                `Переведите: ${formattedCryptoAmount} ${cryptoSymbol}\n\n` +
+                `<b>Реквизиты для оплаты:</b>\n<code>${address.address}</code>\n\n` +
+                `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
+                `!! Контакт указан в кнопке ниже "Поддержка".\n` +
+                `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
+                `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.`;
+        }
+
+        // Создаем кнопки согласно изображению
+        const replyMarkup = {
+            inline_keyboard: [
+                [{ text: 'Поддержка', callback_data: 'help_support' }],
+                [{ text: '📋 Скопировать реквизиты', callback_data: `copy_topup_${topupId || '0'}` }],
+                [{ text: 'Отменить заявку', callback_data: `cancel_topup_${topupId || '0'}` }]
+            ]
+        };
 
         // Отправляем уведомление о выборе реквизита для пополнения баланса
         if (notificationService) {
