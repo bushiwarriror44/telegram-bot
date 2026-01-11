@@ -64,6 +64,7 @@ export class OrderService {
 
     /**
      * Получает неоплаченные заказы пользователя старше указанного времени (в минутах)
+     * Возвращает только заказы, для которых еще не было отправлено уведомление
      */
     async getUnpaidOrdersOlderThan(userChatId, minutes) {
         return await database.all(
@@ -71,9 +72,22 @@ export class OrderService {
              WHERE user_chat_id = ? 
              AND status = 'pending' 
              AND payment_method_id IS NOT NULL
-             AND datetime(created_at, '+' || ? || ' minutes') < datetime('now')`,
+             AND (warning_sent IS NULL OR warning_sent = 0)
+             AND datetime(created_at, '+' || ? || ' minutes') < datetime('now')
+             ORDER BY created_at DESC`,
             [userChatId, minutes]
         );
+    }
+
+    /**
+     * Помечает заказ как обработанный (уведомление отправлено)
+     */
+    async markWarningAsSent(orderId) {
+        await database.run(
+            'UPDATE orders SET warning_sent = 1 WHERE id = ?',
+            [orderId]
+        );
+        return await this.getById(orderId);
     }
 
     /**

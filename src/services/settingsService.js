@@ -155,6 +155,20 @@ export class SettingsService {
   async setStorefrontName(name) {
     return await this.set('storefront_name', name);
   }
+
+  /**
+   * Получает символ валюты
+   */
+  async getCurrencySymbol() {
+    return await this.get('currency_symbol', '₽');
+  }
+
+  /**
+   * Устанавливает символ валюты
+   */
+  async setCurrencySymbol(symbol) {
+    return await this.set('currency_symbol', symbol);
+  }
 }
 
 export const settingsService = new SettingsService();

@@ -1,15 +1,52 @@
 import { database } from '../database/db.js';
+import { cardAccountService } from './cardAccountService.js';
 import crypto from 'crypto';
 
 export class PaymentService {
     async getAllMethods(includeDisabled = false) {
+        // Получаем криптовалютные методы оплаты
         const query = includeDisabled
-            ? 'SELECT * FROM payment_methods ORDER BY name'
-            : 'SELECT * FROM payment_methods WHERE enabled = 1 ORDER BY name';
-        return await database.all(query);
+            ? "SELECT * FROM payment_methods WHERE type = 'crypto' ORDER BY name"
+            : "SELECT * FROM payment_methods WHERE type = 'crypto' AND enabled = 1 ORDER BY name";
+        const cryptoMethods = await database.all(query);
+        
+        // Получаем все активные карточные счета и добавляем их как отдельные методы оплаты
+        const cardAccounts = await cardAccountService.getAll(!includeDisabled);
+        
+        // Преобразуем карточные счета в формат методов оплаты
+        const cardMethods = cardAccounts.map(account => ({
+            id: `card_${account.id}`, // Используем префикс для идентификации
+            name: account.name,
+            type: 'card',
+            network: null,
+            enabled: account.enabled ? 1 : 0,
+            card_account_id: account.id, // Сохраняем ID карточного счета
+            account_number: account.account_number // Сохраняем номер счета для удобства
+        }));
+        
+        // Объединяем криптовалютные методы и карточные счета
+        return [...cryptoMethods, ...cardMethods].sort((a, b) => a.name.localeCompare(b.name));
     }
 
     async getMethodById(id) {
+        // Если это карточный счет (префикс card_), получаем его из card_accounts
+        if (typeof id === 'string' && id.startsWith('card_')) {
+            const cardAccountId = parseInt(id.replace('card_', ''));
+            const cardAccount = await cardAccountService.getById(cardAccountId);
+            if (cardAccount) {
+                return {
+                    id: `card_${cardAccount.id}`,
+                    name: cardAccount.name,
+                    type: 'card',
+                    network: null,
+                    enabled: cardAccount.enabled ? 1 : 0,
+                    card_account_id: cardAccount.id,
+                    account_number: cardAccount.account_number
+                };
+            }
+            return null;
+        }
+        // Иначе получаем из payment_methods
         return await database.get('SELECT * FROM payment_methods WHERE id = ?', [id]);
     }
 

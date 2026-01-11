@@ -20,6 +20,16 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Функция-хелпер для получения символа валюты
+async function getCurrencySymbol() {
+    try {
+        return await settingsService.getCurrencySymbol();
+    } catch (error) {
+        console.error('[UserHandlers] Ошибка при получении символа валюты:', error);
+        return '₽'; // Возвращаем рубль по умолчанию при ошибке
+    }
+}
+
 // Хранит пользователей, которые находятся в режиме поддержки
 const supportMode = new Map();
 // Хранит пользователей, которые вводят промокод (userId -> productId)
@@ -289,9 +299,9 @@ export function setupUserHandlers(bot) {
     });
 
     // Обработка выбора метода оплаты для заказа
-    bot.action(/^pay_order_(\d+)_(\d+)$/, async (ctx) => {
+    bot.action(/^pay_order_(\d+)_(.+)$/, async (ctx) => {
         const orderId = parseInt(ctx.match[1]);
-        const methodId = parseInt(ctx.match[2]);
+        const methodId = decodeURIComponent(ctx.match[2]);
         await showPaymentAddressForOrder(ctx, orderId, methodId);
     });
 
@@ -746,9 +756,10 @@ async function showCabinetMenu(ctx) {
 
         const user = await userService.getByChatId(ctx.from.id);
         const balance = user?.balance || 0;
+        const currencySymbol = await getCurrencySymbol();
 
         const text = `👤 ${ctx.from.username ? '@' + ctx.from.username : 'Не указано'}
-💵 <b>Баланс: ${balance.toFixed(2)} ₽</b>`;
+💵 <b>Баланс: ${balance.toFixed(2)} ${currencySymbol}</b>`;
 
         //         const text = `👤 <b>Личный кабинет</b>
 
@@ -1012,27 +1023,25 @@ async function showTopupMethod(ctx, methodId, amount = null, skipWarning = false
         let cryptoSymbol = '';
 
         if (method.type === 'card') {
-            // Для ТРАНСГРАН используем счет с именем "ТРАНСГРАН", для остальных - случайный
+            // Получаем карточный счет по ID из метода оплаты
             let cardAccount;
-            if (method.name === 'ТРАНСГРАН') {
-                cardAccount = await cardAccountService.getByName('ТРАНСГРАН');
-                // Если не найден, используем случайный
-                if (!cardAccount) {
-                    cardAccount = await cardAccountService.getRandom();
-                }
-            } else {
-                cardAccount = await cardAccountService.getRandom();
+            if (method.card_account_id) {
+                cardAccount = await cardAccountService.getById(method.card_account_id);
+            } else if (method.name) {
+                // Если нет card_account_id, ищем по имени (для обратной совместимости)
+                cardAccount = await cardAccountService.getByName(method.name);
             }
 
             if (!cardAccount) {
-                await ctx.reply('Карточные счета не настроены. Обратитесь к администратору.');
+                await ctx.reply('Карточный счет не найден. Обратитесь к администратору.');
                 return;
             }
 
+            const currencySymbol = await getCurrencySymbol();
             const txid = topupId ? generateTXID(topupId) : 'None';
             text = `<b>Создана заявка #${topupId || 'N/A'}</b>\n\n` +
                 `TxID: <code>${txid}</code>\n\n` +
-                `💵 Переведите: <code>${amount.toLocaleString('ru-RU')}</code> ₽\n\n` +
+                `💵 Переведите: <code>${amount.toLocaleString('ru-RU')}</code> ${currencySymbol}\n\n` +
                 `💳 <b>Реквизиты для оплаты:</b>\n<code>${cardAccount.account_number}</code>\n\n` +
                 `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
                 `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
@@ -1326,13 +1335,14 @@ async function showTopupHistory(ctx) {
 
         let text = `🧾 <b>История пополнений [${totalTopups}/${totalTopups}]:</b>\n\n`;
 
+        const currencySymbol = await getCurrencySymbol();
         for (const topup of topups) {
             const statusText = topup.status === 'pending' ? 'не оплачен' : topup.status === 'completed' ? 'оплачен' : 'отменен';
             const txid = generateTXID(topup.id);
             const formattedDate = formatDate(topup.created_at);
 
             text += `💸 <b>Пополнение #${topup.id} (${statusText}):</b>\n`;
-            text += `<b>Сумма:</b> <code>${topup.amount.toLocaleString('ru-RU')}</code> ₽\n`;
+            text += `<b>Сумма:</b> <code>${topup.amount.toLocaleString('ru-RU')}</code> ${currencySymbol}\n`;
             text += `<b>TXID:</b> <code>${txid}</code>\n`;
             text += `<b>Дата:</b> <code>${formattedDate}</code>\n\n`;
         }
@@ -1613,13 +1623,14 @@ async function showProductsMenu(ctx, districtId) {
         return;
     }
 
+    const currencySymbol = await getCurrencySymbol();
     const keyboard = products.map(product => {
         const packagingLabel = product.packaging_value
             ? ` (${product.packaging_value} кг)`
             : '';
         return [
             {
-                text: `${product.name}${packagingLabel} - ${product.price.toLocaleString('ru-RU')} ₽`,
+                text: `${product.name}${packagingLabel} - ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`,
                 callback_data: `product_${product.id}`
             }
         ];
@@ -1661,10 +1672,11 @@ async function showProductDetails(ctx, productId) {
     const packagingLabel = product.packaging_value ? ` ${product.packaging_value}г` : '';
 
     // Формируем текст в новом формате
+    const currencySymbol = await getCurrencySymbol();
     const text = `Вы выбрали: ${product.name}${packagingLabel}
 
 
-<b>Цена (без комиссии):</b> ${product.price.toLocaleString('ru-RU')} ₽
+<b>Цена (без комиссии):</b> ${product.price.toLocaleString('ru-RU')} ${currencySymbol}
 <b>Описание:</b> ${product.description || 'Описание отсутствует'}
 
 ❔ У вас есть промо-код ❔`;
@@ -1822,7 +1834,8 @@ async function showOrderDetails(ctx, orderId) {
 
         const packagingLabel = order.packaging_value ? ` ${order.packaging_value}г` : '';
         const promocodeText = order.promocode_code ? order.promocode_code : 'Нет';
-        const discountText = order.discount > 0 ? `${order.discount.toLocaleString('ru-RU')} ₽` : '0 ₽';
+        const currencySymbol = await getCurrencySymbol();
+        const discountText = order.discount > 0 ? `${order.discount.toLocaleString('ru-RU')} ${currencySymbol}` : `0 ${currencySymbol}`;
 
         const storefrontName = await settingsService.getStorefrontName();
         const text = `<b>Создан заказ #12${order.id}</b>
@@ -1833,11 +1846,11 @@ async function showOrderDetails(ctx, orderId) {
 
 <b>Товар:</b> ${order.product_name} ${packagingLabel} 
 <b>Кол-во:</b> 1 
-<b>Стоимость:</b> ${order.price.toLocaleString('ru-RU')} ₽ 
+<b>Стоимость:</b> ${order.price.toLocaleString('ru-RU')} ${currencySymbol} 
 
 <b>Промокод:</b> ${promocodeText} 
 <b>Скидка:</b> ${discountText} 
-<b>Финальная сумма:</b> ${order.total_price.toLocaleString('ru-RU')} <b><i>₽</i></b>`;
+<b>Финальная сумма:</b> ${order.total_price.toLocaleString('ru-RU')} <b><i>${currencySymbol}</i></b>`;
 
         // Отправляем детали заказа без кнопок
         await ctx.reply(text, {
@@ -1860,7 +1873,7 @@ async function showOrderDetails(ctx, orderId) {
         }
 
         const keyboard = paymentMethods.map(method => [
-            { text: method.name, callback_data: `pay_order_${order.id}_${method.id}` }
+            { text: method.name, callback_data: `pay_order_${order.id}_${encodeURIComponent(method.id)}` }
         ]);
 
         // Отправляем отдельный блок с выбором способа оплаты
@@ -1889,7 +1902,14 @@ async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     }
 
     // Обновляем метод оплаты в заказе
-    await orderService.updatePaymentMethod(orderId, methodId);
+    // Для карточных счетов сохраняем строковый ID, для криптовалют - числовой
+    const paymentMethodId = typeof methodId === 'string' && methodId.startsWith('card_')
+        ? null // Для карточных счетов не сохраняем в payment_method_id, так как это не метод из payment_methods
+        : (typeof methodId === 'string' ? parseInt(methodId) : methodId);
+
+    if (paymentMethodId !== null) {
+        await orderService.updatePaymentMethod(orderId, paymentMethodId);
+    }
 
     // Отправляем уведомление о выборе способа оплаты
     if (notificationService) {
@@ -1907,35 +1927,36 @@ async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     let paymentDetails = '';
 
     if (method.type === 'card') {
-        // Для ТРАНСГРАН используем счет с именем "ТРАНСГРАН", для остальных - случайный
+        // Получаем карточный счет по ID из метода оплаты
         let cardAccount;
-        if (method.name === 'ТРАНСГРАН') {
-            cardAccount = await cardAccountService.getByName('ТРАНСГРАН');
-            // Если не найден, используем случайный
-            if (!cardAccount) {
-                cardAccount = await cardAccountService.getRandom();
-            }
-        } else {
-            cardAccount = await cardAccountService.getRandom();
+        if (method.card_account_id) {
+            cardAccount = await cardAccountService.getById(method.card_account_id);
+        } else if (method.name) {
+            // Если нет card_account_id, ищем по имени (для обратной совместимости)
+            cardAccount = await cardAccountService.getByName(method.name);
         }
 
         if (!cardAccount) {
-            await ctx.reply('Карточные счета не настроены. Обратитесь к администратору.');
+            await ctx.reply('Карточный счет не найден. Обратитесь к администратору.');
             return;
         }
 
-        paymentDetails = `
-💳 <b>Оплата заказа 12#${order.id}</b>
-
-Метод оплаты: <b>${method.name}</b>
-Сумма: <b>${order.total_price.toLocaleString('ru-RU')} ₽</b>
-
-<b>Реквизиты для оплаты:</b>
-<b>${cardAccount.name}</b>
-<code>${cardAccount.account_number}</code>
-
-После оплаты отправьте скриншот или подтверждение оплаты.
-  `.trim();
+        const currencySymbol = await getCurrencySymbol();
+        const txid = generateTXID(order.id);
+        paymentDetails = `<b>Создана заявка #${order.id}</b>\n\n` +
+            `TxID: <code>${txid}</code>\n\n` +
+            `💵 Переведите: <code>${order.total_price.toLocaleString('ru-RU')}</code> ${currencySymbol}\n\n` +
+            `💳 <b>Реквизиты для оплаты:</b>\n<code>${cardAccount.account_number}</code>\n\n` +
+            `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
+            `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
+            `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
+            `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.\n` +
+            `https://bestchange.com - инструкция 🫱 - https://telegra.ph/INSTRUKCIYA-PO-OPLATE-LTC-CHEREZ-07-16\n` +
+            `@bot_abcobmen_bot - инструкция 🫱 https://telegra.ph/Kak-obmenyat-rubli-na-Litecoin-cherez-obmennik-bota-07-12\n` +
+            `@BTC_MONOPOLY_BTC_BOT- инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-07-12\n` +
+            `https://sova.gg/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-sovagg-07-12\n` +
+            `https://alt-coin.cc/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-alt-coincc-07-12\n` +
+            `https://pocket-exchange.com/ инструкция🫱  https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-pocket-exchangecom-07-12`;
     } else {
         // Для криптовалют получаем адрес
         const address = await paymentService.getPaymentAddress(methodId);
@@ -1945,17 +1966,34 @@ async function showPaymentAddressForOrder(ctx, orderId, methodId) {
             return;
         }
 
-        paymentDetails = `
-💳 <b>Оплата заказа 12#${order.id}</b>
+        // Для криптовалюты конвертируем рубли в криптовалюту
+        const conversion = await cryptoExchangeService.convertRublesToCrypto(order.total_price, method.network);
 
-Метод оплаты: <b>${method.name}</b>
-Сумма: <b>${order.total_price.toLocaleString('ru-RU')} ₽</b>
+        if (conversion.error) {
+            await ctx.reply(`❌ Ошибка при конвертации: ${conversion.error}`);
+            return;
+        }
 
-<b>Адрес для оплаты:</b>
-<code>${address}</code>
+        const cryptoAmount = conversion.amount;
+        const cryptoSymbol = cryptoExchangeService.getCryptoSymbol(method.network);
+        const formattedCryptoAmount = cryptoExchangeService.formatCryptoAmount(cryptoAmount, method.network);
 
-После оплаты отправьте скриншот или подтверждение оплаты.
-        `.trim();
+        const currencySymbol = await getCurrencySymbol();
+        const txid = generateTXID(order.id);
+        paymentDetails = `<b>Создана заявка #${order.id}</b>\n\n` +
+            `TxID: <code>${txid}</code>\n\n` +
+            `💵 Переведите: <code>${formattedCryptoAmount}</code> ${cryptoSymbol}\n\n` +
+            `💳 <b>Реквизиты для оплаты:</b>\n<code>${address}</code>\n\n` +
+            `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
+            `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
+            `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
+            `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.\n` +
+            `https://bestchange.com - инструкция 🫱 - https://telegra.ph/INSTRUKCIYA-PO-OPLATE-LTC-CHEREZ-07-16\n` +
+            `@bot_abcobmen_bot - инструкция 🫱 https://telegra.ph/Kak-obmenyat-rubli-na-Litecoin-cherez-obmennik-bota-07-12\n` +
+            `@BTC_MONOPOLY_BTC_BOT- инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-07-12\n` +
+            `https://sova.gg/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-sovagg-07-12\n` +
+            `https://alt-coin.cc/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-alt-coincc-07-12\n` +
+            `https://pocket-exchange.com/ инструкция🫱  https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-pocket-exchangecom-07-12`;
     }
 
     const text = paymentDetails;
@@ -1997,7 +2035,8 @@ async function showPaymentAddress(ctx, productId, methodId, promocodeId = null) 
         if (promocode) {
             const discount = (product.price * promocode.discount_percent) / 100;
             finalPrice = product.price - discount;
-            discountText = `\n🎁 Промокод <b>${promocode.code}</b>: -${promocode.discount_percent}%\n💰 Скидка: <b>${discount.toLocaleString('ru-RU')} ₽</b>\n`;
+            const currencySymbol = await getCurrencySymbol();
+            discountText = `\n🎁 Промокод <b>${promocode.code}</b>: -${promocode.discount_percent}%\n💰 Скидка: <b>${discount.toLocaleString('ru-RU')} ${currencySymbol}</b>\n`;
         }
     }
 
@@ -2009,19 +2048,42 @@ async function showPaymentAddress(ctx, productId, methodId, promocodeId = null) 
         const referralDiscountPercent = Math.min(referralCount * discountPercent, maxDiscount);
         const referralDiscount = (finalPrice * referralDiscountPercent) / 100;
         finalPrice = finalPrice - referralDiscount;
-        discountText += `\n👥 Реферальная скидка: -${referralDiscountPercent.toFixed(1)}%\n💰 Скидка: <b>${referralDiscount.toLocaleString('ru-RU')} ₽</b>\n`;
+        const currencySymbol = await getCurrencySymbol();
+        discountText += `\n👥 Реферальная скидка: -${referralDiscountPercent.toFixed(1)}%\n💰 Скидка: <b>${referralDiscount.toLocaleString('ru-RU')} ${currencySymbol}</b>\n`;
     }
 
     let paymentText = '';
+    const currencySymbol = await getCurrencySymbol();
 
-    // Если это карта, выбираем случайный карточный счет
+    // Если это карта, получаем карточный счет по ID из метода оплаты
     if (method.type === 'card') {
-        const cardAccount = await cardAccountService.getRandom();
+        let cardAccount;
+        if (method.card_account_id) {
+            cardAccount = await cardAccountService.getById(method.card_account_id);
+        } else if (method.name) {
+            // Если нет card_account_id, ищем по имени (для обратной совместимости)
+            cardAccount = await cardAccountService.getByName(method.name);
+        }
+
         if (!cardAccount) {
-            await ctx.reply('Ошибка: карточные счета не настроены. Обратитесь к администратору.');
+            await ctx.reply('Ошибка: карточный счет не найден. Обратитесь к администратору.');
             return;
         }
-        paymentText = `💳 <b>Оплата картой</b>\n\n📦 Товар: ${product.name}\n💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>${discountText}💰 Итого к оплате: <b>${finalPrice.toLocaleString('ru-RU')} ₽</b>\n\n💳 Карточный счет для оплаты:\n<b>${cardAccount.name}</b>\n<code>${cardAccount.account_number}</code>`;
+        const txid = generateTXID(product.id);
+        paymentText = `<b>Создана заявка #${product.id}</b>\n\n` +
+            `TxID: <code>${txid}</code>\n\n` +
+            `💵 Переведите: <code>${finalPrice.toLocaleString('ru-RU')}</code> ${currencySymbol}\n\n` +
+            `💳 <b>Реквизиты для оплаты:</b>\n<code>${cardAccount.account_number}</code>\n\n` +
+            `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
+            `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
+            `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
+            `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.\n` +
+            `https://bestchange.com - инструкция 🫱 - https://telegra.ph/INSTRUKCIYA-PO-OPLATE-LTC-CHEREZ-07-16\n` +
+            `@bot_abcobmen_bot - инструкция 🫱 https://telegra.ph/Kak-obmenyat-rubli-na-Litecoin-cherez-obmennik-bota-07-12\n` +
+            `@BTC_MONOPOLY_BTC_BOT- инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-07-12\n` +
+            `https://sova.gg/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-sovagg-07-12\n` +
+            `https://alt-coin.cc/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-alt-coincc-07-12\n` +
+            `https://pocket-exchange.com/ инструкция🫱  https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-pocket-exchangecom-07-12`;
     } else {
         // Для криптовалют получаем адрес
         const address = await paymentService.getAddressForMethod(methodId);
@@ -2029,10 +2091,37 @@ async function showPaymentAddress(ctx, productId, methodId, promocodeId = null) 
             await ctx.reply('Ошибка: адрес для оплаты не найден. Обратитесь к администратору.');
             return;
         }
-        paymentText = `💳 <b>Оплата через ${method.name}</b>\n\n📦 Товар: ${product.name}\n💰 Цена: <b>${product.price.toLocaleString('ru-RU')} ₽</b>${discountText}💰 Итого к оплате: <b>${finalPrice.toLocaleString('ru-RU')} ₽</b>\n\n🔐 Адрес для оплаты:\n<code>${address.address}</code>\n\n⚠️ <i>Внимание! Это тестовый адрес. В реальном приложении здесь будет настоящий адрес кошелька.</i>`;
+
+        // Для криптовалюты конвертируем рубли в криптовалюту
+        const conversion = await cryptoExchangeService.convertRublesToCrypto(finalPrice, method.network);
+
+        if (conversion.error) {
+            await ctx.reply(`❌ Ошибка при конвертации: ${conversion.error}`);
+            return;
+        }
+
+        const cryptoAmount = conversion.amount;
+        const cryptoSymbol = cryptoExchangeService.getCryptoSymbol(method.network);
+        const formattedCryptoAmount = cryptoExchangeService.formatCryptoAmount(cryptoAmount, method.network);
+
+        const txid = generateTXID(product.id);
+        paymentText = `<b>Создана заявка #${product.id}</b>\n\n` +
+            `TxID: <code>${txid}</code>\n\n` +
+            `💵 Переведите: <code>${formattedCryptoAmount}</code> ${cryptoSymbol}\n\n` +
+            `💳 <b>Реквизиты для оплаты:</b>\n<code>${address.address}</code>\n\n` +
+            `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
+            `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
+            `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
+            `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.\n` +
+            `https://bestchange.com - инструкция 🫱 - https://telegra.ph/INSTRUKCIYA-PO-OPLATE-LTC-CHEREZ-07-16\n` +
+            `@bot_abcobmen_bot - инструкция 🫱 https://telegra.ph/Kak-obmenyat-rubli-na-Litecoin-cherez-obmennik-bota-07-12\n` +
+            `@BTC_MONOPOLY_BTC_BOT- инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-07-12\n` +
+            `https://sova.gg/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-sovagg-07-12\n` +
+            `https://alt-coin.cc/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-alt-coincc-07-12\n` +
+            `https://pocket-exchange.com/ инструкция🫱  https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-pocket-exchangecom-07-12`;
     }
 
-    const text = `${paymentText}\n\nПосле оплаты средства будут автоматически зачислены на ваш счет.`.trim();
+    const text = paymentText;
 
     // Если использован промокод, помечаем его как использованный
     if (promocodeId) {

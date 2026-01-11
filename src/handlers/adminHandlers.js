@@ -29,6 +29,7 @@ const channelBindMode = new Map(); // userId -> true (режим привязк�
 const reviewCreateMode = new Map(); // userId -> {step: 'product'|'rating'|'text'|'date', data: {}}
 const reviewImportMode = new Map(); // userId -> true (режим загрузки отзывов)
 const storefrontNameMode = new Map(); // userId -> true (режим изменения названия витрины)
+const currencyEditMode = new Map(); // userId -> true (режим изменения валюты)
 
 // Шаблоны товаров по умолчанию
 const PRODUCT_TEMPLATES = [
@@ -225,6 +226,7 @@ ${addressesText}
                     [{ text: '📢 Привязать телеграм-канал', callback_data: 'admin_bind_channel' }],
                     [{ text: '💬 Управление отзывами', callback_data: 'admin_reviews' }],
                     [{ text: '🏪 Изменить название витрины', callback_data: 'admin_storefront_name' }],
+                    [{ text: '💰 Изменить валюту', callback_data: 'admin_currency' }],
                     [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
                 ]
             }
@@ -390,6 +392,28 @@ ${addressesText}
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: '◀️ Отмена', callback_data: 'admin_storefront_name' }]
+                    ]
+                }
+            }
+        );
+    });
+
+    // Настройка валюты
+    bot.action('admin_currency', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showCurrencySettings(ctx);
+    });
+
+    bot.action('edit_currency', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        currencyEditMode.set(ctx.from.id, true);
+        await ctx.answerCbQuery();
+        await ctx.editMessageText(
+            '✏️ Введите новый символ валюты (например: ₽, $, €, ₴, ₸):',
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Отмена', callback_data: 'admin_currency' }]
                     ]
                 }
             }
@@ -1218,12 +1242,13 @@ ${districts.map(d => `• ${d.name}`).join('\n') || 'Районов пока н�
         const city = await cityService.getById(district.city_id);
         const products = await productService.getByDistrictId(districtId);
 
+        const currencySymbol = await settingsService.getCurrencySymbol();
         const text = `
 📦 <b>Товары в районе: ${district.name} (${city.name})</b>
 
 ${products.map(p => {
             const packagingLabel = p.packaging_value ? ` (${p.packaging_value} кг)` : '';
-            return `• ${p.name}${packagingLabel} - ${p.price} ₽`;
+            return `• ${p.name}${packagingLabel} - ${p.price} ${currencySymbol}`;
         }).join('\n') || 'Товаров пока нет'}
     `.trim();
 
@@ -1433,13 +1458,14 @@ ${products.map(p => {
         const district = await districtService.getById(product.district_id);
         const city = await cityService.getById(product.city_id);
 
+        const currencySymbol = await settingsService.getCurrencySymbol();
         const text = `
 ✏️ <b>Редактирование товара: ${product.name}</b>
 
 Текущие данные:
 • Название: ${product.name}
 • Описание: ${product.description || 'Отсутствует'}
-• Цена: ${product.price} ₽
+• Цена: ${product.price} ${currencySymbol}
 • Фасовка: ${product.packaging_value || 'Не указана'} кг
 • Фото: ${product.image_path ? '✅ Загружено' : '❌ Нет фото'}
 
@@ -1977,6 +2003,25 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             } catch (error) {
                 console.error('[AdminHandlers] Ошибка при сохранении приветственного сообщения:', error);
                 await ctx.reply('❌ Ошибка при сохранении приветственного сообщения: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка изменения валюты
+        if (currencyEditMode.has(ctx.from.id)) {
+            try {
+                const newSymbol = ctx.message.text.trim();
+                if (!newSymbol || newSymbol.length === 0) {
+                    await ctx.reply('❌ Символ валюты не может быть пустым. Попробуйте еще раз.');
+                    return;
+                }
+                await settingsService.setCurrencySymbol(newSymbol);
+                currencyEditMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Символ валюты успешно изменен на "${newSymbol}"!`);
+                await showCurrencySettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении символа валюты:', error);
+                await ctx.reply('❌ Ошибка при сохранении символа валюты: ' + error.message);
             }
             return;
         }
@@ -2558,12 +2603,13 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
 
                 // Показываем меню редактирования товара
                 const district = await districtService.getById(product.district_id);
+                const currencySymbol = await settingsService.getCurrencySymbol();
                 await ctx.reply(
                     `✏️ <b>Редактирование товара: ${product.name}</b>\n\n` +
                     `Текущие данные:\n` +
                     `• Название: ${product.name}\n` +
                     `• Описание: ${product.description || 'Отсутствует'}\n` +
-                    `• Цена: ${product.price} ₽\n` +
+                    `• Цена: ${product.price} ${currencySymbol}\n` +
                     `• Фасовка: ${product.packaging_value || 'Не указана'} кг\n` +
                     `• Фото: ✅ Загружено\n\n` +
                     `Выберите действие:`,
@@ -2802,6 +2848,55 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             return;
         }
     });
+
+    // Настройка валюты
+    async function showCurrencySettings(ctx) {
+        if (!isAdmin(ctx.from.id)) {
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
+            } else {
+                await ctx.reply('❌ У вас нет доступа к админ-панели.');
+            }
+            return;
+        }
+
+        const currentSymbol = await settingsService.getCurrencySymbol();
+
+        const text = `
+💰 <b>Настройка валюты</b>
+
+Текущий символ валюты: <b>${currentSymbol}</b>
+
+Выберите действие:
+        `.trim();
+
+        const keyboard = {
+            inline_keyboard: [
+                [{ text: '✏️ Изменить символ валюты', callback_data: 'edit_currency' }],
+                [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+            ]
+        };
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.answerCbQuery();
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    }
 
     // Настройка названия витрины
     async function showStorefrontNameSettings(ctx) {
@@ -3625,8 +3720,9 @@ ${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фа
             statisticsService.getLeastPopularProduct()
         ]);
 
+        const currencySymbol = await settingsService.getCurrencySymbol();
         const formatCurrency = (value) =>
-            `${(value || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
+            `${(value || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${currencySymbol}`;
 
         const mostPopularText = mostPopular
             ? `${mostPopular.name}${mostPopular.packaging_value ? ` (${mostPopular.packaging_value} кг)` : ''} — ${mostPopular.view_count} просмотров`

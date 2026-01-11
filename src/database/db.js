@@ -477,6 +477,22 @@ class Database {
       }
 
       // Если остались товары без района, создаем для них дефолтный
+      
+      // Добавляем поле warning_sent для отслеживания отправленных уведомлений о неоплаченных заказах
+      try {
+        const orderColumns = await this.db.all("PRAGMA table_info(orders)");
+        const hasWarningSent = orderColumns.some((col) => col.name === 'warning_sent');
+        if (!hasWarningSent) {
+          console.log('[DB.init] Добавление колонки warning_sent в таблицу orders...');
+          await this.run('ALTER TABLE orders ADD COLUMN warning_sent INTEGER DEFAULT 0');
+          console.log('[DB.init] Колонка warning_sent добавлена в таблицу orders');
+        }
+      } catch (error) {
+        // Поле уже существует или другая ошибка
+        if (!error.message.includes('duplicate column')) {
+          console.error('[DB.init] Ошибка при добавлении поля warning_sent:', error);
+        }
+      }
       const productsWithoutDistrict = await this.db.all('SELECT DISTINCT city_id FROM products WHERE district_id IS NULL');
       for (const product of productsWithoutDistrict) {
         const defaultDistrict = await this.db.get('SELECT id FROM districts WHERE city_id = ? LIMIT 1', [product.city_id]);

@@ -44,11 +44,12 @@ export class NotificationService {
             // Получаем время на оплату из настроек
             const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes();
 
+            const currencySymbol = await settingsService.getCurrencySymbol();
             const message = `🛒 <b>Новый заказ</b>\n\n` +
                 `📦 Заказ #${order.id}\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `📦 Товар: ${order.product_name}\n` +
-                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ₽\n` +
+                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ${currencySymbol}\n` +
                 `📍 Город: ${order.city_name}, Район: ${order.district_name}\n` +
                 `⏰ Время на оплату: ${paymentTimeMinutes} минут\n` +
                 `📅 Дата: ${new Date(order.created_at).toLocaleString('ru-RU')}\n\n` +
@@ -72,11 +73,12 @@ export class NotificationService {
             const username = user?.username ? `@${user.username}` : `ID: ${order.user_chat_id}`;
             const name = user?.first_name || 'Неизвестно';
 
+            const currencySymbol = await settingsService.getCurrencySymbol();
             const message = `💳 <b>Выбран способ оплаты</b>\n\n` +
                 `📦 Заказ #${order.id}\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `💳 Способ оплаты: ${paymentMethodName}\n` +
-                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ₽\n\n` +
+                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ${currencySymbol}\n\n` +
                 `📊 Статус: <b>Переход к оплате</b>`;
 
             await this.sendToChannel(message);
@@ -96,10 +98,11 @@ export class NotificationService {
             const username = user.username ? `@${user.username}` : `ID: ${userId}`;
             const name = user.first_name || 'Неизвестно';
 
+            const currencySymbol = await settingsService.getCurrencySymbol();
             const message = `💰 <b>Пополнение баланса</b>\n\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `💳 Способ: ${paymentMethodName}\n` +
-                `💰 Сумма: ${amount.toLocaleString('ru-RU')} ₽\n` +
+                `💰 Сумма: ${amount.toLocaleString('ru-RU')} ${currencySymbol}\n` +
                 `📅 Дата: ${new Date().toLocaleString('ru-RU')}\n\n` +
                 `📊 Статус: <b>Ожидает оплаты</b>`;
 
