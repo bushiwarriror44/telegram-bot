@@ -824,12 +824,115 @@ async function showTopupHistory(ctx) {
 
         if (topups.length === 0) {
             const text = `
-💵 <b>История пополнений</b>
+🧾 <b>История пополнений</b>
 
 У вас пока нет пополнений.
             `.trim();
 
-            await ctx.editMessageText(text, {
+            if (ctx.callbackQuery) {
+                try {
+                    await ctx.answerCbQuery();
+                    await ctx.editMessageText(text, {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                            ]
+                        }
+                    });
+                } catch (error) {
+                    await ctx.reply(text, {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                            ]
+                        }
+                    });
+                }
+            } else {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                        ]
+                    }
+                });
+            }
+            return;
+        }
+
+        // Генерируем TXID на основе ID пополнения (формат: gt16-xxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+        function generateTXID(topupId) {
+            // Преобразуем ID в hex
+            const idHex = topupId.toString(16).padStart(8, '0');
+            // Создаем детерминированный UUID-подобный идентификатор на основе ID
+            // Используем простую хеш-функцию для генерации остальных частей
+            let hash = topupId;
+            for (let i = 0; i < 3; i++) {
+                hash = ((hash * 1103515245) + 12345) & 0x7fffffff;
+            }
+            const hashHex = hash.toString(16).padStart(8, '0');
+            // Формат: gt{2 цифры из ID}-{4 hex}-{4 hex}-{4 hex}-{4 hex}-{12 hex}
+            const part1 = idHex.substring(0, 2);
+            const part2 = idHex.substring(2, 6);
+            const part3 = hashHex.substring(0, 4);
+            const part4 = hashHex.substring(4, 8);
+            const part5 = (idHex + hashHex).substring(0, 4);
+            const part6 = (idHex + hashHex).substring(4, 16);
+            return `gt${part1}-${part2}-${part3}-${part4}-${part5}-${part6}`;
+        }
+
+        // Форматируем дату в формат "17:42 08.01.2026"
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            return `${hours}:${minutes} ${day}.${month}.${year}`;
+        }
+
+        // Показываем все пополнения (или можно добавить пагинацию)
+        const totalTopups = topups.length;
+        let text = `🧾 <b>История пополнений [${totalTopups}/${totalTopups}]:</b>\n\n`;
+
+        for (const topup of topups) {
+            const statusText = topup.status === 'pending' ? 'не оплачен' : topup.status === 'completed' ? 'оплачен' : 'отменен';
+            const txid = generateTXID(topup.id);
+            const formattedDate = formatDate(topup.created_at);
+
+            text += `💸 Пополнение #${topup.id} (${statusText}):\n`;
+            text += `- Сумма: ${topup.amount.toLocaleString('ru-RU')} ₽\n`;
+            text += `- TXID: ${txid}\n`;
+            text += `- Дата: ${formattedDate}\n\n`;
+        }
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.answerCbQuery();
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                        ]
+                    }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                        ]
+                    }
+                });
+            }
+        } else {
+            await ctx.reply(text, {
                 parse_mode: 'HTML',
                 reply_markup: {
                     inline_keyboard: [
@@ -837,28 +940,19 @@ async function showTopupHistory(ctx) {
                     ]
                 }
             });
-            return;
         }
-
-        let text = `<b>💵 История пополнений</b>\n\n`;
-        for (let i = 0; i < Math.min(topups.length, 10); i++) {
-            const topup = topups[i];
-            const status = topup.status === 'completed' ? '✅' : topup.status === 'pending' ? '⏳' : '❌';
-            text += `${status} ${topup.amount} ₽\n`;
-            text += `📅 ${new Date(topup.created_at).toLocaleDateString('ru-RU')}\n\n`;
-        }
-
-        await ctx.editMessageText(text, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
-                ]
-            }
-        });
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showTopupHistory:', error);
-        await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.answerCbQuery();
+                await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+            } catch (e) {
+                await ctx.reply('Произошла ошибка. Попробуйте позже.');
+            }
+        } else {
+            await ctx.reply('Произошла ошибка. Попробуйте позже.');
+        }
     }
 }
 
@@ -962,7 +1056,7 @@ async function showStorefrontMenu(ctx) {
         ];
 
         await ctx.reply(
-            'Каталог товаров:',
+            '🛍 Каталог товаров:',
             {
                 reply_markup: {
                     inline_keyboard: keyboard
@@ -993,7 +1087,7 @@ async function showCitiesMenu(ctx) {
     // Добавляем кнопку "Помощь"
     keyboard.push([{ text: '💬 Помощь', callback_data: 'help_support' }]);
     // Добавляем кнопку "Назад к витрине"
-    keyboard.push([{ text: '◀️ Назад', callback_data: 'back_to_storefront' }]);
+    keyboard.push([{ text: 'Вернуться назад', callback_data: 'back_to_storefront' }]);
 
     await ctx.reply(
         '🏙️ Выберите город:',
@@ -1033,12 +1127,12 @@ async function showDistrictsMenu(ctx, cityId) {
         { text: `📍 ${district.name}`, callback_data: `district_${district.id}` }
     ]);
 
-    keyboard.push([{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]);
-    keyboard.push([{ text: '🏠 На главную', callback_data: 'back_to_storefront' }]);
+    keyboard.push([{ text: 'Вернуться назад', callback_data: 'back_to_cities' }]);
+
 
     try {
         await ctx.editMessageText(
-            `🏙️ Город: ${city.name}\n\n📍 Выберите район:`,
+            `Категории товаров: "${city.name}"`,
             {
                 reply_markup: {
                     inline_keyboard: keyboard
