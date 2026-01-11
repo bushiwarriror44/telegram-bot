@@ -24,7 +24,10 @@ import { adminReplyMode } from './chatsHandler.js';
 import { showConversation } from './chatsHandler.js';
 import { channelBindMode } from './panelHandler.js';
 import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
-import { productImageUploadMode } from './productsHandler.js';
+import { productImageUploadMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts } from './productsHandler.js';
+import { mockProducts } from '../../utils/mockData.js';
+import { cityService } from '../../services/cityService.js';
+import { districtService } from '../../services/districtService.js';
 import { cardAddMode, showCardDetails } from './cardsHandler.js';
 
 /**
@@ -57,6 +60,10 @@ export function registerTextHandlers(bot) {
                 storefrontNameEditMode.delete(ctx.from.id);
                 currencyEditMode.delete(ctx.from.id);
                 cardAddMode.delete(ctx.from.id);
+                predefinedProductSelectMode.delete(ctx.from.id);
+                predefinedProductCityMode.delete(ctx.from.id);
+                predefinedProductDistrictMode.delete(ctx.from.id);
+                predefinedProductAddMode.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showAdminPanel(ctx);
                 return; // Не передаем дальше, так как команда обработана
@@ -582,6 +589,156 @@ export function registerTextHandlers(bot) {
             } catch (error) {
                 console.error('[AdminHandlers] Ошибка при добавлении карты:', error);
                 await ctx.reply('❌ Ошибка при добавлении карты: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка ввода города для предустановленного товара
+        if (predefinedProductSelectMode.get(ctx.from.id) === 'city_input') {
+            try {
+                const cityName = ctx.message.text.trim();
+                if (!cityName || cityName.length === 0) {
+                    await ctx.reply('❌ Название города не может быть пустым. Попробуйте еще раз.');
+                    return;
+                }
+
+                // Проверяем, существует ли город
+                let city = await cityService.getByName(cityName);
+                if (!city) {
+                    // Создаем город автоматически
+                    city = await cityService.create(cityName);
+                    // Создаем район "Центральный" для нового города
+                    await districtService.create(city.id, 'Центральный');
+                    await ctx.reply(`✅ Город "${cityName}" создан автоматически!`);
+                }
+
+                const productData = predefinedProductCityMode.get(ctx.from.id);
+                if (!productData) {
+                    await ctx.reply('❌ Ошибка: данные товара не найдены');
+                    predefinedProductSelectMode.delete(ctx.from.id);
+                    return;
+                }
+
+                predefinedProductSelectMode.delete(ctx.from.id);
+                predefinedProductCityMode.delete(ctx.from.id);
+                predefinedProductDistrictMode.set(ctx.from.id, {
+                    ...productData,
+                    cityId: city.id,
+                    cityName: city.name
+                });
+
+                await showDistrictsForPredefinedProduct(ctx, city.id);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при обработке города:', error);
+                await ctx.reply('❌ Ошибка: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка ввода района для предустановленного товара
+        if (predefinedProductSelectMode.get(ctx.from.id) === 'district_input') {
+            try {
+                const districtName = ctx.message.text.trim();
+                if (!districtName || districtName.length === 0) {
+                    await ctx.reply('❌ Название района не может быть пустым. Попробуйте еще раз.');
+                    return;
+                }
+
+                const productData = predefinedProductDistrictMode.get(ctx.from.id);
+                if (!productData || !productData.cityId) {
+                    await ctx.reply('❌ Ошибка: данные товара или города не найдены');
+                    predefinedProductSelectMode.delete(ctx.from.id);
+                    predefinedProductDistrictMode.delete(ctx.from.id);
+                    return;
+                }
+
+                // Проверяем, существует ли район
+                const districts = await districtService.getByCityId(productData.cityId);
+                let district = districts.find(d => d.name.toLowerCase() === districtName.toLowerCase());
+
+                if (!district) {
+                    // Создаем район автоматически
+                    district = await districtService.create(productData.cityId, districtName);
+                    await ctx.reply(`✅ Район "${districtName}" создан автоматически!`);
+                }
+
+                predefinedProductSelectMode.delete(ctx.from.id);
+                await placePredefinedProduct(ctx, district.id, productData);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при обработке района:', error);
+                await ctx.reply('❌ Ошибка: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка добавления нового предустановленного товара
+        if (predefinedProductAddMode.has(ctx.from.id)) {
+            const mode = predefinedProductAddMode.get(ctx.from.id);
+            const text = ctx.message.text.trim();
+
+            if (!text || text.length === 0) {
+                await ctx.reply('❌ Поле не может быть пустым. Попробуйте еще раз.');
+                return;
+            }
+
+            try {
+                if (mode === 'name') {
+                    // Сохраняем название и переходим к описанию
+                    predefinedProductCityMode.set(ctx.from.id, { name: text });
+                    predefinedProductAddMode.set(ctx.from.id, 'description');
+                    await ctx.reply(
+                        '✅ Название сохранено!\n\n' +
+                        'Введите описание товара:\n\n' +
+                        'Для отмены отправьте /cancel'
+                    );
+                } else if (mode === 'description') {
+                    // Сохраняем описание и переходим к цене
+                    const productData = predefinedProductCityMode.get(ctx.from.id);
+                    productData.description = text;
+                    predefinedProductAddMode.set(ctx.from.id, 'price');
+                    await ctx.reply(
+                        '✅ Описание сохранено!\n\n' +
+                        'Введите цену товара (только число):\n\n' +
+                        'Для отмены отправьте /cancel'
+                    );
+                } else if (mode === 'price') {
+                    // Сохраняем цену и добавляем товар в mockProducts
+                    const price = parseFloat(text.replace(',', '.'));
+                    if (isNaN(price) || price <= 0) {
+                        await ctx.reply('❌ Цена должна быть положительным числом. Попробуйте еще раз.');
+                        return;
+                    }
+
+                    const productData = predefinedProductCityMode.get(ctx.from.id);
+                    if (!productData || !productData.name) {
+                        await ctx.reply('❌ Ошибка: данные товара не найдены');
+                        predefinedProductAddMode.delete(ctx.from.id);
+                        predefinedProductCityMode.delete(ctx.from.id);
+                        return;
+                    }
+
+                    // Добавляем товар в mockProducts (в первый доступный город для примера)
+                    const firstCity = Object.keys(mockProducts)[0];
+                    if (firstCity) {
+                        mockProducts[firstCity].push({
+                            name: productData.name,
+                            description: productData.description,
+                            price: price
+                        });
+                    }
+
+                    predefinedProductAddMode.delete(ctx.from.id);
+                    predefinedProductCityMode.delete(ctx.from.id);
+
+                    await ctx.reply(
+                        `✅ Предустановленный товар "${productData.name}" успешно добавлен!\n\n` +
+                        `Он будет доступен в списке предустановленных товаров.`
+                    );
+                    await showPredefinedProducts(ctx);
+                }
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при добавлении предустановленного товара:', error);
+                await ctx.reply('❌ Ошибка: ' + error.message);
             }
             return;
         }

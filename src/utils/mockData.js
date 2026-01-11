@@ -15,7 +15,7 @@ const mockCities = [
   'Казань'
 ];
 
-const mockProducts = {
+export const mockProducts = {
   'Москва': [
     { name: 'iPhone 15 Pro', description: 'Новейший смартфон Apple с процессором A17 Pro', price: 89999 },
     { name: 'MacBook Pro M3', description: 'Мощный ноутбук для работы и творчества', price: 199999 },
@@ -42,6 +42,28 @@ const mockProducts = {
     { name: 'Meta Quest 3', description: 'VR шлем для виртуальной реальности', price: 59999 }
   ]
 };
+
+/**
+ * Получает все предустановленные товары в виде плоского списка
+ */
+export function getMockProducts() {
+  const allProducts = [];
+  for (const cityName in mockProducts) {
+    for (const product of mockProducts[cityName]) {
+      allProducts.push(product);
+    }
+  }
+  // Убираем дубликаты по названию
+  const uniqueProducts = [];
+  const seenNames = new Set();
+  for (const product of allProducts) {
+    if (!seenNames.has(product.name)) {
+      uniqueProducts.push(product);
+      seenNames.add(product.name);
+    }
+  }
+  return uniqueProducts;
+}
 
 // Криптовалютные методы оплаты
 const paymentMethods = [

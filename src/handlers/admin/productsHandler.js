@@ -5,6 +5,9 @@ import { packagingService } from '../../services/packagingService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { isAdmin } from './authHandler.js';
 
+// Импортируем предустановленные товары из mockData
+import { getMockProducts, mockProducts } from '../../utils/mockData.js';
+
 // Шаблоны товаров по умолчанию
 const PRODUCT_TEMPLATES = [
     { id: 1, name: 'Яблоки' },
@@ -14,6 +17,12 @@ const PRODUCT_TEMPLATES = [
 
 // Режим загрузки фото товара
 export const productImageUploadMode = new Map(); // userId -> productId
+
+// Режимы добавления предустановленных товаров
+export const predefinedProductSelectMode = new Map(); // userId -> true (выбор предустановленного товара)
+export const predefinedProductCityMode = new Map(); // userId -> { productName, description, price } (выбор города)
+export const predefinedProductDistrictMode = new Map(); // userId -> { productName, description, price, cityId, cityName } (выбор района)
+export const predefinedProductAddMode = new Map(); // userId -> 'name' | 'description' | 'price' (добавление нового предустановленного товара)
 
 /**
  * Регистрирует обработчики управления товарами
@@ -250,6 +259,113 @@ export function registerProductsHandlers(bot) {
             { parse_mode: 'HTML' }
         );
     });
+
+    // Обработчик для добавления предустановленного товара
+    bot.action('admin_products_add_predefined', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showPredefinedProducts(ctx);
+    });
+
+    // Обработчик для выбора предустановленного товара
+    bot.action(/^admin_predefined_product_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const productIndex = parseInt(ctx.match[1]);
+        const products = getMockProducts();
+        if (productIndex < 0 || productIndex >= products.length) {
+            await ctx.answerCbQuery('❌ Товар не найден');
+            return;
+        }
+        const product = products[productIndex];
+        predefinedProductSelectMode.set(ctx.from.id, true);
+        predefinedProductCityMode.set(ctx.from.id, {
+            name: product.name,
+            description: product.description,
+            price: product.price
+        });
+        await showCitiesForPredefinedProduct(ctx);
+    });
+
+    // Обработчик для выбора города для предустановленного товара
+    bot.action(/^admin_predefined_city_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const cityId = parseInt(ctx.match[1]);
+        const city = await cityService.getById(cityId);
+        if (!city) {
+            await ctx.answerCbQuery('❌ Город не найден');
+            return;
+        }
+        const productData = predefinedProductCityMode.get(ctx.from.id);
+        if (!productData) {
+            await ctx.answerCbQuery('❌ Данные товара не найдены');
+            return;
+        }
+        predefinedProductCityMode.delete(ctx.from.id);
+        predefinedProductDistrictMode.set(ctx.from.id, {
+            ...productData,
+            cityId: city.id,
+            cityName: city.name
+        });
+        await showDistrictsForPredefinedProduct(ctx, city.id);
+    });
+
+    // Обработчик для выбора района для предустановленного товара
+    bot.action(/^admin_predefined_district_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const districtId = parseInt(ctx.match[1]);
+        const district = await districtService.getById(districtId);
+        if (!district) {
+            await ctx.answerCbQuery('❌ Район не найден');
+            return;
+        }
+        const productData = predefinedProductDistrictMode.get(ctx.from.id);
+        if (!productData) {
+            await ctx.answerCbQuery('❌ Данные товара не найдены');
+            return;
+        }
+        await placePredefinedProduct(ctx, districtId, productData);
+    });
+
+    // Обработчик для ввода города вручную
+    bot.action('admin_predefined_city_manual', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        predefinedProductSelectMode.set(ctx.from.id, 'city_input');
+        await ctx.editMessageText(
+            '✏️ <b>Ввод города</b>\n\n' +
+            'Введите название города. Если города нет в списке, он будет создан автоматически.\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    // Обработчик для ввода района вручную
+    bot.action('admin_predefined_district_manual', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const productData = predefinedProductDistrictMode.get(ctx.from.id);
+        if (!productData) {
+            await ctx.answerCbQuery('❌ Данные товара не найдены');
+            return;
+        }
+        predefinedProductSelectMode.set(ctx.from.id, 'district_input');
+        await ctx.editMessageText(
+            '✏️ <b>Ввод района</b>\n\n' +
+            `Город: <b>${productData.cityName}</b>\n\n` +
+            'Введите название района. Если района нет в списке, он будет создан автоматически.\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
+    // Обработчик для добавления нового предустановленного товара
+    bot.action('admin_predefined_add_new', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        predefinedProductAddMode.set(ctx.from.id, 'name');
+        await ctx.editMessageText(
+            '➕ <b>Добавление нового предустановленного товара</b>\n\n' +
+            'Введите название товара:\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
 }
 
 /**
@@ -267,6 +383,7 @@ export async function showProductsAdmin(ctx) {
     const keyboard = cities.map(city => [
         { text: `🏙️ ${city.name}`, callback_data: `admin_products_city_${city.id}` }
     ]);
+    keyboard.push([{ text: '➕ Добавить', callback_data: 'admin_products_add_predefined' }]);
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_panel' }]);
 
     const replyMarkup = { inline_keyboard: keyboard };
@@ -314,6 +431,7 @@ export async function showDistrictsForProducts(ctx, cityId) {
     const keyboard = districts.map(district => [
         { text: `📍 ${district.name}`, callback_data: `admin_products_district_${district.id}` }
     ]);
+    keyboard.push([{ text: '➕ Добавить новый предустановленный товар', callback_data: 'admin_predefined_add_new' }]);
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_products' }]);
 
     if (ctx.callbackQuery) {

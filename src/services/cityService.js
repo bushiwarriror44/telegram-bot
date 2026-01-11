@@ -9,6 +9,10 @@ export class CityService {
     return await database.get('SELECT * FROM cities WHERE id = ?', [id]);
   }
 
+  async getByName(name) {
+    return await database.get('SELECT * FROM cities WHERE name = ?', [name]);
+  }
+
   async create(name) {
     console.log('[CityService.create] Начало создания города, name:', name);
     console.log('[CityService.create] Вызов database.run...');
