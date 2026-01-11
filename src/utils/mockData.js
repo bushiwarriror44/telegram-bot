@@ -226,6 +226,34 @@ export async function initializeMockData() {
       for (const method of cardPaymentMethods) {
         await paymentService.createMethod(method.name, method.network, 'card');
       }
+    } else {
+      // Проверяем и создаем недостающие методы оплаты
+      console.log('[MOCK] Проверка наличия всех методов оплаты...');
+      const existingNames = existingPayments.map(p => p.name);
+
+      // Проверяем криптовалютные методы
+      for (const method of paymentMethods) {
+        if (!existingNames.includes(method.name)) {
+          console.log(`[MOCK] Создание недостающего метода оплаты: ${method.name}`);
+          try {
+            await paymentService.createMethod(method.name, method.network, 'crypto');
+          } catch (error) {
+            console.error(`[MOCK] Ошибка при создании метода ${method.name}:`, error);
+          }
+        }
+      }
+
+      // Проверяем карточные методы
+      for (const method of cardPaymentMethods) {
+        if (!existingNames.includes(method.name)) {
+          console.log(`[MOCK] Создание недостающего метода оплаты: ${method.name}`);
+          try {
+            await paymentService.createMethod(method.name, method.network, 'card');
+          } catch (error) {
+            console.error(`[MOCK] Ошибка при создании метода ${method.name}:`, error);
+          }
+        }
+      }
     }
 
     // Создаем карточные счета если их нет
@@ -242,6 +270,29 @@ export async function initializeMockData() {
       ];
       for (const card of mockCardAccounts) {
         await cardAccountService.create(card.name, card.accountNumber);
+      }
+    } else {
+      // Проверяем и создаем недостающие карточные счета
+      console.log('[MOCK] Проверка наличия всех карточных счетов...');
+      const existingCardNames = existingCards.map(c => c.name);
+      const requiredCards = [
+        { name: 'Альфа-Банк', accountNumber: '5536 9141 2345 6789' },
+        { name: 'Т-Банк', accountNumber: '4111 1111 1111 1111' },
+        { name: 'СБП', accountNumber: '+7 900 123-45-67' },
+        { name: 'Visa', accountNumber: '4532 1234 5678 9010' },
+        { name: 'Mastercard', accountNumber: '5555 5555 5555 4444' },
+        { name: 'ТРАНСГРАН', accountNumber: '4276 1234 5678 9012' }
+      ];
+
+      for (const card of requiredCards) {
+        if (!existingCardNames.includes(card.name)) {
+          console.log(`[MOCK] Создание недостающего карточного счета: ${card.name}`);
+          try {
+            await cardAccountService.create(card.name, card.accountNumber);
+          } catch (error) {
+            console.error(`[MOCK] Ошибка при создании карточного счета ${card.name}:`, error);
+          }
+        }
       }
     }
 
@@ -342,7 +393,8 @@ export async function initializeMockData() {
     { name: 'Т-Банк', accountNumber: '4111 1111 1111 1111' },
     { name: 'СБП', accountNumber: '+7 900 123-45-67' },
     { name: 'Visa', accountNumber: '4532 1234 5678 9010' },
-    { name: 'Mastercard', accountNumber: '5555 5555 5555 4444' }
+    { name: 'Mastercard', accountNumber: '5555 5555 5555 4444' },
+    { name: 'ТРАНСГРАН', accountNumber: '4276 1234 5678 9012' }
   ];
 
   for (const card of mockCardAccounts) {
