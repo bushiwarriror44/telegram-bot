@@ -1891,6 +1891,24 @@ async function showOrderDetails(ctx, orderId) {
     }
 }
 
+// Функция для генерации TXID
+function generateTXID(id) {
+    const idHex = id.toString(16).padStart(8, '0');
+    let hash = 0;
+    for (let i = 0; i < idHex.length; i++) {
+        hash = ((hash * 1103515245) + 12345) & 0x7fffffff;
+    }
+    const hashHex = hash.toString(16).padStart(8, '0');
+    // Формат: gt{2 цифры из ID}-{4 hex}-{4 hex}-{4 hex}-{4 hex}-{12 hex}
+    const part1 = idHex.substring(0, 2);
+    const part2 = idHex.substring(2, 6);
+    const part3 = hashHex.substring(0, 4);
+    const part4 = hashHex.substring(4, 8);
+    const part5 = (idHex + hashHex).substring(0, 4);
+    const part6 = (idHex + hashHex).substring(4, 16);
+    return `gt${part1}-${part2}-${part3}-${part4}-${part5}-${part6}`;
+}
+
 // Показ адреса оплаты для заказа
 async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     const order = await orderService.getById(orderId);

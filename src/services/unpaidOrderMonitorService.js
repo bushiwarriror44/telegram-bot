@@ -103,7 +103,8 @@ export class UnpaidOrderMonitorService {
                         }
                     }
                 } catch (error) {
-                    console.error(`[UnpaidOrderMonitor] Ошибка при проверке пользователя ${chatId}:`, error);
+                    const errorChatId = user?.chat_id || user?.chatId || user?.id || 'unknown';
+                    console.error(`[UnpaidOrderMonitor] Ошибка при проверке пользователя ${errorChatId}:`, error);
                 }
             }
 
