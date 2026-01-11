@@ -488,3 +488,49 @@ async function createMockReviews() {
   console.log('Моковые данные успешно инициализированы!');
 }
 
+// Функция для гарантированного создания ТРАНСГРАН
+export async function ensureTransgranExists() {
+  console.log('[MOCK] Проверка наличия ТРАНСГРАН...');
+
+  try {
+    // Проверяем метод оплаты ТРАНСГРАН
+    const allMethods = await paymentService.getAllMethods(true);
+    const transgranMethod = allMethods.find(m => m.name === 'ТРАНСГРАН');
+
+    if (!transgranMethod) {
+      console.log('[MOCK] Метод оплаты ТРАНСГРАН не найден. Создаю...');
+      try {
+        await paymentService.createMethod('ТРАНСГРАН', 'TRANSGRAN', 'card');
+        console.log('[MOCK] ✅ Метод оплаты ТРАНСГРАН создан!');
+      } catch (error) {
+        console.error('[MOCK] ❌ Ошибка при создании метода ТРАНСГРАН:', error.message);
+      }
+    } else {
+      console.log('[MOCK] Метод оплаты ТРАНСГРАН найден (ID: ' + transgranMethod.id + ')');
+      // Включаем метод, если он отключен
+      if (!transgranMethod.enabled) {
+        console.log('[MOCK] Метод ТРАНСГРАН отключен. Включаю...');
+        await paymentService.enableMethod(transgranMethod.id, true);
+        console.log('[MOCK] ✅ Метод ТРАНСГРАН включен!');
+      }
+    }
+
+    // Проверяем карточный счет ТРАНСГРАН
+    const transgranCard = await cardAccountService.getByName('ТРАНСГРАН');
+    if (!transgranCard) {
+      console.log('[MOCK] Карточный счет ТРАНСГРАН не найден. Создаю...');
+      try {
+        await cardAccountService.create('ТРАНСГРАН', '4276 1234 5678 9012');
+        console.log('[MOCK] ✅ Карточный счет ТРАНСГРАН создан!');
+      } catch (error) {
+        console.error('[MOCK] ❌ Ошибка при создании карточного счета ТРАНСГРАН:', error.message);
+      }
+    } else {
+      console.log('[MOCK] Карточный счет ТРАНСГРАН найден (ID: ' + transgranCard.id + ')');
+    }
+
+    console.log('[MOCK] Проверка ТРАНСГРАН завершена');
+  } catch (error) {
+    console.error('[MOCK] ❌ Критическая ошибка при проверке ТРАНСГРАН:', error);
+  }
+}

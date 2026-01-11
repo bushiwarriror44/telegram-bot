@@ -3,8 +3,9 @@ import { config } from './config/index.js';
 import { database } from './database/db.js';
 import { setupUserHandlers, setAdminSessions } from './handlers/userHandlers.js';
 import { setupAdminHandlers, adminSessions } from './handlers/adminHandlers.js';
-import { initializeMockData } from './utils/mockData.js';
+import { initializeMockData, ensureTransgranExists } from './utils/mockData.js';
 import { menuButtonService } from './services/menuButtonService.js';
+import { UnpaidOrderMonitorService } from './services/unpaidOrderMonitorService.js';
 
 async function startBot() {
   try {
@@ -20,6 +21,11 @@ async function startBot() {
     console.log('[START] Шаг 2: Инициализация моковых данных...');
     await initializeMockData();
     console.log('[START] Шаг 2 завершен: Моковые данные инициализированы');
+    
+    // Гарантированное создание ТРАНСГРАН
+    console.log('[START] Шаг 2.1: Проверка и создание ТРАНСГРАН...');
+    await ensureTransgranExists();
+    console.log('[START] Шаг 2.1 завершен: ТРАНСГРАН проверен/создан');
 
     // Проверка токена бота
     console.log('[START] Шаг 3: Проверка токена бота...');
@@ -156,6 +162,13 @@ async function startBot() {
       // Даем боту время на инициализацию polling
       await new Promise(resolve => setTimeout(resolve, 3000));
       console.log('[START] Бот полностью инициализирован и готов принимать команды');
+      
+      // Запускаем фоновую проверку неоплаченных заказов
+      console.log('[START] Запуск фоновой проверки неоплаченных заказов...');
+      const unpaidOrderMonitor = new UnpaidOrderMonitorService(bot);
+      unpaidOrderMonitor.start();
+      console.log('[START] Фоновая проверка неоплаченных заказов запущена');
+      
       console.log('[START] Попробуйте отправить /start боту в Telegram');
       console.log('[START] Если обновления не приходят, проверьте логи выше');
     } catch (launchError) {
