@@ -1918,15 +1918,49 @@ async function showPaymentAddressForOrder(ctx, orderId, methodId) {
         last_name: ctx.from.last_name
     });
 
-    // Получаем адрес оплаты
-    const address = await paymentService.getPaymentAddress(methodId);
+    // Для карточных методов используем карточные счета, для криптовалют - адреса
+    let paymentDetails = '';
 
-    if (!address) {
-        await ctx.reply('Адрес оплаты не настроен. Обратитесь к администратору.');
-        return;
-    }
+    if (method.type === 'card') {
+        // Для ТРАНСГРАН используем счет с именем "ТРАНСГРАН", для остальных - случайный
+        let cardAccount;
+        if (method.name === 'ТРАНСГРАН') {
+            cardAccount = await cardAccountService.getByName('ТРАНСГРАН');
+            // Если не найден, используем случайный
+            if (!cardAccount) {
+                cardAccount = await cardAccountService.getRandom();
+            }
+        } else {
+            cardAccount = await cardAccountService.getRandom();
+        }
 
-    const text = `
+        if (!cardAccount) {
+            await ctx.reply('Карточные счета не настроены. Обратитесь к администратору.');
+            return;
+        }
+
+        paymentDetails = `
+💳 <b>Оплата заказа 12#${order.id}</b>
+
+Метод оплаты: <b>${method.name}</b>
+Сумма: <b>${order.total_price.toLocaleString('ru-RU')} ₽</b>
+
+<b>Реквизиты для оплаты:</b>
+<b>${cardAccount.name}</b>
+<code>${cardAccount.account_number}</code>
+
+После оплаты отправьте скриншот или подтверждение оплаты.
+        `.trim();
+    } else {
+        // Для криптовалют получаем адрес
+        const address = await paymentService.getPaymentAddress(methodId);
+
+        if (!address) {
+            await ctx.reply('Адрес оплаты не настроен. Обратитесь к администратору.');
+            return;
+        }
+
+        paymentDetails = `
 💳 <b>Оплата заказа 12#${order.id}</b>
 
 Метод оплаты: <b>${method.name}</b>
@@ -1936,7 +1970,10 @@ async function showPaymentAddressForOrder(ctx, orderId, methodId) {
 <code>${address}</code>
 
 После оплаты отправьте скриншот или подтверждение оплаты.
-    `.trim();
+        `.trim();
+    }
+
+    const text = paymentDetails;
 
     await ctx.reply(text, {
         parse_mode: 'HTML',
