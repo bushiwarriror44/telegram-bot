@@ -855,6 +855,12 @@ async function showTopupMethod(ctx, methodId, amount = null) {
             return;
         }
 
+        // Показываем сообщение об ожидании получения реквизитов
+        const waitingMsg = await ctx.reply('🕗 Ожидание получения реквизитов..');
+
+        // Добавляем задержку перед показом блока с заявкой (3 секунды)
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
         // Обновляем запись о пополнении с указанной суммой (запись уже создана при выборе метода)
         const { database } = await import('../database/db.js');
         let topupId = null;
@@ -919,13 +925,19 @@ async function showTopupMethod(ctx, methodId, amount = null) {
 
             const txid = topupId ? generateTXID(topupId) : 'None';
             text = `<b>Создана заявка #${topupId || 'N/A'}</b>\n\n` +
-                `TxID: ${txid}\n\n` +
-                `Переведите: ${amount.toLocaleString('ru-RU')} ₽\n\n` +
-                `<b>Реквизиты для оплаты:</b>\n<code>${cardAccount.account_number}</code>\n\n` +
+                `TxID: <code>${txid}</code>\n\n` +
+                `💵 Переведите: <code>${amount.toLocaleString('ru-RU')}</code> ₽\n\n` +
+                `💳 <b>Реквизиты для оплаты:</b>\n<code>${cardAccount.account_number}</code>\n\n` +
                 `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
-                `!! Контакт указан в кнопке ниже "Поддержка".\n` +
+                `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
                 `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
-                `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.`;
+                `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.\n` +
+                `https://bestchange.com - инструкция 🫱 - https://telegra.ph/INSTRUKCIYA-PO-OPLATE-LTC-CHEREZ-07-16\n` +
+                `@bot_abcobmen_bot - инструкция 🫱 https://telegra.ph/Kak-obmenyat-rubli-na-Litecoin-cherez-obmennik-bota-07-12\n` +
+                `@BTC_MONOPOLY_BTC_BOT- инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-07-12\n` +
+                `https://sova.gg/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-sovagg-07-12\n` +
+                `https://alt-coin.cc/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-alt-coincc-07-12\n` +
+                `https://pocket-exchange.com/ инструкция🫱  https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-pocket-exchangecom-07-12`
         } else {
             // Для криптовалюты конвертируем рубли в криптовалюту
             const conversion = await cryptoExchangeService.convertRublesToCrypto(amount, method.network);
@@ -947,11 +959,11 @@ async function showTopupMethod(ctx, methodId, amount = null) {
 
             const txid = topupId ? generateTXID(topupId) : 'None';
             text = `<b>Создана заявка #${topupId || 'N/A'}</b>\n\n` +
-                `TxID: ${txid}\n\n` +
-                `Переведите: ${formattedCryptoAmount} ${cryptoSymbol}\n\n` +
-                `<b>Реквизиты для оплаты:</b>\n<code>${address.address}</code>\n\n` +
+                `TxID: <code>${txid}</code>\n\n` +
+                `💵 Переведите: <code>${formattedCryptoAmount}</code> ${cryptoSymbol}\n\n` +
+                `💳 <b>Реквизиты для оплаты:</b>\n<code>${address.address}</code>\n\n` +
                 `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
-                `!! Контакт указан в кнопке ниже "Поддержка".\n` +
+                `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
                 `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
                 `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.`;
         }
@@ -969,9 +981,6 @@ async function showTopupMethod(ctx, methodId, amount = null) {
         if (notificationService) {
             await notificationService.notifyTopupRequest(ctx.from.id, method.name);
         }
-
-        // Возвращаем обычные кнопки меню после показа реквизитов
-        const menuKeyboard = await getMenuKeyboard();
 
         if (ctx.callbackQuery) {
             try {
@@ -991,11 +1000,6 @@ async function showTopupMethod(ctx, methodId, amount = null) {
                 reply_markup: replyMarkup
             });
         }
-
-        // Возвращаем обычные кнопки меню
-        await ctx.reply('🕹 Главное меню:', {
-            reply_markup: menuKeyboard
-        });
     } catch (error) {
         console.error('[UserHandlers] ОШИБКА в showTopupMethod:', error);
         if (ctx.callbackQuery) {
