@@ -735,7 +735,8 @@ async function showTopupMenu(ctx) {
             }]);
         }
 
-        await ctx.reply(' ', {
+        // Отправляем сообщение с кнопками (используем невидимый символ для текста)
+        await ctx.reply('\u200B', {
             reply_markup: {
                 inline_keyboard: keyboard
             }
