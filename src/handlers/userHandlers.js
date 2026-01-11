@@ -383,6 +383,35 @@ export function setupUserHandlers(bot) {
             }
 
             topupAmountMode.delete(ctx.from.id);
+
+            // Обновляем запись о пополнении с указанной суммой
+            const { database } = await import('../database/db.js');
+            try {
+                // Ищем последнюю запись о пополнении для этого пользователя и метода
+                const lastTopup = await database.get(
+                    'SELECT * FROM topups WHERE user_chat_id = ? AND payment_method_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
+                    [ctx.from.id, methodId, 'pending']
+                );
+
+                if (lastTopup) {
+                    // Обновляем существующую запись
+                    await database.run(
+                        'UPDATE topups SET amount = ? WHERE id = ?',
+                        [amount, lastTopup.id]
+                    );
+                    console.log('[UserHandlers] Обновлена запись о пополнении ID:', lastTopup.id, 'Сумма:', amount);
+                } else {
+                    // Создаем новую запись, если не нашли
+                    const result = await database.run(
+                        'INSERT INTO topups (user_chat_id, amount, payment_method_id, status) VALUES (?, ?, ?, ?)',
+                        [ctx.from.id, amount, methodId, 'pending']
+                    );
+                    console.log('[UserHandlers] Создана запись о пополнении с ID:', result.lastID, 'Сумма:', amount);
+                }
+            } catch (error) {
+                console.error('[UserHandlers] Ошибка при обновлении/создании записи о пополнении:', error);
+            }
+
             await showTopupMethod(ctx, methodId, amount);
             return;
         }
@@ -730,9 +759,22 @@ async function showTopupMethod(ctx, methodId, amount = null) {
             return;
         }
 
-        // Если сумма не указана, запрашиваем её
+        // Если сумма не указана, запрашиваем её и создаем запись в БД
         if (amount === null) {
             topupAmountMode.set(ctx.from.id, methodId);
+
+            // Создаем запись о пополнении сразу при выборе метода (с суммой 0, потом обновим)
+            const { database } = await import('../database/db.js');
+            try {
+                const result = await database.run(
+                    'INSERT INTO topups (user_chat_id, amount, payment_method_id, status) VALUES (?, ?, ?, ?)',
+                    [ctx.from.id, 0, methodId, 'pending']
+                );
+                console.log('[UserHandlers] Создана предварительная запись о пополнении с ID:', result.lastID);
+            } catch (error) {
+                console.error('[UserHandlers] Ошибка при создании предварительной записи о пополнении:', error);
+            }
+
             await ctx.editMessageText(
                 '💰 <b>Пополнение баланса</b>\n\n' +
                 '✏️ Введите сумму пополнения (в рублях):\n\n' +
@@ -778,16 +820,32 @@ async function showTopupMethod(ctx, methodId, amount = null) {
                 `Адрес для пополнения:\n<code>${address.address}</code>`;
         }
 
-        // Создаем запись о пополнении в базе данных
+        // Обновляем запись о пополнении с указанной суммой (запись уже создана при выборе метода)
         const { database } = await import('../database/db.js');
         try {
-            const result = await database.run(
-                'INSERT INTO topups (user_chat_id, amount, payment_method_id, status) VALUES (?, ?, ?, ?)',
-                [ctx.from.id, amount, methodId, 'pending']
+            // Ищем последнюю запись о пополнении для этого пользователя и метода
+            const lastTopup = await database.get(
+                'SELECT * FROM topups WHERE user_chat_id = ? AND payment_method_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
+                [ctx.from.id, methodId, 'pending']
             );
-            console.log('[UserHandlers] Создана запись о пополнении с ID:', result.lastID, 'Сумма:', amount);
+
+            if (lastTopup && lastTopup.amount === 0) {
+                // Обновляем существующую запись с суммой 0
+                await database.run(
+                    'UPDATE topups SET amount = ? WHERE id = ?',
+                    [amount, lastTopup.id]
+                );
+                console.log('[UserHandlers] Обновлена запись о пополнении ID:', lastTopup.id, 'Сумма:', amount);
+            } else if (!lastTopup) {
+                // Если записи нет, создаем новую
+                const result = await database.run(
+                    'INSERT INTO topups (user_chat_id, amount, payment_method_id, status) VALUES (?, ?, ?, ?)',
+                    [ctx.from.id, amount, methodId, 'pending']
+                );
+                console.log('[UserHandlers] Создана запись о пополнении с ID:', result.lastID, 'Сумма:', amount);
+            }
         } catch (error) {
-            console.error('[UserHandlers] Ошибка при создании записи о пополнении:', error);
+            console.error('[UserHandlers] Ошибка при обновлении/создании записи о пополнении:', error);
             console.error('[UserHandlers] Stack trace:', error.stack);
         }
 
@@ -906,13 +964,16 @@ async function showMyOrders(ctx) {
                 ? '🟢'
                 : '🔴';
 
+            // Текст сообщения с иконкой статуса
+            const messageText = `${statusIcon} ${orderText}`;
+
             const keyboard = [[{
-                text: `${statusIcon} ${orderText}`,
+                text: orderText,
                 callback_data: `view_order_${order.id}`
             }]];
 
-            // Отправляем сообщение только с кнопкой (без текста)
-            await ctx.reply(' ', {
+            // Отправляем сообщение с текстом и кнопкой
+            await ctx.reply(messageText, {
                 reply_markup: {
                     inline_keyboard: keyboard
                 }
