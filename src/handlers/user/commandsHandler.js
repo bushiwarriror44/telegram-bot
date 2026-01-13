@@ -72,16 +72,32 @@ export async function registerCommands(bot, isAdmin) {
             // Проверяем, включена ли капча
             if (config.captchaEnabled) {
                 console.log('[UserHandlers] Капча включена, генерируем капчу...');
-                const captcha = generateCaptcha();
-                saveCaptcha(ctx.from.id, captcha.question, captcha.answer);
+                const captcha = await generateCaptcha();
+                saveCaptcha(ctx.from.id, captcha.imagePath, captcha.answer);
 
-                await ctx.reply(
-                    `🔒 <b>Проверка безопасности</b>\n\n` +
-                    `Решите пример, чтобы продолжить:\n\n` +
-                    `<b>${captcha.question}</b>\n\n` +
-                    `Отправьте только число (ответ).`,
-                    { parse_mode: 'HTML' }
-                );
+                // Отправляем изображение капчи
+                try {
+                    const { readFileSync } = await import('fs');
+                    const imageBuffer = readFileSync(captcha.imagePath);
+                    
+                    await ctx.replyWithPhoto(
+                        { source: imageBuffer },
+                        {
+                            caption: `🔒 <b>Проверка безопасности</b>\n\n` +
+                                `Введите текст с изображения, чтобы продолжить:\n\n` +
+                                `Отправьте только текст (без пробелов).`,
+                            parse_mode: 'HTML'
+                        }
+                    );
+                } catch (error) {
+                    console.error('[UserHandlers] Ошибка при отправке изображения капчи:', error);
+                    await ctx.reply(
+                        `🔒 <b>Проверка безопасности</b>\n\n` +
+                        `Произошла ошибка при генерации капчи. Попробуйте позже.`,
+                        { parse_mode: 'HTML' }
+                    );
+                    return;
+                }
 
                 // Сохраняем параметры start для последующей обработки после прохождения капчи
                 const startParam = ctx.message.text.split(' ')[1];

@@ -55,15 +55,30 @@ export function registerTextHandlers(bot) {
                 }
             } else {
                 // Неверный ответ, генерируем новую капчу
-                const captcha = generateCaptcha();
-                saveCaptcha(ctx.from.id, captcha.question, captcha.answer);
-                await ctx.reply(
-                    `❌ <b>Неверный ответ</b>\n\n` +
-                    `Попробуйте еще раз:\n\n` +
-                    `<b>${captcha.question}</b>\n\n` +
-                    `Отправьте только число (ответ).`,
-                    { parse_mode: 'HTML' }
-                );
+                try {
+                    const captcha = await generateCaptcha();
+                    saveCaptcha(ctx.from.id, captcha.imagePath, captcha.answer);
+                    
+                    const { readFileSync } = await import('fs');
+                    const imageBuffer = readFileSync(captcha.imagePath);
+                    
+                    await ctx.replyWithPhoto(
+                        { source: imageBuffer },
+                        {
+                            caption: `❌ <b>Неверный ответ</b>\n\n` +
+                                `Попробуйте еще раз. Введите текст с изображения:\n\n` +
+                                `Отправьте только текст (без пробелов).`,
+                            parse_mode: 'HTML'
+                        }
+                    );
+                } catch (error) {
+                    console.error('[TextHandler] Ошибка при генерации новой капчи:', error);
+                    await ctx.reply(
+                        `❌ <b>Неверный ответ</b>\n\n` +
+                        `Произошла ошибка при генерации новой капчи. Попробуйте позже.`,
+                        { parse_mode: 'HTML' }
+                    );
+                }
             }
             return; // Прерываем обработку, не передаем дальше
         }

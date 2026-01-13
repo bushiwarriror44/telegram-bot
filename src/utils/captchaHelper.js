@@ -3,7 +3,7 @@
  */
 
 import svgCaptcha from 'svg-captcha';
-import { writeFileSync, unlinkSync, readFileSync } from 'fs';
+import { writeFileSync, unlinkSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -43,7 +43,6 @@ export async function generateCaptcha() {
 
     // Создаем временную директорию, если её нет
     try {
-        const { mkdirSync } = await import('fs');
         mkdirSync(TEMP_DIR, { recursive: true });
     } catch (error) {
         // Директория уже существует или другая ошибка
@@ -180,6 +179,7 @@ export function hasActiveCaptcha(userId) {
 
     // Проверяем время жизни
     if (Date.now() - captcha.timestamp > CAPTCHA_EXPIRY_TIME) {
+        deleteCaptchaImage(userId);
         activeCaptchas.delete(userId);
         return false;
     }
