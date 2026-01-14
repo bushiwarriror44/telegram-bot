@@ -27,6 +27,7 @@ import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
 import { productImageUploadMode, productPackagingEditMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
 import { mockProducts } from '../../utils/mockData.js';
 import { cardAddMode, showCardDetails } from './cardsHandler.js';
+import { formatPackaging } from '../../utils/packagingHelper.js';
 
 /**
  * Регистрирует обработчики текстовых сообщений для админа
@@ -582,7 +583,7 @@ export function registerTextHandlers(bot) {
             try {
                 const productId = productPackagingEditMode.get(ctx.from.id);
                 const product = await productService.getById(productId);
-                
+
                 if (!product) {
                     await ctx.reply('Товар не найден.');
                     productPackagingEditMode.delete(ctx.from.id);
@@ -590,7 +591,7 @@ export function registerTextHandlers(bot) {
                 }
 
                 const packagingValue = parseFloat(ctx.message.text.trim().replace(',', '.'));
-                
+
                 if (isNaN(packagingValue) || packagingValue <= 0) {
                     await ctx.reply('❌ Фасовка должна быть положительным числом. Попробуйте еще раз.\nПример: 0.5, 1, 2.5');
                     return;
@@ -600,7 +601,7 @@ export function registerTextHandlers(bot) {
                 let packaging = await packagingService.getByValue(packagingValue);
                 if (!packaging) {
                     await ctx.reply(
-                        `❌ Фасовка ${packagingValue} кг не найдена.\n\n` +
+                        `❌ Фасовка ${formatPackaging(packagingValue)} не найдена.\n\n` +
                         `Сначала добавьте её в админ-панели (Фасовки).`
                     );
                     return;
@@ -608,29 +609,32 @@ export function registerTextHandlers(bot) {
 
                 // Обновляем фасовку товара
                 await productService.update(product.id, product.name, product.description, product.price, packaging.id, product.image_path);
-                
+
+                // Получаем обновленный товар для отображения правильной фасовки
+                const updatedProduct = await productService.getById(product.id);
+
                 productPackagingEditMode.delete(ctx.from.id);
-                
+
                 // Показываем обновленное меню редактирования товара
                 const district = await districtService.getById(product.district_id);
                 const currencySymbol = await settingsService.getCurrencySymbol();
                 const hasImage = product.image_path ? true : false;
                 const imageStatus = hasImage ? '✅ Загружено' : '❌ Нет фото';
-                const imageInstructions = hasImage 
-                    ? '' 
+                const imageInstructions = hasImage
+                    ? ''
                     : '\n\n📷 <b>Как добавить изображение:</b>\n' +
-                      '1. Нажмите на кнопку "📷 Загрузить/Изменить фото" ниже\n' +
-                      '2. Следуйте инструкциям для загрузки изображения\n' +
-                      '3. Отправьте изображение как фото (не как документ)';
-                
+                    '1. Нажмите на кнопку "📷 Загрузить/Изменить фото" ниже\n' +
+                    '2. Следуйте инструкциям для загрузки изображения\n' +
+                    '3. Отправьте изображение как фото (не как документ)';
+
                 await ctx.reply(
-                    `✅ Фасовка успешно обновлена на ${packagingValue} кг!\n\n` +
+                    `✅ Фасовка успешно обновлена на ${formatPackaging(updatedProduct.packaging_value)}!\n\n` +
                     `✏️ <b>Редактирование товара: ${product.name}</b>\n\n` +
                     `Текущие данные:\n` +
                     `• Название: ${product.name}\n` +
                     `• Описание: ${product.description || 'Отсутствует'}\n` +
                     `• Цена: ${product.price} ${currencySymbol}\n` +
-                    `• Фасовка: ${packagingValue} кг\n` +
+                    `• Фасовка: ${formatPackaging(updatedProduct.packaging_value)}\n` +
                     `• Фото: ${imageStatus}${imageInstructions}\n\n` +
                     `Выберите действие:`,
                     {
@@ -800,14 +804,14 @@ export function registerTextHandlers(bot) {
 
                     productData.price = price;
                     predefinedProductAddMode.set(ctx.from.id, 'packaging');
-                    
+
                     // Получаем список всех фасовок
                     const { packagingService } = await import('../../services/packagingService.js');
                     const packagings = await packagingService.getAll();
-                    const packagingList = packagings.length > 0 
-                        ? packagings.map(p => `• ${p.value} кг`).join('\n')
+                    const packagingList = packagings.length > 0
+                        ? packagings.map(p => `• ${formatPackaging(p.value)}`).join('\n')
                         : 'Фасовки не добавлены. Сначала добавьте фасовки в админ-панели.';
-                    
+
                     await ctx.reply(
                         '✅ Цена сохранена!\n\n' +
                         'Введите фасовку товара (только число, например: 0.5, 1, 2.5):\n\n' +
@@ -835,7 +839,7 @@ export function registerTextHandlers(bot) {
                     let packaging = await packagingService.getByValue(packagingValue);
                     if (!packaging) {
                         await ctx.reply(
-                            `❌ Фасовка ${packagingValue} кг не найдена.\n\n` +
+                            `❌ Фасовка ${formatPackaging(packagingValue)} не найдена.\n\n` +
                             `Сначала добавьте её в админ-панели (Фасовки).`
                         );
                         return;

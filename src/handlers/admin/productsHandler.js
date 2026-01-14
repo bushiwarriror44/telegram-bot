@@ -4,6 +4,7 @@ import { productService } from '../../services/productService.js';
 import { packagingService } from '../../services/packagingService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { isAdmin } from './authHandler.js';
+import { formatPackaging } from '../../utils/packagingHelper.js';
 
 // Импортируем предустановленные товары из mockData
 import { getMockProducts, mockProducts } from '../../utils/mockData.js';
@@ -261,7 +262,7 @@ export function registerProductsHandlers(bot) {
 • Название: ${product.name}
 • Описание: ${product.description || 'Отсутствует'}
 • Цена: ${product.price} ${currencySymbol}
-• Фасовка: ${product.packaging_value || 'Не указана'} кг
+• Фасовка: ${formatPackaging(product.packaging_value)}
 • Фото: ${imageStatus}${imageInstructions}
 
 Выберите действие:
@@ -294,14 +295,14 @@ export function registerProductsHandlers(bot) {
         // Получаем список всех фасовок
         const packagings = await packagingService.getAll();
         const packagingList = packagings.length > 0
-            ? packagings.map(p => `• ${p.value} кг`).join('\n')
+            ? packagings.map(p => `• ${formatPackaging(p.value)}`).join('\n')
             : 'Фасовки не добавлены. Сначала добавьте фасовки в админ-панели.';
 
         await ctx.reply(
             '🏷️ <b>Редактирование фасовки товара</b>\n\n' +
-            `Текущая фасовка: <b>${product.packaging_value || 'Не указана'} кг</b>\n\n` +
+            `Текущая фасовка: <b>${formatPackaging(product.packaging_value)}</b>\n\n` +
             `Доступные фасовки:\n${packagingList}\n\n` +
-            `Введите новую фасовку (только число, например: 0.5, 1, 2.5):\n\n` +
+            `Введите новую фасовку (только число, например: 0.5, 1, 1000):\n\n` +
             `Для отмены отправьте /cancel`,
             { parse_mode: 'HTML' }
         );
@@ -601,7 +602,7 @@ export async function showDistrictProductsAdmin(ctx, districtId) {
 📦 <b>Товары в районе: ${district.name} (${city.name})</b>
 
 ${products.map(p => {
-        const packagingLabel = p.packaging_value ? ` (${p.packaging_value} кг)` : '';
+        const packagingLabel = p.packaging_value ? ` (${formatPackaging(p.packaging_value)})` : '';
         return `• ${p.name}${packagingLabel} - ${p.price} ${currencySymbol}`;
     }).join('\n') || 'Товаров пока нет'}
     `.trim();

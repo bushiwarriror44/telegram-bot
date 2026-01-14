@@ -1,5 +1,6 @@
 import { packagingService } from '../../services/packagingService.js';
 import { isAdmin } from './authHandler.js';
+import { formatPackaging } from '../../utils/packagingHelper.js';
 
 /**
  * Регистрирует обработчики управления фасовками
@@ -52,7 +53,7 @@ export function registerPackagingsHandlers(bot) {
             }
 
             await packagingService.create(value);
-            await ctx.reply(`✅ Фасовка ${value} кг успешно добавлена!`);
+            await ctx.reply(`✅ Фасовка ${formatPackaging(value)} успешно добавлена!`);
             await showPackagingsAdmin(ctx);
         } catch (error) {
             await ctx.reply(`❌ Ошибка: ${error.message}`);
@@ -70,7 +71,7 @@ export async function showPackagingsAdmin(ctx) {
 ⚖️ <b>Управление фасовками</b>
 
 Текущие фасовки:
-${packagings.map((p) => `• ${p.value} кг (id: ${p.id})`).join('\n') || 'Фасовок пока нет'}
+${packagings.map((p) => `• ${formatPackaging(p.value)} (id: ${p.id})`).join('\n') || 'Фасовок пока нет'}
     `.trim();
 
     const replyMarkup = {

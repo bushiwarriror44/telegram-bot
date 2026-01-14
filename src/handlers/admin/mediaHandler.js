@@ -14,6 +14,7 @@ import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
 import { databaseImportMode, showDataMenu } from './dataHandler.js';
 import { channelBindMode } from './panelHandler.js';
 import { settingsService as settingsServiceForChannel } from '../../services/settingsService.js';
+import { formatPackaging } from '../../utils/packagingHelper.js';
 
 /**
  * Регистрирует обработчики медиа (фото и документы)
@@ -75,7 +76,7 @@ export function registerMediaHandlers(bot) {
                     `• Название: ${product.name}\n` +
                     `• Описание: ${product.description || 'Отсутствует'}\n` +
                     `• Цена: ${product.price} ${currencySymbol}\n` +
-                    `• Фасовка: ${product.packaging_value || 'Не указана'} кг\n` +
+                    `• Фасовка: ${formatPackaging(product.packaging_value)}\n` +
                     `• Фото: ✅ Загружено\n\n` +
                     `Выберите действие:`,
                     {

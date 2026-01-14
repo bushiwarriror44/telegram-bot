@@ -15,6 +15,7 @@ import { getCurrencySymbol } from '../../utils/currencyHelper.js';
 import { generateTXID, generatePaymentRequestText } from '../../utils/textFormatters.js';
 import { cardAccountService } from '../../services/cardAccountService.js';
 import { cryptoExchangeService } from '../../services/cryptoExchangeService.js';
+import { formatPackaging } from '../../utils/packagingHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -275,7 +276,7 @@ export async function showProductsMenu(ctx, districtId) {
     const currencySymbol = await getCurrencySymbol();
     const keyboard = products.map(product => {
         const packagingLabel = product.packaging_value
-            ? ` (${product.packaging_value} кг)`
+            ? ` (${formatPackaging(product.packaging_value)})`
             : '';
         return [
             {
@@ -321,7 +322,7 @@ export async function showProductDetails(ctx, productId) {
     const district = await districtService.getById(product.district_id);
     const city = await cityService.getById(product.city_id);
 
-    const packagingLabel = product.packaging_value ? ` ${product.packaging_value}г` : '';
+    const packagingLabel = product.packaging_value ? ` ${formatPackaging(product.packaging_value)}` : '';
 
     // Формируем текст в новом формате
     const currencySymbol = await getCurrencySymbol();

@@ -1,6 +1,7 @@
 import { statisticsService } from '../../services/statisticsService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { isAdmin } from './authHandler.js';
+import { formatPackaging } from '../../utils/packagingHelper.js';
 
 /**
  * Регистрирует обработчики статистики
@@ -69,11 +70,11 @@ export async function showStatisticsAdmin(ctx) {
     const formatCurrency = (value) => `${(value || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${currencySymbol}`;
 
     const mostPopularText = mostPopular
-        ? `${mostPopular.name}${mostPopular.packaging_value ? ` (${mostPopular.packaging_value} кг)` : ''} — ${mostPopular.view_count} просмотров`
+        ? `${mostPopular.name}${mostPopular.packaging_value ? ` (${formatPackaging(mostPopular.packaging_value)})` : ''} — ${mostPopular.view_count} просмотров`
         : 'Нет данных';
 
     const leastPopularText = leastPopular
-        ? `${leastPopular.name}${leastPopular.packaging_value ? ` (${leastPopular.packaging_value} кг)` : ''} — ${leastPopular.view_count} просмотров`
+        ? `${leastPopular.name}${leastPopular.packaging_value ? ` (${formatPackaging(leastPopular.packaging_value)})` : ''} — ${leastPopular.view_count} просмотров`
         : 'Нет данных';
 
     const text = `
