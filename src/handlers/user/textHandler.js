@@ -10,7 +10,7 @@ import { showTopupMethod } from './topupHandler.js';
 import { createOrder } from './catalogHandler.js';
 import { showStorefrontMenu } from './catalogHandler.js';
 import { showCabinetMenu } from './cabinetHandler.js';
-import { showHelpMenu } from './supportHandler.js';
+import { showHelpMenu, showSupportInput } from './supportHandler.js';
 import { showReviews } from './reviewsHandler.js';
 import { config } from '../../config/index.js';
 import { validateCaptcha, hasActiveCaptcha, generateCaptcha, saveCaptcha, getStartParam } from '../../utils/captchaHelper.js';
@@ -97,8 +97,15 @@ export function registerTextHandlers(bot) {
 
             const supportType = supportMode.get(ctx.from.id);
             await supportService.saveUserMessage(ctx.from.id, ctx.message.text, supportType);
-            await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!');
             supportMode.delete(ctx.from.id);
+            
+            // Восстанавливаем обычную клавиатуру меню
+            const { getMenuKeyboard } = await import('../../utils/keyboardHelpers.js');
+            const keyboard = await getMenuKeyboard();
+            
+            await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!', {
+                reply_markup: keyboard
+            });
             return;
         }
 
@@ -227,8 +234,39 @@ export function registerTextHandlers(bot) {
     });
 
     // Обработка кнопки "Поддержка"
-    bot.hears(['💬 Поддержка', 'Поддержка'], async (ctx) => {
+    bot.hears(['💬 Поддержка', 'Поддержка', '🤷‍♂️ Поддержка'], async (ctx) => {
         await showHelpMenu(ctx);
+    });
+
+    // Обработка кнопок выбора типа обращения в поддержке
+    bot.hears(['💬 Вопрос', 'Вопрос'], async (ctx) => {
+        await showSupportInput(ctx, 'question');
+    });
+
+    bot.hears(['🚨 Проблема', 'Проблема'], async (ctx) => {
+        await showSupportInput(ctx, 'problem');
+    });
+
+    bot.hears(['❗ У меня проблема с платежом'], async (ctx) => {
+        await showSupportInput(ctx, 'payment_problem');
+    });
+
+    // Обработка кнопки "Назад" в режиме поддержки
+    bot.hears(['◀️ Назад'], async (ctx) => {
+        // Проверяем, находится ли пользователь в режиме поддержки
+        if (supportMode.has(ctx.from.id)) {
+            // Если пользователь в режиме ввода сообщения, возвращаем к выбору типа
+            supportMode.delete(ctx.from.id);
+            await showHelpMenu(ctx);
+            return;
+        }
+        // Если не в режиме поддержки, восстанавливаем обычную клавиатуру меню
+        const { getMenuKeyboard } = await import('../../utils/keyboardHelpers.js');
+        const keyboard = await getMenuKeyboard();
+        await ctx.reply('🕹 Главное меню:', {
+            reply_markup: keyboard
+        });
+        return;
     });
 
     // Обработка кнопки "Отзывы" (может быть с количеством или без)

@@ -10,22 +10,9 @@ export const supportMode = new Map();
  * @param {Object} bot - Экземпляр Telegraf бота
  */
 export function registerSupportHandlers(bot) {
-    // Обработка кнопки "Помощь"
+    // Обработка кнопки "Помощь" (через callback, если используется inline кнопка)
     bot.action('help_support', async (ctx) => {
         await showHelpMenu(ctx);
-    });
-
-    // Обработка выбора типа обращения
-    bot.action('support_question', async (ctx) => {
-        await showSupportInput(ctx, 'question');
-    });
-
-    bot.action('support_problem', async (ctx) => {
-        await showSupportInput(ctx, 'problem');
-    });
-
-    bot.action('support_payment_problem', async (ctx) => {
-        await showSupportInput(ctx, 'payment_problem');
     });
 }
 
@@ -45,15 +32,18 @@ export async function showHelpMenu(ctx) {
 Выберите тип обращения:
     `.trim();
 
+    // Используем reply keyboard вместо inline keyboard
     await ctx.reply(text, {
         parse_mode: 'HTML',
         reply_markup: {
-            inline_keyboard: [
-                [{ text: '💬 Вопрос', callback_data: 'support_question' }],
-                [{ text: '🚨 Проблема', callback_data: 'support_problem' }],
-                [{ text: '❗ У меня проблема с платежом', callback_data: 'support_payment_problem' }],
-                [{ text: '◀️ Назад', callback_data: 'back_to_cities' }]
-            ]
+            keyboard: [
+                ['💬 Вопрос'],
+                ['🚨 Проблема'],
+                ['❗ У меня проблема с платежом'],
+                ['◀️ Назад']
+            ],
+            resize_keyboard: true,
+            one_time_keyboard: false
         }
     });
 }
@@ -85,12 +75,15 @@ ${typeEmojis[type]} <b>${typeNames[type]}</b>
 Введите ваше сообщение и наша команда постарается как можно быстрее вам помочь.
     `.trim();
 
-    await ctx.editMessageText(text, {
+    // Используем reply keyboard с кнопкой "Назад"
+    await ctx.reply(text, {
         parse_mode: 'HTML',
         reply_markup: {
-            inline_keyboard: [
-                [{ text: '◀️ Назад', callback_data: 'help_support' }]
-            ]
+            keyboard: [
+                ['◀️ Назад']
+            ],
+            resize_keyboard: true,
+            one_time_keyboard: false
         }
     });
 }
