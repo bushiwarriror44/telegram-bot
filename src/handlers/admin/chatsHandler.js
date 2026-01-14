@@ -110,7 +110,28 @@ export async function showChatsList(ctx, limit = null) {
     const keyboard = users.map(user => {
         const userName = user.first_name || user.username || `ID: ${user.chat_id}`;
         const unreadBadge = user.unread_count > 0 ? ` (${user.unread_count})` : '';
-        return [{ text: `👤 ${userName}${unreadBadge}`, callback_data: `admin_chat_${user.chat_id}` }];
+        
+        // Определяем иконку и текст для типа обращения
+        let typeIcon = '💬';
+        let typeText = '';
+        if (user.last_message_type) {
+            switch (user.last_message_type) {
+                case 'question':
+                    typeIcon = '💬';
+                    typeText = 'Вопрос';
+                    break;
+                case 'problem':
+                    typeIcon = '🚨';
+                    typeText = 'Проблема';
+                    break;
+                case 'payment_problem':
+                    typeIcon = '❗';
+                    typeText = 'Платеж';
+                    break;
+            }
+        }
+        
+        return [{ text: `${typeIcon} ${userName}${unreadBadge} [${typeText}]`, callback_data: `admin_chat_${user.chat_id}` }];
     });
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_chats' }]);
 
@@ -143,7 +164,26 @@ export async function showConversation(ctx, userChatId) {
             if (msg.is_from_admin) {
                 conversationText += `👨‍💼 <b>Администратор</b> (${time}):\n${msg.message_text}\n\n`;
             } else {
-                conversationText += `👤 <b>Пользователь</b> (${time}):\n${msg.message_text}\n\n`;
+                // Определяем иконку и текст для типа обращения
+                let typeIcon = '💬';
+                let typeText = 'Вопрос';
+                if (msg.message_type) {
+                    switch (msg.message_type) {
+                        case 'question':
+                            typeIcon = '💬';
+                            typeText = 'Вопрос';
+                            break;
+                        case 'problem':
+                            typeIcon = '🚨';
+                            typeText = 'Проблема';
+                            break;
+                        case 'payment_problem':
+                            typeIcon = '❗';
+                            typeText = 'Проблема с платежом';
+                            break;
+                    }
+                }
+                conversationText += `${typeIcon} <b>Пользователь</b> [${typeText}] (${time}):\n${msg.message_text}\n\n`;
             }
         }
     }

@@ -24,7 +24,7 @@ import { adminReplyMode } from './chatsHandler.js';
 import { showConversation } from './chatsHandler.js';
 import { channelBindMode } from './panelHandler.js';
 import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
-import { productImageUploadMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts } from './productsHandler.js';
+import { productImageUploadMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
 import { mockProducts } from '../../utils/mockData.js';
 import { cardAddMode, showCardDetails } from './cardsHandler.js';
 
@@ -188,13 +188,18 @@ export function registerTextHandlers(bot) {
                 const newIcon = ctx.message.text.trim();
                 // Проверяем, что это одна иконка (эмодзи может быть длиннее из-за суррогатных пар)
                 // Принимаем иконку длиной до 4 символов (для поддержки эмодзи с модификаторами)
-                if (newIcon.length === 0 || newIcon.length > 4) {
-                    await ctx.reply('❌ Пожалуйста, введите только одну иконку (эмодзи или символ).');
+                // Разрешаем пустую строку для отключения иконки
+                if (newIcon.length > 4) {
+                    await ctx.reply('❌ Пожалуйста, введите только одну иконку (эмодзи или символ) или отправьте пустое сообщение для отключения иконки.');
                     return;
                 }
                 await settingsService.setCityIcon(newIcon);
                 iconEditMode.delete(ctx.from.id);
-                await ctx.reply(`✅ Иконка для городов успешно обновлена на: ${newIcon}`);
+                if (newIcon === '') {
+                    await ctx.reply('✅ Иконка для городов отключена. Города будут отображаться без иконки.');
+                } else {
+                    await ctx.reply(`✅ Иконка для городов успешно обновлена на: ${newIcon}`);
+                }
                 await showIconsSettings(ctx);
             } catch (error) {
                 console.error('[AdminHandlers] Ошибка при сохранении иконки городов:', error);

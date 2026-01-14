@@ -13,6 +13,7 @@ export async function getMenuKeyboard() {
 
     const topButtons = [
         ['♻️ Каталог', '⚙️ Мой кабинет'],
+        ['💬 Поддержка'],
         [reviewsButtonText]
     ];
 

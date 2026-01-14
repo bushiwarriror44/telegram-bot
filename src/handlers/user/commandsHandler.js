@@ -3,7 +3,7 @@ import { settingsService } from '../../services/settingsService.js';
 import { referralService } from '../../services/referralService.js';
 import { showMenuKeyboard } from '../../utils/keyboardHelpers.js';
 import { config } from '../../config/index.js';
-import { generateCaptcha, saveCaptcha, getStartParam } from '../../utils/captchaHelper.js';
+import { generateCaptcha, saveCaptcha, getStartParam, validateCaptcha, hasActiveCaptcha } from '../../utils/captchaHelper.js';
 
 /**
  * Вспомогательная функция для обработки команды /start после прохождения капчи
@@ -73,20 +73,23 @@ export async function registerCommands(bot, isAdmin) {
             if (config.captchaEnabled) {
                 console.log('[UserHandlers] Капча включена, генерируем капчу...');
                 const captcha = await generateCaptcha();
-                saveCaptcha(ctx.from.id, captcha.imagePath, captcha.answer);
+                saveCaptcha(ctx.from.id, captcha.imagePath, captcha.answer, captcha.options);
 
                 // Отправляем изображение капчи
                 try {
                     const { readFileSync } = await import('fs');
+                    const { createCaptchaButtons } = await import('../../utils/captchaHelper.js');
                     const imageBuffer = readFileSync(captcha.imagePath);
+                    
+                    const buttons = createCaptchaButtons(captcha.options);
                     
                     await ctx.replyWithPhoto(
                         { source: imageBuffer },
                         {
                             caption: `🔒 <b>Проверка безопасности</b>\n\n` +
-                                `Введите текст с изображения, чтобы продолжить:\n\n` +
-                                `Отправьте только текст (без пробелов).`,
-                            parse_mode: 'HTML'
+                                `Введите текст с изображения или выберите правильный вариант из кнопок ниже:`,
+                            parse_mode: 'HTML',
+                            reply_markup: buttons
                         }
                     );
                 } catch (error) {
@@ -145,4 +148,93 @@ export async function registerCommands(bot, isAdmin) {
         await showCabinetMenu(ctx);
     });
     console.log('[UserHandlers] Обработчик /cabinet зарегистрирован');
+
+    // Обработчик нажатий на кнопки капчи
+    bot.action(/^captcha_answer_(.+)$/, async (ctx) => {
+        try {
+            await ctx.answerCbQuery(); // Подтверждаем нажатие кнопки
+            
+            // Проверяем, есть ли активная капча
+            if (!hasActiveCaptcha(ctx.from.id)) {
+                await ctx.reply('❌ Капча истекла или не найдена. Отправьте /start для получения новой капчи.');
+                return;
+            }
+
+            // Извлекаем ответ из callback_data
+            const userAnswer = ctx.match[1];
+            const isValid = validateCaptcha(ctx.from.id, userAnswer);
+
+            if (isValid) {
+                // Капча пройдена, выполняем логику команды /start
+                try {
+                    // Пытаемся обновить сообщение
+                    await ctx.editMessageCaption('✅ Капча пройдена!');
+                } catch (e) {
+                    // Если не получилось, отправляем новое сообщение
+                    await ctx.reply('✅ Капча пройдена!');
+                }
+                
+                try {
+                    // Выполняем логику start
+                    await processStartCommand(ctx, isAdmin);
+                } catch (error) {
+                    console.error('[CommandsHandler] Ошибка при обработке start после капчи:', error);
+                    await ctx.reply('Произошла ошибка. Попробуйте позже.');
+                }
+            } else {
+                // Неверный ответ, генерируем новую капчу
+                try {
+                    const captcha = await generateCaptcha();
+                    saveCaptcha(ctx.from.id, captcha.imagePath, captcha.answer, captcha.options);
+                    
+                    const { readFileSync } = await import('fs');
+                    const { createCaptchaButtons } = await import('../../utils/captchaHelper.js');
+                    const imageBuffer = readFileSync(captcha.imagePath);
+                    
+                    const buttons = createCaptchaButtons(captcha.options);
+                    
+                    // Отправляем новое сообщение с капчей (более надежно, чем editMessageMedia)
+                    await ctx.replyWithPhoto(
+                        { source: imageBuffer },
+                        {
+                            caption: `❌ <b>Неверный ответ</b>\n\n` +
+                                `Попробуйте еще раз. Введите текст с изображения или выберите правильный вариант из кнопок:`,
+                            parse_mode: 'HTML',
+                            reply_markup: buttons
+                        }
+                    );
+                    
+                    // Пытаемся удалить старое сообщение (не критично, если не получится)
+                    try {
+                        await ctx.deleteMessage();
+                    } catch (e) {
+                        // Игнорируем ошибку, если сообщение уже удалено
+                    }
+                } catch (error) {
+                    console.error('[CommandsHandler] Ошибка при генерации новой капчи:', error);
+                    try {
+                        await ctx.editMessageCaption(
+                            `❌ <b>Неверный ответ</b>\n\n` +
+                            `Произошла ошибка при генерации новой капчи. Попробуйте позже.`,
+                            { parse_mode: 'HTML' }
+                        );
+                    } catch (e) {
+                        await ctx.reply(
+                            `❌ <b>Неверный ответ</b>\n\n` +
+                            `Произошла ошибка при генерации новой капчи. Попробуйте позже.`,
+                            { parse_mode: 'HTML' }
+                        );
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[CommandsHandler] Ошибка при обработке нажатия на кнопку капчи:', error);
+            try {
+                await ctx.answerCbQuery('Произошла ошибка. Попробуйте еще раз.');
+            } catch (e) {
+                // Игнорируем ошибку, если сообщение уже было удалено
+            }
+        }
+    });
+    console.log('[UserHandlers] Обработчик кнопок капчи зарегистрирован');
 }

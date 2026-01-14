@@ -24,8 +24,85 @@ const CAPTCHA_EXPIRY_TIME = 5 * 60 * 1000;
 const TEMP_DIR = join(__dirname, '../../temp');
 
 /**
+ * Генерирует похожие варианты для капчи (неправильные ответы)
+ * @param {string} correctAnswer - Правильный ответ
+ * @param {number} count - Количество вариантов (включая правильный)
+ * @returns {Array<string>} Массив вариантов ответов
+ */
+function generateSimilarOptions(correctAnswer, count = 12) {
+    const options = new Set([correctAnswer.toLowerCase()]);
+    const charPreset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const length = correctAnswer.length;
+
+    // Генерируем варианты разных типов:
+    // 1. Похожие варианты (изменяем 1-2 символа)
+    // 2. Частично похожие (изменяем половину символов)
+    // 3. Полностью случайные варианты
+
+    while (options.size < count) {
+        // Тип 1: Похожий вариант (меняем 1-2 символа)
+        if (options.size < count - 4) {
+            let variant = correctAnswer.split('');
+            const changes = Math.floor(Math.random() * 2) + 1; // 1-2 изменения
+            const positions = new Set();
+
+            while (positions.size < changes) {
+                positions.add(Math.floor(Math.random() * length));
+            }
+
+            for (const pos of positions) {
+                variant[pos] = charPreset[Math.floor(Math.random() * charPreset.length)];
+            }
+
+            const variantStr = variant.join('').toLowerCase();
+            if (variantStr !== correctAnswer.toLowerCase()) {
+                options.add(variantStr);
+            }
+        }
+
+        // Тип 2: Частично похожий (меняем половину символов)
+        if (options.size < count - 2) {
+            let variant = correctAnswer.split('');
+            const changes = Math.floor(length / 2);
+            const positions = new Set();
+
+            while (positions.size < changes) {
+                positions.add(Math.floor(Math.random() * length));
+            }
+
+            for (const pos of positions) {
+                variant[pos] = charPreset[Math.floor(Math.random() * charPreset.length)];
+            }
+
+            const variantStr = variant.join('').toLowerCase();
+            if (variantStr !== correctAnswer.toLowerCase()) {
+                options.add(variantStr);
+            }
+        }
+
+        // Тип 3: Полностью случайный вариант
+        if (options.size < count) {
+            let randomVariant = '';
+            for (let i = 0; i < length; i++) {
+                randomVariant += charPreset[Math.floor(Math.random() * charPreset.length)];
+            }
+            options.add(randomVariant.toLowerCase());
+        }
+    }
+
+    // Преобразуем в массив и перемешиваем
+    const optionsArray = Array.from(options);
+    for (let i = optionsArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [optionsArray[i], optionsArray[j]] = [optionsArray[j], optionsArray[i]];
+    }
+
+    return optionsArray;
+}
+
+/**
  * Генерирует графическую капчу с изображением
- * @returns {Promise<Object>} Объект с путем к изображению и правильным ответом
+ * @returns {Promise<Object>} Объект с путем к изображению, правильным ответом и вариантами
  */
 export async function generateCaptcha() {
     // Генерируем случайную строку для капчи (4-6 символов, только буквы и цифры)
@@ -67,16 +144,24 @@ export async function generateCaptcha() {
         console.warn('[CaptchaHelper] Sharp не установлен, сохраняем как SVG. Установите sharp для лучшей совместимости.');
         const svgPath = imagePath.replace('.png', '.svg');
         writeFileSync(svgPath, captcha.data);
+        const correctAnswer = captcha.text.toLowerCase();
+        const options = generateSimilarOptions(correctAnswer, 12);
+
         return {
             imagePath: svgPath,
-            answer: captcha.text.toLowerCase(), // Приводим к нижнему регистру для сравнения
+            answer: correctAnswer, // Приводим к нижнему регистру для сравнения
+            options: options, // Варианты ответов для кнопок
             isSvg: true
         };
     }
 
+    const correctAnswer = captcha.text.toLowerCase();
+    const options = generateSimilarOptions(correctAnswer, 12);
+
     return {
         imagePath,
-        answer: captcha.text.toLowerCase(), // Приводим к нижнему регистру для сравнения
+        answer: correctAnswer, // Приводим к нижнему регистру для сравнения
+        options: options, // Варианты ответов для кнопок
         isSvg: false
     };
 }
@@ -86,13 +171,47 @@ export async function generateCaptcha() {
  * @param {number} userId - ID пользователя
  * @param {string} imagePath - Путь к изображению капчи
  * @param {string} answer - Правильный ответ
+ * @param {Array<string>} options - Варианты ответов для кнопок
  */
-export function saveCaptcha(userId, imagePath, answer) {
+export function saveCaptcha(userId, imagePath, answer, options = []) {
     activeCaptchas.set(userId, {
         imagePath,
         answer,
+        options,
         timestamp: Date.now()
     });
+}
+
+/**
+ * Создает inline-кнопки с вариантами ответов капчи
+ * @param {Array<string>} options - Массив вариантов ответов
+ * @returns {Object} Объект с inline_keyboard для Telegram
+ */
+export function createCaptchaButtons(options) {
+    const buttons = [];
+    const rows = 3; // 3 ряда
+    const cols = 4; // 4 колонки
+
+    for (let i = 0; i < rows; i++) {
+        const row = [];
+        for (let j = 0; j < cols; j++) {
+            const index = i * cols + j;
+            if (index < options.length) {
+                const option = options[index];
+                row.push({
+                    text: option.toUpperCase(),
+                    callback_data: `captcha_answer_${option}`
+                });
+            }
+        }
+        if (row.length > 0) {
+            buttons.push(row);
+        }
+    }
+
+    return {
+        inline_keyboard: buttons
+    };
 }
 
 /**

@@ -311,10 +311,18 @@ class Database {
         message_text TEXT NOT NULL,
         is_from_admin INTEGER DEFAULT 0,
         admin_chat_id INTEGER,
+        message_type TEXT DEFAULT 'question',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_chat_id) REFERENCES users(chat_id) ON DELETE CASCADE
       )
     `);
+    
+    // Добавляем колонку message_type, если её нет (для существующих БД)
+    try {
+      await this.run(`ALTER TABLE support_messages ADD COLUMN message_type TEXT DEFAULT 'question'`);
+    } catch (error) {
+      // Колонка уже существует, игнорируем ошибку
+    }
 
     // Таблица кнопок меню
     await this.run(`

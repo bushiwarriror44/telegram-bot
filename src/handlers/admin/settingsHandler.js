@@ -59,6 +59,7 @@ export function registerSettingsHandlers(bot) {
             '✏️ <b>Редактирование иконки для городов</b>\n\n' +
             'Отправьте новую иконку (эмодзи или символ).\n' +
             'Например: 📍, 🏙️, 🏛️, 🗺️ и т.д.\n\n' +
+            'Для отключения иконки отправьте пустое сообщение или используйте кнопку "🚫 Без иконки".\n\n' +
             'Для отмены отправьте /cancel',
             { parse_mode: 'HTML' }
         );
@@ -67,12 +68,28 @@ export function registerSettingsHandlers(bot) {
     bot.action('view_city_icon', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         const currentIcon = await settingsService.getCityIcon();
-        await ctx.reply(
-            '👁️ <b>Текущая иконка для городов:</b>\n\n' +
-            `<b>${currentIcon}</b>\n\n` +
-            `Пример использования: ${currentIcon} Москва`,
-            { parse_mode: 'HTML' }
-        );
+        if (currentIcon === '' || currentIcon === 'NONE') {
+            await ctx.reply(
+                '👁️ <b>Текущая иконка для городов:</b>\n\n' +
+                `<b>❌ Без иконки</b>\n\n` +
+                `Иконка отключена. Города отображаются без иконки.`,
+                { parse_mode: 'HTML' }
+            );
+        } else {
+            await ctx.reply(
+                '👁️ <b>Текущая иконка для городов:</b>\n\n' +
+                `<b>${currentIcon}</b>\n\n` +
+                `Пример использования: ${currentIcon} Москва`,
+                { parse_mode: 'HTML' }
+            );
+        }
+        await showIconsSettings(ctx);
+    });
+
+    bot.action('disable_city_icon', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await settingsService.setCityIcon('');
+        await ctx.answerCbQuery('✅ Иконка отключена');
         await showIconsSettings(ctx);
     });
 
@@ -327,15 +344,17 @@ export async function showWelcomeSettings(ctx) {
  */
 export async function showIconsSettings(ctx) {
     const currentIcon = await settingsService.getCityIcon();
+    const iconDisplay = currentIcon === '' || currentIcon === 'NONE' ? '❌ Без иконки' : currentIcon;
 
     const text = `🎨 <b>Настройка иконок</b>\n\n` +
-        `Текущая иконка для городов: <b>${currentIcon}</b>\n\n` +
+        `Текущая иконка для городов: <b>${iconDisplay}</b>\n\n` +
         `Выберите действие:`;
 
     const keyboard = {
         inline_keyboard: [
             [{ text: '✏️ Изменить иконку городов', callback_data: 'edit_city_icon' }],
             [{ text: '👁️ Просмотреть текущую иконку', callback_data: 'view_city_icon' }],
+            [{ text: '🚫 Без иконки', callback_data: 'disable_city_icon' }],
             [{ text: '◀️ Назад', callback_data: 'admin_settings' }]
         ]
     };

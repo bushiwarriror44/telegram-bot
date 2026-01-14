@@ -173,9 +173,10 @@ export async function showCitiesMenu(ctx) {
 
     // Получаем иконку для городов из настроек
     const cityIcon = await settingsService.getCityIcon();
+    const displayIcon = (cityIcon === '' || cityIcon === 'NONE') ? '' : `${cityIcon} `;
 
     const keyboard = cities.map(city => [
-        { text: `${cityIcon} ${city.name}`, callback_data: `city_${city.id}` }
+        { text: `${displayIcon}${city.name}`, callback_data: `city_${city.id}` }
     ]);
 
     keyboard.push([{ text: 'Вернуться назад', callback_data: 'back_to_storefront' }]);

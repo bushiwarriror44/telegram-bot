@@ -26,10 +26,11 @@ export function registerNavigationHandlers(bot) {
         } catch (error) {
             // Если не удалось изменить сообщение, отправляем новое
             const cityIcon = await settingsService.getCityIcon();
-            await ctx.reply('🛍 Каталог товаров::', {
+            const displayIcon = (cityIcon === '' || cityIcon === 'NONE') ? '' : `${cityIcon} `;
+            await ctx.reply('🛍 Каталог товаров:', {
                 reply_markup: {
                     inline_keyboard: (await cityService.getAll()).map(city => [
-                        { text: `${cityIcon} ${city.name}`, callback_data: `city_${city.id}` }
+                        { text: `${displayIcon}${city.name}`, callback_data: `city_${city.id}` }
                     ])
                 }
             });

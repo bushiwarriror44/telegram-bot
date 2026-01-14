@@ -3,11 +3,14 @@ import { database } from '../database/db.js';
 export class SupportService {
   /**
    * Сохраняет сообщение от пользователя
+   * @param {number} userChatId - ID пользователя
+   * @param {string} messageText - Текст сообщения
+   * @param {string} type - Тип обращения: 'question', 'problem', 'payment_problem'
    */
-  async saveUserMessage(userChatId, messageText) {
+  async saveUserMessage(userChatId, messageText, type = 'question') {
     const result = await database.run(
-      'INSERT INTO support_messages (user_chat_id, message_text, is_from_admin) VALUES (?, ?, 0)',
-      [userChatId, messageText]
+      'INSERT INTO support_messages (user_chat_id, message_text, is_from_admin, message_type) VALUES (?, ?, 0, ?)',
+      [userChatId, messageText, type]
     );
     return result.lastID;
   }
@@ -47,6 +50,9 @@ export class SupportService {
         (SELECT message_text FROM support_messages 
          WHERE user_chat_id = u.chat_id 
          ORDER BY created_at DESC LIMIT 1) as last_message,
+        (SELECT message_type FROM support_messages 
+         WHERE user_chat_id = u.chat_id 
+         ORDER BY created_at DESC LIMIT 1) as last_message_type,
         (SELECT created_at FROM support_messages 
          WHERE user_chat_id = u.chat_id 
          ORDER BY created_at DESC LIMIT 1) as last_message_time,

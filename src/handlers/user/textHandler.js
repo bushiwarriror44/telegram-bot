@@ -57,18 +57,21 @@ export function registerTextHandlers(bot) {
                 // Неверный ответ, генерируем новую капчу
                 try {
                     const captcha = await generateCaptcha();
-                    saveCaptcha(ctx.from.id, captcha.imagePath, captcha.answer);
+                    saveCaptcha(ctx.from.id, captcha.imagePath, captcha.answer, captcha.options);
                     
                     const { readFileSync } = await import('fs');
+                    const { createCaptchaButtons } = await import('../../utils/captchaHelper.js');
                     const imageBuffer = readFileSync(captcha.imagePath);
+                    
+                    const buttons = createCaptchaButtons(captcha.options);
                     
                     await ctx.replyWithPhoto(
                         { source: imageBuffer },
                         {
                             caption: `❌ <b>Неверный ответ</b>\n\n` +
-                                `Попробуйте еще раз. Введите текст с изображения:\n\n` +
-                                `Отправьте только текст (без пробелов).`,
-                            parse_mode: 'HTML'
+                                `Попробуйте еще раз. Введите текст с изображения или выберите правильный вариант из кнопок:`,
+                            parse_mode: 'HTML',
+                            reply_markup: buttons
                         }
                     );
                 } catch (error) {
@@ -92,7 +95,8 @@ export function registerTextHandlers(bot) {
                 last_name: ctx.from.last_name
             });
 
-            await supportService.saveUserMessage(ctx.from.id, ctx.message.text);
+            const supportType = supportMode.get(ctx.from.id);
+            await supportService.saveUserMessage(ctx.from.id, ctx.message.text, supportType);
             await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!');
             supportMode.delete(ctx.from.id);
             return;
@@ -219,6 +223,11 @@ export function registerTextHandlers(bot) {
     });
 
     bot.hears(['📨 Помощь', 'Помощь'], async (ctx) => {
+        await showHelpMenu(ctx);
+    });
+
+    // Обработка кнопки "Поддержка"
+    bot.hears(['💬 Поддержка', 'Поддержка'], async (ctx) => {
         await showHelpMenu(ctx);
     });
 
