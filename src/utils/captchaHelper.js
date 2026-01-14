@@ -183,9 +183,9 @@ export function saveCaptcha(userId, imagePath, answer, options = []) {
 }
 
 /**
- * Создает inline-кнопки с вариантами ответов капчи
+ * Создает reply keyboard с вариантами ответов капчи
  * @param {Array<string>} options - Массив вариантов ответов
- * @returns {Object} Объект с inline_keyboard для Telegram
+ * @returns {Object} Объект с keyboard для Telegram (reply keyboard)
  */
 export function createCaptchaButtons(options) {
     const buttons = [];
@@ -198,10 +198,7 @@ export function createCaptchaButtons(options) {
             const index = i * cols + j;
             if (index < options.length) {
                 const option = options[index];
-                row.push({
-                    text: option.toUpperCase(),
-                    callback_data: `captcha_answer_${option}`
-                });
+                row.push(option.toUpperCase());
             }
         }
         if (row.length > 0) {
@@ -210,7 +207,9 @@ export function createCaptchaButtons(options) {
     }
 
     return {
-        inline_keyboard: buttons
+        keyboard: buttons,
+        resize_keyboard: true,
+        one_time_keyboard: false
     };
 }
 
