@@ -244,12 +244,8 @@ export async function initializeMockData() {
         for (let j = 0; j < products.length; j++) {
           const product = products[j];
           try {
-            // Для первого товара первого города устанавливаем дефолтное изображение
+            // Товары создаются без фото (imagePath = null)
             let imagePath = null;
-            const cityIndex = existingCities.findIndex(c => c.id === city.id);
-            if (j === 0 && cityIndex === 0) {
-              imagePath = 'src/assets/img/placeholder_photo.png';
-            }
 
             await productService.create(
               city.id,
@@ -401,12 +397,8 @@ export async function initializeMockData() {
         const packaging = packagingByValue.get(1);
         console.log(`[MOCK] Фасовка для товара:`, packaging ? packaging.id : 'null');
         try {
-          // Для первого товара устанавливаем дефолтное изображение
+          // Товары создаются без фото (imagePath = null)
           let imagePath = null;
-          if (j === 0 && i === 0) {
-            // Первый товар первого города
-            imagePath = 'src/assets/img/placeholder_photo.png';
-          }
 
           await productService.create(
             city.id,

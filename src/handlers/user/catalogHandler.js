@@ -339,7 +339,7 @@ export async function showProductDetails(ctx, productId) {
         [{ text: '🔙 Назад', callback_data: `back_to_products_${district.id}` }]
     ];
 
-    // Определяем путь к изображению
+    // Определяем путь к изображению (только если фото загружено)
     let photoPath = null;
     if (product.image_path) {
         if (product.image_path.startsWith('./') || product.image_path.startsWith('../')) {
@@ -349,10 +349,9 @@ export async function showProductDetails(ctx, productId) {
         } else {
             photoPath = product.image_path;
         }
-    } else {
-        const defaultImagePath = join(__dirname, '../../..', 'src/assets/img/placeholder_photo.png');
-        if (existsSync(defaultImagePath)) {
-            photoPath = defaultImagePath;
+        // Проверяем, что файл действительно существует
+        if (!existsSync(photoPath)) {
+            photoPath = null;
         }
     }
 

@@ -83,6 +83,7 @@ export function registerMediaHandlers(bot) {
                         reply_markup: {
                             inline_keyboard: [
                                 [{ text: '📷 Загрузить/Изменить фото', callback_data: `admin_product_upload_photo_${product.id}` }],
+                                [{ text: '🏷️ Изменить фасовку', callback_data: `admin_product_edit_packaging_${product.id}` }],
                                 [{ text: '◀️ Назад к товарам', callback_data: `admin_products_district_${product.district_id}` }]
                             ]
                         }

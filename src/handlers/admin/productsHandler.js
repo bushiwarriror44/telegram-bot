@@ -18,11 +18,14 @@ const PRODUCT_TEMPLATES = [
 // Режим загрузки фото товара
 export const productImageUploadMode = new Map(); // userId -> productId
 
+// Режим редактирования фасовки товара
+export const productPackagingEditMode = new Map(); // userId -> productId
+
 // Режимы добавления предустановленных товаров
 export const predefinedProductSelectMode = new Map(); // userId -> true (выбор предустановленного товара)
 export const predefinedProductCityMode = new Map(); // userId -> { productName, description, price } (выбор города)
 export const predefinedProductDistrictMode = new Map(); // userId -> { productName, description, price, cityId, cityName } (выбор района)
-export const predefinedProductAddMode = new Map(); // userId -> 'name' | 'description' | 'price' (добавление нового предустановленного товара)
+export const predefinedProductAddMode = new Map(); // userId -> 'name' | 'description' | 'price' | 'packaging' (добавление нового предустановленного товара)
 export const predefinedProductAddSource = new Map(); // userId -> 'settings' | 'products' (источник вызова добавления товара)
 
 /**
@@ -244,13 +247,13 @@ export function registerProductsHandlers(bot) {
         const currencySymbol = await settingsService.getCurrencySymbol();
         const hasImage = product.image_path ? true : false;
         const imageStatus = hasImage ? '✅ Загружено' : '❌ Нет фото';
-        const imageInstructions = hasImage 
-            ? '' 
+        const imageInstructions = hasImage
+            ? ''
             : '\n\n📷 <b>Как добавить изображение:</b>\n' +
-              '1. Нажмите на кнопку "📷 Загрузить/Изменить фото" ниже\n' +
-              '2. Следуйте инструкциям для загрузки изображения\n' +
-              '3. Отправьте изображение как фото (не как документ)';
-        
+            '1. Нажмите на кнопку "📷 Загрузить/Изменить фото" ниже\n' +
+            '2. Следуйте инструкциям для загрузки изображения\n' +
+            '3. Отправьте изображение как фото (не как документ)';
+
         const text = `
 ✏️ <b>Редактирование товара: ${product.name}</b>
 
@@ -265,7 +268,8 @@ export function registerProductsHandlers(bot) {
         `.trim();
 
         const keyboard = [
-            [{ text: hasImage ? '📷 Изменить фото' : '📷 Загрузить фото', callback_data: `admin_product_upload_photo_${product.id}` }],
+            [{ text: hasImage ? '📷 Изменить фото' : '📷 Загрузка фото (ИНФО)', callback_data: `admin_product_upload_photo_${product.id}` }],
+            [{ text: '🏷️ Изменить фасовку', callback_data: `admin_product_edit_packaging_${product.id}` }],
             [{ text: '◀️ Назад к товарам', callback_data: `admin_products_district_${product.district_id}` }]
         ];
 
@@ -273,6 +277,34 @@ export function registerProductsHandlers(bot) {
             parse_mode: 'HTML',
             reply_markup: { inline_keyboard: keyboard }
         });
+    });
+
+    bot.action(/^admin_product_edit_packaging_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const productId = parseInt(ctx.match[1]);
+        const product = await productService.getById(productId);
+
+        if (!product) {
+            await ctx.reply('Товар не найден.');
+            return;
+        }
+
+        productPackagingEditMode.set(ctx.from.id, productId);
+
+        // Получаем список всех фасовок
+        const packagings = await packagingService.getAll();
+        const packagingList = packagings.length > 0
+            ? packagings.map(p => `• ${p.value} кг`).join('\n')
+            : 'Фасовки не добавлены. Сначала добавьте фасовки в админ-панели.';
+
+        await ctx.reply(
+            '🏷️ <b>Редактирование фасовки товара</b>\n\n' +
+            `Текущая фасовка: <b>${product.packaging_value || 'Не указана'} кг</b>\n\n` +
+            `Доступные фасовки:\n${packagingList}\n\n` +
+            `Введите новую фасовку (только число, например: 0.5, 1, 2.5):\n\n` +
+            `Для отмены отправьте /cancel`,
+            { parse_mode: 'HTML' }
+        );
     });
 
     bot.action(/^admin_product_upload_photo_(\d+)$/, async (ctx) => {
@@ -758,11 +790,19 @@ export async function placePredefinedProduct(ctx, districtId, productData) {
             return;
         }
 
-        // Получаем фасовку по умолчанию (1 кг)
-        let packaging = await packagingService.getByValue(1);
+        // Получаем фасовку из данных товара или используем дефолтную (1 кг)
+        let packaging = null;
+        if (productData.packagingId) {
+            packaging = await packagingService.getById(productData.packagingId);
+        }
+
         if (!packaging) {
-            // Если фасовки нет, создаем её
-            packaging = await packagingService.create(1);
+            // Если фасовки нет в данных, используем дефолтную (1 кг)
+            packaging = await packagingService.getByValue(1);
+            if (!packaging) {
+                // Если фасовки нет, создаем её
+                packaging = await packagingService.create(1);
+            }
         }
 
         await productService.create(

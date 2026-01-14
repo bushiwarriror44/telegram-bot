@@ -24,7 +24,7 @@ import { adminReplyMode } from './chatsHandler.js';
 import { showConversation } from './chatsHandler.js';
 import { channelBindMode } from './panelHandler.js';
 import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
-import { productImageUploadMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
+import { productImageUploadMode, productPackagingEditMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
 import { mockProducts } from '../../utils/mockData.js';
 import { cardAddMode, showCardDetails } from './cardsHandler.js';
 
@@ -52,6 +52,7 @@ export function registerTextHandlers(bot) {
                 promocodeAssignMode.delete(ctx.from.id);
                 referralDiscountEditMode.delete(ctx.from.id);
                 productImageUploadMode.delete(ctx.from.id);
+                productPackagingEditMode.delete(ctx.from.id);
                 channelBindMode.delete(ctx.from.id);
                 reviewCreateMode.delete(ctx.from.id);
                 reviewImportMode.delete(ctx.from.id);
@@ -115,6 +116,7 @@ export function registerTextHandlers(bot) {
                 promocodeAddMode.has(ctx.from.id) ||
                 promocodeAssignMode.has(ctx.from.id) ||
                 productImageUploadMode.has(ctx.from.id) ||
+                productPackagingEditMode.has(ctx.from.id) ||
                 channelBindMode.has(ctx.from.id) ||
                 reviewCreateMode.has(ctx.from.id) ||
                 reviewImportMode.has(ctx.from.id) ||
@@ -575,6 +577,81 @@ export function registerTextHandlers(bot) {
             return; // Явно указываем, что сообщение обработано
         }
 
+        // Обработка редактирования фасовки товара
+        if (productPackagingEditMode.has(ctx.from.id)) {
+            try {
+                const productId = productPackagingEditMode.get(ctx.from.id);
+                const product = await productService.getById(productId);
+                
+                if (!product) {
+                    await ctx.reply('Товар не найден.');
+                    productPackagingEditMode.delete(ctx.from.id);
+                    return;
+                }
+
+                const packagingValue = parseFloat(ctx.message.text.trim().replace(',', '.'));
+                
+                if (isNaN(packagingValue) || packagingValue <= 0) {
+                    await ctx.reply('❌ Фасовка должна быть положительным числом. Попробуйте еще раз.\nПример: 0.5, 1, 2.5');
+                    return;
+                }
+
+                // Проверяем, существует ли такая фасовка
+                let packaging = await packagingService.getByValue(packagingValue);
+                if (!packaging) {
+                    await ctx.reply(
+                        `❌ Фасовка ${packagingValue} кг не найдена.\n\n` +
+                        `Сначала добавьте её в админ-панели (Фасовки).`
+                    );
+                    return;
+                }
+
+                // Обновляем фасовку товара
+                await productService.update(product.id, product.name, product.description, product.price, packaging.id, product.image_path);
+                
+                productPackagingEditMode.delete(ctx.from.id);
+                
+                // Показываем обновленное меню редактирования товара
+                const district = await districtService.getById(product.district_id);
+                const currencySymbol = await settingsService.getCurrencySymbol();
+                const hasImage = product.image_path ? true : false;
+                const imageStatus = hasImage ? '✅ Загружено' : '❌ Нет фото';
+                const imageInstructions = hasImage 
+                    ? '' 
+                    : '\n\n📷 <b>Как добавить изображение:</b>\n' +
+                      '1. Нажмите на кнопку "📷 Загрузить/Изменить фото" ниже\n' +
+                      '2. Следуйте инструкциям для загрузки изображения\n' +
+                      '3. Отправьте изображение как фото (не как документ)';
+                
+                await ctx.reply(
+                    `✅ Фасовка успешно обновлена на ${packagingValue} кг!\n\n` +
+                    `✏️ <b>Редактирование товара: ${product.name}</b>\n\n` +
+                    `Текущие данные:\n` +
+                    `• Название: ${product.name}\n` +
+                    `• Описание: ${product.description || 'Отсутствует'}\n` +
+                    `• Цена: ${product.price} ${currencySymbol}\n` +
+                    `• Фасовка: ${packagingValue} кг\n` +
+                    `• Фото: ${imageStatus}${imageInstructions}\n\n` +
+                    `Выберите действие:`,
+                    {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: hasImage ? '📷 Изменить фото' : '📷 Загрузка фото (ИНФО)', callback_data: `admin_product_upload_photo_${product.id}` }],
+                                [{ text: '🏷️ Изменить фасовку', callback_data: `admin_product_edit_packaging_${product.id}` }],
+                                [{ text: '◀️ Назад к товарам', callback_data: `admin_products_district_${product.district_id}` }]
+                            ]
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при редактировании фасовки товара:', error);
+                await ctx.reply('❌ Ошибка при редактировании фасовки: ' + error.message);
+                productPackagingEditMode.delete(ctx.from.id);
+            }
+            return;
+        }
+
         // Обработка добавления карты в карточный счет
         if (cardAddMode.has(ctx.from.id)) {
             try {
@@ -706,7 +783,7 @@ export function registerTextHandlers(bot) {
                         'Для отмены отправьте /cancel'
                     );
                 } else if (mode === 'price') {
-                    // Сохраняем цену и добавляем товар в mockProducts
+                    // Сохраняем цену и переходим к фасовке
                     const price = parseFloat(text.replace(',', '.'));
                     if (isNaN(price) || price <= 0) {
                         await ctx.reply('❌ Цена должна быть положительным числом. Попробуйте еще раз.');
@@ -721,12 +798,60 @@ export function registerTextHandlers(bot) {
                         return;
                     }
 
-                    // Добавляем товар в mockProducts (в первый доступный город для примера)
+                    productData.price = price;
+                    predefinedProductAddMode.set(ctx.from.id, 'packaging');
+                    
+                    // Получаем список всех фасовок
+                    const { packagingService } = await import('../../services/packagingService.js');
+                    const packagings = await packagingService.getAll();
+                    const packagingList = packagings.length > 0 
+                        ? packagings.map(p => `• ${p.value} кг`).join('\n')
+                        : 'Фасовки не добавлены. Сначала добавьте фасовки в админ-панели.';
+                    
+                    await ctx.reply(
+                        '✅ Цена сохранена!\n\n' +
+                        'Введите фасовку товара (только число, например: 0.5, 1, 2.5):\n\n' +
+                        `Доступные фасовки:\n${packagingList}\n\n` +
+                        'Для отмены отправьте /cancel'
+                    );
+                } else if (mode === 'packaging') {
+                    // Сохраняем фасовку и добавляем товар в mockProducts
+                    const packagingValue = parseFloat(text.trim().replace(',', '.'));
+                    if (isNaN(packagingValue) || packagingValue <= 0) {
+                        await ctx.reply('❌ Фасовка должна быть положительным числом. Попробуйте еще раз.\nПример: 0.5, 1, 2.5');
+                        return;
+                    }
+
+                    const productData = predefinedProductCityMode.get(ctx.from.id);
+                    if (!productData || !productData.name) {
+                        await ctx.reply('❌ Ошибка: данные товара не найдены');
+                        predefinedProductAddMode.delete(ctx.from.id);
+                        predefinedProductCityMode.delete(ctx.from.id);
+                        return;
+                    }
+
+                    // Проверяем, существует ли такая фасовка
+                    const { packagingService } = await import('../../services/packagingService.js');
+                    let packaging = await packagingService.getByValue(packagingValue);
+                    if (!packaging) {
+                        await ctx.reply(
+                            `❌ Фасовка ${packagingValue} кг не найдена.\n\n` +
+                            `Сначала добавьте её в админ-панели (Фасовки).`
+                        );
+                        return;
+                    }
+
+                    // Сохраняем фасовку в данных товара
+                    productData.packagingId = packaging.id;
+                    productData.packagingValue = packagingValue;
+
+                    // Добавляем товар в mockProducts
                     const { addMockProduct } = await import('../../utils/mockData.js');
                     addMockProduct({
                         name: productData.name,
                         description: productData.description,
-                        price: price
+                        price: productData.price,
+                        packagingValue: productData.packagingValue
                     });
 
                     predefinedProductAddMode.delete(ctx.from.id);
