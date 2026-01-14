@@ -28,6 +28,8 @@ import { productImageUploadMode, productPackagingEditMode, predefinedProductSele
 import { mockProducts } from '../../utils/mockData.js';
 import { cardAddMode, showCardDetails } from './cardsHandler.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
+import { config } from '../../config/index.js';
+import { hasActiveCaptcha } from '../../utils/captchaHelper.js';
 
 /**
  * Регистрирует обработчики текстовых сообщений для админа
@@ -72,6 +74,13 @@ export function registerTextHandlers(bot) {
             // Для всех остальных команд передаем управление дальше через next()
             console.log('[AdminHandlers] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
             return next(); // Позволяем другим обработчикам (bot.command()) обработать команду
+        }
+
+        // ВАЖНО: Проверяем капчу ДО проверки админа, чтобы капча обрабатывалась для всех пользователей
+        // Если у пользователя активна капча, передаем управление дальше в userHandlers
+        if (config.captchaEnabled && hasActiveCaptcha(ctx.from.id)) {
+            console.log('[AdminHandlers] У пользователя активна капча, передаем управление дальше для обработки капчи');
+            return next();
         }
 
         // Далее обрабатываем только для админов
