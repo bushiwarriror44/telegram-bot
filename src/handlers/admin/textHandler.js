@@ -22,6 +22,7 @@ import { reviewCreateMode } from './reviewsHandler.js';
 import { importPaymentMode, importProductMode, databaseImportMode, showDataMenu } from './dataHandler.js';
 import { adminReplyMode } from './chatsHandler.js';
 import { showConversation } from './chatsHandler.js';
+import { adminMessageUserMode } from './usersHandler.js';
 import { channelBindMode } from './panelHandler.js';
 import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
 import { productImageUploadMode, productPackagingEditMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
@@ -47,6 +48,7 @@ export function registerTextHandlers(bot) {
                 importPaymentMode.delete(ctx.from.id);
                 importProductMode.delete(ctx.from.id);
                 adminReplyMode.delete(ctx.from.id);
+                adminMessageUserMode.delete(ctx.from.id);
                 welcomeEditMode.delete(ctx.from.id);
                 iconEditMode.delete(ctx.from.id);
                 databaseImportMode.delete(ctx.from.id);
@@ -546,6 +548,53 @@ export function registerTextHandlers(bot) {
                 await ctx.reply('❌ Ошибка при загрузке платежных данных: ' + error.message);
             }
             return;
+        }
+
+        // Проверяем, находится ли администратор в режиме отправки сообщения пользователю
+        if (adminMessageUserMode.has(ctx.from.id)) {
+            const userChatId = adminMessageUserMode.get(ctx.from.id);
+            let messageText = ctx.message.text;
+
+            // Если это команда /cancel, отменяем отправку
+            if (messageText === '/cancel') {
+                adminMessageUserMode.delete(ctx.from.id);
+                await ctx.reply('❌ Отправка сообщения отменена.');
+                const { showMessageUserMenu } = await import('./usersHandler.js');
+                await showMessageUserMenu(ctx);
+                return;
+            }
+
+            if (!messageText || messageText.length === 0) {
+                await ctx.reply('❌ Укажите текст сообщения.');
+                return;
+            }
+
+            try {
+                // Отправляем сообщение пользователю
+                try {
+                    await bot.telegram.sendMessage(
+                        userChatId,
+                        `💬 <b>Сообщение от администратора:</b>\n\n${messageText}`,
+                        { parse_mode: 'HTML' }
+                    );
+                    await ctx.reply(`✅ Сообщение отправлено пользователю!`);
+                } catch (error) {
+                    console.error('[AdminHandlers] Ошибка при отправке сообщения пользователю:', error);
+                    if (error.code === 403) {
+                        await ctx.reply(`❌ Не удалось отправить сообщение: пользователь заблокировал бота или не может получать сообщения.`);
+                    } else {
+                        await ctx.reply(`❌ Ошибка при отправке сообщения: ${error.message}`);
+                    }
+                }
+
+                adminMessageUserMode.delete(ctx.from.id);
+                const { showUsersAdmin } = await import('./usersHandler.js');
+                await showUsersAdmin(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при обработке отправки сообщения:', error);
+                await ctx.reply(`❌ Ошибка: ${error.message}`);
+            }
+            return; // Явно указываем, что сообщение обработано
         }
 
         // Проверяем, находится ли администратор в режиме ответа
