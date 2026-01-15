@@ -35,11 +35,19 @@ export function registerTopupHandlers(bot) {
     });
 
     // Обработка подтверждения ТРАНСГРАН
-    bot.action(/^confirm_transgran_(\d+)_([\d.]+)$/, async (ctx) => {
+    bot.action(/^confirm_transgran_(.+?)_([\d.]+)$/, async (ctx) => {
         console.log('[TopupHandler] Обработка подтверждения ТРАНСГРАН, callback_data:', ctx.callbackQuery?.data);
         try {
-            const methodId = parseInt(ctx.match[1]);
+            let methodId = ctx.match[1];
             const amount = parseFloat(ctx.match[2]);
+
+            // Если methodId содержит "card_", извлекаем число
+            if (methodId.startsWith('card_')) {
+                methodId = parseInt(methodId.replace('card_', ''));
+            } else {
+                methodId = parseInt(methodId);
+            }
+
             console.log('[TopupHandler] methodId:', methodId, 'amount:', amount);
             await ctx.answerCbQuery();
             await showTopupMethod(ctx, methodId, amount, true);
@@ -50,10 +58,18 @@ export function registerTopupHandlers(bot) {
     });
 
     // Обработка отмены ТРАНСГРАН
-    bot.action(/^cancel_transgran_(\d+)$/, async (ctx) => {
+    bot.action(/^cancel_transgran_(.+?)$/, async (ctx) => {
         console.log('[TopupHandler] Обработка отмены ТРАНСГРАН, callback_data:', ctx.callbackQuery?.data);
         try {
-            const methodId = parseInt(ctx.match[1]);
+            let methodId = ctx.match[1];
+
+            // Если methodId содержит "card_", извлекаем число
+            if (methodId.startsWith('card_')) {
+                methodId = parseInt(methodId.replace('card_', ''));
+            } else {
+                methodId = parseInt(methodId);
+            }
+
             console.log('[TopupHandler] methodId:', methodId);
             await ctx.answerCbQuery();
 
@@ -244,10 +260,25 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
             // Показываем предупреждение для ТРАНСГРАН
             const warningText = `⚠️ Оплата на реквизиты другой страны (СНГ).\nВы точно хотите продолжить?`;
 
-            // Формируем callback_data, убеждаясь что amount - это число без лишних символов
-            const confirmCallback = `confirm_transgran_${methodId}_${amount}`;
-            const cancelCallback = `cancel_transgran_${methodId}`;
+            // Извлекаем числовой ID метода для callback_data
+            // Если methodId строка типа "card_6", используем card_account_id или извлекаем число
+            let numericMethodId = methodId;
+            if (typeof methodId === 'string' && methodId.startsWith('card_')) {
+                numericMethodId = methodId.replace('card_', '');
+            } else if (method.card_account_id) {
+                numericMethodId = method.card_account_id;
+            } else if (method.id && typeof method.id === 'string' && method.id.startsWith('card_')) {
+                numericMethodId = method.id.replace('card_', '');
+            } else if (method.id) {
+                numericMethodId = method.id;
+            }
+
+            // Формируем callback_data, используя числовой ID
+            const confirmCallback = `confirm_transgran_${numericMethodId}_${amount}`;
+            const cancelCallback = `cancel_transgran_${numericMethodId}`;
             console.log('[TopupHandler] Формирование callback_data для ТРАНСГРАН:');
+            console.log('[TopupHandler] methodId (исходный):', methodId);
+            console.log('[TopupHandler] numericMethodId:', numericMethodId);
             console.log('[TopupHandler] confirmCallback:', confirmCallback);
             console.log('[TopupHandler] cancelCallback:', cancelCallback);
 
