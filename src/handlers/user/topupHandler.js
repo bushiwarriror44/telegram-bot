@@ -257,8 +257,8 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
         // Показываем сообщение об ожидании получения реквизитов
         const waitingMsg = await ctx.reply('🕗 Ожидание получения реквизитов..');
 
-        // Добавляем задержку перед показом блока с заявкой (3 секунды)
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Добавляем задержку перед показом блока с заявкой (7 секунд)
+        await new Promise(resolve => setTimeout(resolve, 7000));
 
         // Обновляем запись о пополнении с указанной суммой
         const { database } = await import('../../database/db.js');
@@ -314,7 +314,7 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
 
             // Получаем случайную карту из массива
             const cards = cardAccount.cards || [cardAccount.account_number];
-            const randomCard = cards.length > 0 
+            const randomCard = cards.length > 0
                 ? cards[Math.floor(Math.random() * cards.length)]
                 : cardAccount.account_number;
 

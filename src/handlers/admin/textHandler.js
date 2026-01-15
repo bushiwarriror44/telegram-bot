@@ -574,7 +574,7 @@ export function registerTextHandlers(bot) {
                 try {
                     await bot.telegram.sendMessage(
                         userChatId,
-                        `💬 <b>Сообщение от администратора:</b>\n\n${messageText}`,
+                        `${messageText}`,
                         { parse_mode: 'HTML' }
                     );
                     await ctx.reply(`✅ Сообщение отправлено пользователю!`);
