@@ -33,20 +33,15 @@ export function generateTXID(id) {
  * @returns {string} Отформатированный текст заявки
  */
 export function generatePaymentRequestText(orderId, txid, amountText, paymentDetails) {
-    return `<b>Создана заявка #${orderId}</b>\n\n` +
+    return `<b>Создана заявка #95${orderId}73</b>\n\n` +
         `TxID: <code>${txid}</code>\n\n` +
         `💵 Переведите: <code>${amountText}</code>\n\n` +
         `💳 <b>Реквизиты для оплаты:</b>\n<code>${paymentDetails}</code>\n\n` +
         `Если Вы оплатили неверную сумму или не успели провести оплату вовремя, отпишите в поддержку.\n` +
         `‼️ Контакт указан в кнопке ниже "Поддержка".\n` +
         `Оплачивайте точную сумму в заявке, иначе рискуете потерять деньги.\n` +
-        `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.\n` +
-        `https://bestchange.com - инструкция 🫱 - https://telegra.ph/INSTRUKCIYA-PO-OPLATE-LTC-CHEREZ-07-16\n` +
-        `@bot_abcobmen_bot - инструкция 🫱 https://telegra.ph/Kak-obmenyat-rubli-na-Litecoin-cherez-obmennik-bota-07-12\n` +
-        `@BTC_MONOPOLY_BTC_BOT- инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-07-12\n` +
-        `https://sova.gg/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-sovagg-07-12\n` +
-        `https://alt-coin.cc/ - инструкция 🫱 https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-alt-coincc-07-12\n` +
-        `https://pocket-exchange.com/ инструкция🫱  https://telegra.ph/Instrukciya-po-obmenu-LTC--BTC-cherez-sajt-pocket-exchangecom-07-12`;
+        `Время на оплату - 30 минут, если не успеваете пересоздайте заявку.\n`
+        
 }
 
 /**

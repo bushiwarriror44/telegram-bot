@@ -23,6 +23,10 @@ const __dirname = dirname(__filename);
 // Хранит пользователей, которые вводят промокод (userId -> productId)
 export const promocodeInputMode = new Map();
 
+// Хранит время блокировки после отмены заказа (userId -> timestamp)
+// Блокировка длится 30 минут
+export const orderCancelBlock = new Map();
+
 // Переменная для notificationService (будет установлена извне)
 let notificationService = null;
 
@@ -133,6 +137,108 @@ export function registerCatalogHandlers(bot) {
             // Для оплаченных заказов показываем детали
             await showOrderDetails(ctx, orderId);
         }
+    });
+
+    // Обработка кнопки "Поддержка" для заказа
+    bot.action(/^order_support_(\d+)$/, async (ctx) => {
+        await ctx.answerCbQuery();
+        const { showHelpMenu } = await import('./supportHandler.js');
+        await showHelpMenu(ctx);
+    });
+
+    // Обработка кнопки "Скопировать реквизиты"
+    bot.action(/^copy_payment_details_(\d+)$/, async (ctx) => {
+        const orderId = parseInt(ctx.match[1]);
+        const order = await orderService.getById(orderId);
+
+        if (!order) {
+            await ctx.answerCbQuery('Заказ не найден');
+            return;
+        }
+
+        // Проверяем, что заказ принадлежит пользователю
+        if (order.user_chat_id !== ctx.from.id) {
+            await ctx.answerCbQuery('Это не ваш заказ');
+            return;
+        }
+
+        // Получаем детали оплаты для копирования
+        const method = await paymentService.getMethodById(order.payment_method_id);
+        if (!method) {
+            await ctx.answerCbQuery('Метод оплаты не выбран');
+            return;
+        }
+
+        let paymentDetails = '';
+
+        if (method.type === 'card') {
+            let cardAccount;
+            if (method.card_account_id) {
+                cardAccount = await cardAccountService.getById(method.card_account_id);
+            } else if (method.name) {
+                if (method.name === 'ТРАНСГРАН') {
+                    cardAccount = await cardAccountService.getRandomCardByName('ТРАНСГРАН');
+                } else {
+                    cardAccount = await cardAccountService.getRandomCardByName(method.name);
+                }
+            }
+
+            if (cardAccount) {
+                const cards = cardAccount.cards || [cardAccount.account_number];
+                const randomCard = cards.length > 0
+                    ? cards[Math.floor(Math.random() * cards.length)]
+                    : cardAccount.account_number;
+                paymentDetails = randomCard;
+            }
+        } else {
+            const address = await paymentService.getPaymentAddress(method.id);
+            if (address) {
+                paymentDetails = address;
+            }
+        }
+
+        if (paymentDetails) {
+            await ctx.answerCbQuery('Реквизиты скопированы');
+            await ctx.reply(`📋 Реквизиты для оплаты:\n\n<code>${paymentDetails}</code>`, {
+                parse_mode: 'HTML'
+            });
+        } else {
+            await ctx.answerCbQuery('Реквизиты не найдены');
+            await ctx.reply('❌ Реквизиты не найдены. Обратитесь к администратору.');
+        }
+    });
+
+    // Обработка кнопки "Отменить заявку"
+    bot.action(/^cancel_order_(\d+)$/, async (ctx) => {
+        const orderId = parseInt(ctx.match[1]);
+        const order = await orderService.getById(orderId);
+
+        if (!order) {
+            await ctx.answerCbQuery('Заказ не найден');
+            return;
+        }
+
+        // Проверяем, что заказ принадлежит пользователю
+        if (order.user_chat_id !== ctx.from.id) {
+            await ctx.answerCbQuery('Это не ваш заказ');
+            return;
+        }
+
+        // Проверяем, что заказ можно отменить (pending или paid)
+        if (order.status !== 'pending' && order.status !== 'paid') {
+            await ctx.answerCbQuery('Заказ уже обработан');
+            return;
+        }
+
+        await ctx.answerCbQuery();
+
+        // Отменяем заказ
+        await orderService.cancelOrder(orderId);
+
+        // Устанавливаем блокировку на 30 минут
+        orderCancelBlock.set(ctx.from.id, Date.now());
+
+        await ctx.reply('❌ Заявка отменена. В течение 30 минут вы не можете создавать новые заявки после отмены текущей.');
     });
 }
 
@@ -408,6 +514,26 @@ export async function showProductDetails(ctx, productId) {
  */
 export async function createOrder(ctx, productId, promocodeId = null) {
     try {
+        // Проверяем, есть ли активный заказ
+        const activeOrder = await orderService.getActiveOrder(ctx.from.id);
+        if (activeOrder) {
+            await ctx.reply('❌ У вас есть активный заказ, сначала завершите или отмените его, чтобы создать новый заказ');
+            return;
+        }
+
+        // Проверяем, не заблокирован ли пользователь после отмены заказа
+        const blockTime = orderCancelBlock.get(ctx.from.id);
+        if (blockTime && Date.now() - blockTime < 30 * 60 * 1000) {
+            const remainingMinutes = Math.ceil((30 * 60 * 1000 - (Date.now() - blockTime)) / (60 * 1000));
+            await ctx.reply(`⏰ Вы не можете создавать новые заявки в течение ${remainingMinutes} минут после отмены текущей.`);
+            return;
+        }
+
+        // Если блокировка истекла, удаляем её
+        if (blockTime) {
+            orderCancelBlock.delete(ctx.from.id);
+        }
+
         const product = await productService.getById(productId);
         if (!product) {
             await ctx.reply('Товар не найден.');
@@ -489,7 +615,7 @@ export async function showOrderDetails(ctx, orderId) {
         const discountText = order.discount > 0 ? `${order.discount.toLocaleString('ru-RU')} ${currencySymbol}` : `0 ${currencySymbol}`;
 
         const storefrontName = await settingsService.getStorefrontName();
-        const text = `<b>Создан заказ #12${order.id}</b>
+        const text = `<b>Создан заказ #95${order.id}73</b>
 
 <b>Витрина:</b> ${storefrontName} 
 <b>Категория:</b> ${order.city_name} 
@@ -598,7 +724,7 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
 
         // Получаем случайную карту из массива
         const cards = cardAccount.cards || [cardAccount.account_number];
-        const randomCard = cards.length > 0 
+        const randomCard = cards.length > 0
             ? cards[Math.floor(Math.random() * cards.length)]
             : cardAccount.account_number;
 
@@ -637,8 +763,9 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
-                [{ text: '✅ Оплатил', callback_data: `confirm_payment_${orderId}` }],
-                [{ text: '◀️ Назад', callback_data: `back_to_cities` }]
+                [{ text: 'Поддержка', callback_data: `order_support_${orderId}` }],
+                [{ text: '📋 Скопировать реквизиты 📋', callback_data: `copy_payment_details_${orderId}` }],
+                [{ text: 'Отменить заявку', callback_data: `cancel_order_${orderId}` }]
             ]
         }
     });

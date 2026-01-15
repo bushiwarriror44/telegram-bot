@@ -104,6 +104,31 @@ export class OrderService {
             [userChatId]
         );
     }
+
+    /**
+     * Получает активный заказ пользователя (pending или paid статус)
+     */
+    async getActiveOrder(userChatId) {
+        return await database.get(
+            `SELECT * FROM orders 
+             WHERE user_chat_id = ? 
+             AND (status = 'pending' OR status = 'paid')
+             ORDER BY created_at DESC 
+             LIMIT 1`,
+            [userChatId]
+        );
+    }
+
+    /**
+     * Отменяет заказ
+     */
+    async cancelOrder(orderId) {
+        await database.run(
+            'UPDATE orders SET status = ? WHERE id = ?',
+            ['cancelled', orderId]
+        );
+        return await this.getById(orderId);
+    }
 }
 
 export const orderService = new OrderService();
