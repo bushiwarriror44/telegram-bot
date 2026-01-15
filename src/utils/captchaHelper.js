@@ -17,8 +17,14 @@ const activeCaptchas = new Map();
 // Хранилище параметров start для пользователей, проходящих капчу (userId -> startParam)
 const startParams = new Map();
 
+// Хранилище времени успешного прохождения капчи (userId -> timestamp)
+const captchaPassedTimes = new Map();
+
 // Время жизни капчи в миллисекундах (5 минут)
 const CAPTCHA_EXPIRY_TIME = 5 * 60 * 1000;
+
+// Время, в течение которого капча не запрашивается после успешного прохождения (15 минут)
+const CAPTCHA_PASSED_COOLDOWN = 15 * 60 * 1000;
 
 // Временная директория для хранения изображений капчи
 const TEMP_DIR = join(__dirname, '../../temp');
@@ -272,6 +278,12 @@ export function validateCaptcha(userId, userAnswer) {
     deleteCaptchaImage(userId);
     activeCaptchas.delete(userId);
 
+    // Если капча пройдена успешно, сохраняем время прохождения
+    if (isValid) {
+        captchaPassedTimes.set(userId, Date.now());
+        console.log('[CaptchaHelper] Капча успешно пройдена пользователем', userId, 'время:', new Date().toISOString());
+    }
+
     return isValid;
 }
 
@@ -340,4 +352,29 @@ export function getStartParam(userId) {
         startParams.delete(userId);
     }
     return param || null;
+}
+
+/**
+ * Проверяет, прошло ли менее 15 минут с момента успешного прохождения капчи
+ * @param {number} userId - ID пользователя
+ * @returns {boolean} true, если капча была пройдена менее 15 минут назад
+ */
+export function isCaptchaRecentlyPassed(userId) {
+    const passedTime = captchaPassedTimes.get(userId);
+    if (!passedTime) {
+        return false;
+    }
+
+    const timeSincePassed = Date.now() - passedTime;
+    const isRecent = timeSincePassed < CAPTCHA_PASSED_COOLDOWN;
+
+    // Если прошло больше 15 минут, удаляем запись
+    if (!isRecent) {
+        captchaPassedTimes.delete(userId);
+        console.log('[CaptchaHelper] Время действия капчи истекло для пользователя', userId);
+        return false;
+    }
+
+    console.log('[CaptchaHelper] Капча была пройдена', Math.floor(timeSincePassed / 1000), 'секунд назад для пользователя', userId);
+    return true;
 }

@@ -71,6 +71,15 @@ export async function registerCommands(bot, isAdmin) {
         try {
             // Проверяем, включена ли капча
             if (config.captchaEnabled) {
+                // Проверяем, не проходил ли пользователь капчу недавно (в течение 15 минут)
+                const { isCaptchaRecentlyPassed } = await import('../../utils/captchaHelper.js');
+                if (isCaptchaRecentlyPassed(ctx.from.id)) {
+                    console.log('[UserHandlers] Капча была пройдена недавно, пропускаем проверку');
+                    // Выполняем обычную логику без капчи
+                    await processStartCommand(ctx, isAdmin);
+                    return;
+                }
+
                 console.log('[UserHandlers] Капча включена, генерируем капчу...');
                 const captcha = await generateCaptcha();
                 saveCaptcha(ctx.from.id, captcha.imagePath, captcha.answer, captcha.options);

@@ -81,9 +81,9 @@ export class CryptoExchangeService {
             'BTC': '₿',
             'LTC': 'Ł',
             'ETH': 'Ξ',
-            'USDT': '₮',
-            'TRC20': '₮',
-            'TRC': '₮'
+            'USDT': 'USDT',
+            'TRC20': 'USDT',
+            'TRC': 'USDT'
         };
         return symbolMap[cryptoNetwork.toUpperCase()] || cryptoNetwork.toUpperCase();
     }
