@@ -146,6 +146,33 @@ export function registerCatalogHandlers(bot) {
         await showHelpMenu(ctx);
     });
 
+    // Обработка кнопки "Перейти к активному заказу"
+    bot.action(/^view_active_order_(\d+)$/, async (ctx) => {
+        await ctx.answerCbQuery();
+        const orderId = parseInt(ctx.match[1]);
+        const order = await orderService.getById(orderId);
+
+        if (!order) {
+            await ctx.reply('❌ Заказ не найден.');
+            return;
+        }
+
+        // Проверяем, что заказ принадлежит пользователю
+        if (order.user_chat_id !== ctx.from.id) {
+            await ctx.reply('❌ Это не ваш заказ.');
+            return;
+        }
+
+        // Проверяем статус заказа
+        if (order.status === 'cancelled' || order.status === 'expired') {
+            await ctx.reply('❌ Этот заказ был отменен или истек.');
+            return;
+        }
+
+        // Показываем стандартный блок с возможностью оплаты заказа
+        await showOrderDetails(ctx, orderId);
+    });
+
     // Обработка кнопки "Скопировать реквизиты"
     bot.action(/^copy_payment_details_(\d+)$/, async (ctx) => {
         const orderId = parseInt(ctx.match[1]);
@@ -531,7 +558,16 @@ export async function createOrder(ctx, productId, promocodeId = null) {
                 created_at: activeOrder.created_at,
                 product_id: activeOrder.product_id
             });
-            await ctx.reply('❌ У вас есть активный заказ, сначала завершите или отмените его, чтобы создать новый заказ');
+            await ctx.reply(
+                '❌ У вас есть активный заказ, сначала завершите или отмените его, чтобы создать новый заказ',
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '📋 Перейти к активному заказу', callback_data: `view_active_order_${activeOrder.id}` }]
+                        ]
+                    }
+                }
+            );
             return;
         }
         console.log('[CatalogHandler] createOrder: Активный заказ не найден, продолжаем создание');
