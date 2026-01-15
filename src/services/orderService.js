@@ -1,4 +1,5 @@
 import { database } from '../database/db.js';
+import { settingsService } from './settingsService.js';
 
 export class OrderService {
     async create(userChatId, productId, cityId, districtId, price, discount, totalPrice, promocodeId = null) {
@@ -106,10 +107,16 @@ export class OrderService {
     }
 
     /**
-     * Получает активный заказ пользователя (pending или paid статус)
+     * Получает активный заказ пользователя (pending или paid статус, не старше времени на оплату)
      */
     async getActiveOrder(userChatId) {
         console.log('[OrderService] getActiveOrder: Поиск активного заказа для пользователя', userChatId);
+        
+        // Получаем время на оплату из настроек
+        const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes() || 30;
+        console.log('[OrderService] getActiveOrder: Время на оплату (минут):', paymentTimeMinutes);
+        
+        // Получаем заказ со статусом pending или paid
         const result = await database.get(
             `SELECT * FROM orders 
              WHERE user_chat_id = ? 
@@ -118,8 +125,10 @@ export class OrderService {
              LIMIT 1`,
             [userChatId]
         );
+        
         console.log('[OrderService] getActiveOrder: SQL запрос выполнен');
         console.log('[OrderService] getActiveOrder: Результат:', result ? 'Найден заказ' : 'Заказ не найден');
+        
         if (result) {
             console.log('[OrderService] getActiveOrder: Детали найденного заказа:', {
                 id: result.id,
@@ -128,6 +137,37 @@ export class OrderService {
                 created_at: result.created_at,
                 product_id: result.product_id
             });
+            
+            // Проверяем, не истекло ли время на оплату
+            const orderDate = new Date(result.created_at);
+            const now = new Date();
+            const diffMinutes = (now - orderDate) / (1000 * 60);
+            console.log('[OrderService] getActiveOrder: Время с момента создания заказа (минут):', diffMinutes.toFixed(2));
+            console.log('[OrderService] getActiveOrder: Лимит времени (минут):', paymentTimeMinutes);
+            
+            if (diffMinutes > paymentTimeMinutes) {
+                console.log('[OrderService] getActiveOrder: Время на оплату истекло, заказ не считается активным');
+                
+                // Автоматически обновляем статус просроченного заказа на 'expired'
+                if (result.status === 'pending') {
+                    console.log('[OrderService] getActiveOrder: Обновление статуса заказа на expired');
+                    await this.updateStatus(result.id, 'expired');
+                }
+                
+                // Проверяем все заказы пользователя для отладки
+                const allOrders = await database.all(
+                    `SELECT id, status, created_at FROM orders 
+                     WHERE user_chat_id = ? 
+                     ORDER BY created_at DESC 
+                     LIMIT 10`,
+                    [userChatId]
+                );
+                console.log('[OrderService] getActiveOrder: Все заказы пользователя (последние 10):', allOrders);
+                
+                return null; // Заказ просрочен, не считается активным
+            } else {
+                console.log('[OrderService] getActiveOrder: Заказ еще активен, время не истекло');
+            }
         } else {
             // Проверяем все заказы пользователя для отладки
             const allOrders = await database.all(
@@ -139,6 +179,7 @@ export class OrderService {
             );
             console.log('[OrderService] getActiveOrder: Все заказы пользователя (последние 10):', allOrders);
         }
+        
         return result;
     }
 
