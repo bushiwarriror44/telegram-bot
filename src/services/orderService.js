@@ -109,7 +109,8 @@ export class OrderService {
      * Получает активный заказ пользователя (pending или paid статус)
      */
     async getActiveOrder(userChatId) {
-        return await database.get(
+        console.log('[OrderService] getActiveOrder: Поиск активного заказа для пользователя', userChatId);
+        const result = await database.get(
             `SELECT * FROM orders 
              WHERE user_chat_id = ? 
              AND (status = 'pending' OR status = 'paid')
@@ -117,6 +118,28 @@ export class OrderService {
              LIMIT 1`,
             [userChatId]
         );
+        console.log('[OrderService] getActiveOrder: SQL запрос выполнен');
+        console.log('[OrderService] getActiveOrder: Результат:', result ? 'Найден заказ' : 'Заказ не найден');
+        if (result) {
+            console.log('[OrderService] getActiveOrder: Детали найденного заказа:', {
+                id: result.id,
+                status: result.status,
+                user_chat_id: result.user_chat_id,
+                created_at: result.created_at,
+                product_id: result.product_id
+            });
+        } else {
+            // Проверяем все заказы пользователя для отладки
+            const allOrders = await database.all(
+                `SELECT id, status, created_at FROM orders 
+                 WHERE user_chat_id = ? 
+                 ORDER BY created_at DESC 
+                 LIMIT 10`,
+                [userChatId]
+            );
+            console.log('[OrderService] getActiveOrder: Все заказы пользователя (последние 10):', allOrders);
+        }
+        return result;
     }
 
     /**

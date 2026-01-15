@@ -514,12 +514,27 @@ export async function showProductDetails(ctx, productId) {
  */
 export async function createOrder(ctx, productId, promocodeId = null) {
     try {
+        console.log('[CatalogHandler] createOrder: Начало создания заказа');
+        console.log('[CatalogHandler] createOrder: User ID:', ctx.from.id);
+        console.log('[CatalogHandler] createOrder: Product ID:', productId);
+        console.log('[CatalogHandler] createOrder: Promocode ID:', promocodeId);
+
         // Проверяем, есть ли активный заказ
+        console.log('[CatalogHandler] createOrder: Проверка активного заказа для пользователя', ctx.from.id);
         const activeOrder = await orderService.getActiveOrder(ctx.from.id);
+        console.log('[CatalogHandler] createOrder: Результат проверки активного заказа:', activeOrder ? 'Найден' : 'Не найден');
         if (activeOrder) {
+            console.log('[CatalogHandler] createOrder: Детали активного заказа:', {
+                id: activeOrder.id,
+                status: activeOrder.status,
+                user_chat_id: activeOrder.user_chat_id,
+                created_at: activeOrder.created_at,
+                product_id: activeOrder.product_id
+            });
             await ctx.reply('❌ У вас есть активный заказ, сначала завершите или отмените его, чтобы создать новый заказ');
             return;
         }
+        console.log('[CatalogHandler] createOrder: Активный заказ не найден, продолжаем создание');
 
         // Проверяем, не заблокирован ли пользователь после отмены заказа
         const blockTime = orderCancelBlock.get(ctx.from.id);

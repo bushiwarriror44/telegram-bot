@@ -318,10 +318,10 @@ class Database {
     `);
     
     // Добавляем колонку message_type, если её нет (для существующих БД)
-    try {
+    const supportMessagesColumns = await this.db.all('PRAGMA table_info(support_messages)');
+    const hasMessageType = supportMessagesColumns.some((col) => col.name === 'message_type');
+    if (!hasMessageType) {
       await this.run(`ALTER TABLE support_messages ADD COLUMN message_type TEXT DEFAULT 'question'`);
-    } catch (error) {
-      // Колонка уже существует, игнорируем ошибку
     }
 
     // Таблица кнопок меню
