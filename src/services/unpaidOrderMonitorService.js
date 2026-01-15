@@ -109,8 +109,58 @@ export class UnpaidOrderMonitorService {
             }
 
             console.log(`[UnpaidOrderMonitor] Проверка завершена. Обработано предупреждений: ${processedCount}`);
+
+            // Проверяем истекшие заказы (которые стали expired и не оплачены)
+            await this.checkExpiredOrders();
         } catch (error) {
             console.error('[UnpaidOrderMonitor] Критическая ошибка при проверке неоплаченных заказов:', error);
+        }
+    }
+
+    /**
+     * Проверяет заказы со статусом expired и отправляет уведомления пользователям
+     */
+    async checkExpiredOrders() {
+        try {
+            console.log('[UnpaidOrderMonitor] Начало проверки истекших заказов...');
+
+            // Получаем все заказы со статусом expired, для которых еще не было отправлено уведомление
+            const expiredOrders = await orderService.getExpiredOrdersWithoutNotification();
+            console.log('[UnpaidOrderMonitor] Найдено истекших заказов без уведомлений:', expiredOrders.length);
+
+            let notificationCount = 0;
+
+            for (const order of expiredOrders) {
+                try {
+                    const chatId = order.user_chat_id;
+                    if (!chatId) continue;
+
+                    // Помечаем заказ как обработанный в БД (чтобы уведомление не отправлялось повторно)
+                    await orderService.markExpiredNotificationAsSent(order.id);
+
+                    // Отправляем уведомление об истечении заказа
+                    try {
+                        await this.bot.telegram.sendMessage(
+                            chatId,
+                            `🥲 Ваш заказ №${order.id} не была вовремя оплачен. \n\n<b>Внимание!</b> Запрещено создавать заказы и не оплачивать их. За это Вы будете заблокированы на ${blockTimeHours} часов.`,
+                            { parse_mode: 'HTML' }
+                        );
+
+                        notificationCount++;
+                        console.log(`[UnpaidOrderMonitor] Уведомление об истечении заказа отправлено пользователю ${chatId} (заказ #${order.id})`);
+                    } catch (error) {
+                        console.error(`[UnpaidOrderMonitor] Ошибка отправки уведомления об истечении заказа пользователю ${chatId}:`, error.message);
+                        // Если не удалось отправить, откатываем пометку в БД
+                        await database.run('UPDATE orders SET expired_notification_sent = 0 WHERE id = ?', [order.id]);
+                    }
+                } catch (error) {
+                    console.error(`[UnpaidOrderMonitor] Ошибка при обработке истекшего заказа #${order.id}:`, error);
+                }
+            }
+
+            console.log(`[UnpaidOrderMonitor] Проверка истекших заказов завершена. Отправлено уведомлений: ${notificationCount}`);
+        } catch (error) {
+            console.error('[UnpaidOrderMonitor] Критическая ошибка при проверке истекших заказов:', error);
         }
     }
 }

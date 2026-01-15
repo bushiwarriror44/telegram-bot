@@ -470,6 +470,12 @@ class Database {
       await this.run('ALTER TABLE orders ADD COLUMN warning_sent INTEGER DEFAULT 0');
       console.log('[DB.init] Колонка warning_sent добавлена в таблицу orders');
     }
+    const hasExpiredNotificationSent = orderColumns.some((col) => col.name === 'expired_notification_sent');
+    if (!hasExpiredNotificationSent) {
+      console.log('[DB.init] Добавление колонки expired_notification_sent в таблицу orders...');
+      await this.run('ALTER TABLE orders ADD COLUMN expired_notification_sent INTEGER DEFAULT 0');
+      console.log('[DB.init] Колонка expired_notification_sent добавлена в таблицу orders');
+    }
 
     // Миграция: добавляем колонку cards в существующую таблицу card_accounts при необходимости
     const cardAccountColumns = await this.db.all('PRAGMA table_info(card_accounts)');

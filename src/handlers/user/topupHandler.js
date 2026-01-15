@@ -136,7 +136,10 @@ export function registerTopupHandlers(bot) {
                 ['cancelled', topupId]
             );
             await ctx.answerCbQuery('Заявка отменена');
-            await ctx.editMessageText('❌ Заявка на пополнение отменена.');
+            await ctx.editMessageText('❌ Заявка на пополнение отменена.\n\n⚠️ Не спамьте заявками на пополнение, иначе вы будете заблокированы в боте!'); 
+            // 123
+            
+
 
             // Возвращаем обычные кнопки меню
             const menuKeyboard = await getMenuKeyboard();

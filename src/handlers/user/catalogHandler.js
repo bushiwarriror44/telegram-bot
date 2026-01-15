@@ -173,6 +173,38 @@ export function registerCatalogHandlers(bot) {
         await showOrderDetails(ctx, orderId);
     });
 
+    // Обработка кнопки "Отменить активный заказ"
+    bot.action(/^cancel_active_order_(\d+)$/, async (ctx) => {
+        await ctx.answerCbQuery();
+        const orderId = parseInt(ctx.match[1]);
+        const order = await orderService.getById(orderId);
+
+        if (!order) {
+            await ctx.reply('❌ Заказ не найден.');
+            return;
+        }
+
+        // Проверяем, что заказ принадлежит пользователю
+        if (order.user_chat_id !== ctx.from.id) {
+            await ctx.reply('❌ Это не ваш заказ.');
+            return;
+        }
+
+        // Проверяем, что заказ можно отменить (pending или paid)
+        if (order.status !== 'pending' && order.status !== 'paid') {
+            await ctx.reply('❌ Заказ уже обработан.');
+            return;
+        }
+
+        // Отменяем заказ
+        await orderService.cancelOrder(orderId);
+
+        // Устанавливаем блокировку на 30 минут
+        orderCancelBlock.set(ctx.from.id, Date.now());
+
+        await ctx.reply('✅ Заказ успешно отменен, удачных покупок');
+    });
+
     // Обработка кнопки "Скопировать реквизиты"
     bot.action(/^copy_payment_details_(\d+)$/, async (ctx) => {
         const orderId = parseInt(ctx.match[1]);
@@ -563,7 +595,8 @@ export async function createOrder(ctx, productId, promocodeId = null) {
                 {
                     reply_markup: {
                         inline_keyboard: [
-                            [{ text: '📋 Перейти к активному заказу', callback_data: `view_active_order_${activeOrder.id}` }]
+                            [{ text: '📋 Перейти к активному заказу', callback_data: `view_active_order_${activeOrder.id}` }],
+                            [{ text: '❌ Отменить активный заказ', callback_data: `cancel_active_order_${activeOrder.id}` }]
                         ]
                     }
                 }
@@ -576,7 +609,7 @@ export async function createOrder(ctx, productId, promocodeId = null) {
         const blockTime = orderCancelBlock.get(ctx.from.id);
         if (blockTime && Date.now() - blockTime < 30 * 60 * 1000) {
             const remainingMinutes = Math.ceil((30 * 60 * 1000 - (Date.now() - blockTime)) / (60 * 1000));
-            await ctx.reply(`⏰ Вы не можете создавать новые заявки в течение ${remainingMinutes} минут после отмены текущей.`);
+            await ctx.reply(`⏰ Вы не можете создавать новые заказы в течение ${remainingMinutes} минут после отмены текущего заказа.`);
             return;
         }
 

@@ -193,6 +193,29 @@ export class OrderService {
         );
         return await this.getById(orderId);
     }
+
+    /**
+     * Получает заказы со статусом expired, для которых еще не было отправлено уведомление
+     */
+    async getExpiredOrdersWithoutNotification() {
+        return await database.all(
+            `SELECT * FROM orders 
+             WHERE status = 'expired' 
+             AND (expired_notification_sent IS NULL OR expired_notification_sent = 0)
+             ORDER BY created_at DESC`
+        );
+    }
+
+    /**
+     * Помечает заказ как обработанный (уведомление об истечении отправлено)
+     */
+    async markExpiredNotificationAsSent(orderId) {
+        await database.run(
+            'UPDATE orders SET expired_notification_sent = 1 WHERE id = ?',
+            [orderId]
+        );
+        return await this.getById(orderId);
+    }
 }
 
 export const orderService = new OrderService();
