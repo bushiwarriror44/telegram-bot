@@ -21,6 +21,8 @@ export function setNotificationService(service) {
  * @param {Object} bot - Экземпляр Telegraf бота
  */
 export function registerTopupHandlers(bot) {
+    console.log('[TopupHandler] Регистрация обработчиков пополнения...');
+
     // Обработчик кнопки "Пополнить"
     bot.action('topup_balance', async (ctx) => {
         await showTopupMenu(ctx);
@@ -33,32 +35,48 @@ export function registerTopupHandlers(bot) {
     });
 
     // Обработка подтверждения ТРАНСГРАН
-    bot.action(/^confirm_transgran_(\d+)_(.+)$/, async (ctx) => {
-        const methodId = parseInt(ctx.match[1]);
-        const amount = parseFloat(ctx.match[2]);
-        await ctx.answerCbQuery();
-        await showTopupMethod(ctx, methodId, amount, true);
+    bot.action(/^confirm_transgran_(\d+)_([\d.]+)$/, async (ctx) => {
+        console.log('[TopupHandler] Обработка подтверждения ТРАНСГРАН, callback_data:', ctx.callbackQuery?.data);
+        try {
+            const methodId = parseInt(ctx.match[1]);
+            const amount = parseFloat(ctx.match[2]);
+            console.log('[TopupHandler] methodId:', methodId, 'amount:', amount);
+            await ctx.answerCbQuery();
+            await showTopupMethod(ctx, methodId, amount, true);
+        } catch (error) {
+            console.error('[TopupHandler] Ошибка при обработке подтверждения ТРАНСГРАН:', error);
+            await ctx.answerCbQuery('Произошла ошибка. Попробуйте еще раз.');
+        }
     });
 
     // Обработка отмены ТРАНСГРАН
     bot.action(/^cancel_transgran_(\d+)$/, async (ctx) => {
-        const methodId = parseInt(ctx.match[1]);
-        await ctx.answerCbQuery();
-
-        // Удаляем предварительную запись о пополнении, если она была создана
-        const { database } = await import('../../database/db.js');
+        console.log('[TopupHandler] Обработка отмены ТРАНСГРАН, callback_data:', ctx.callbackQuery?.data);
         try {
-            await database.run(
-                'DELETE FROM topups WHERE user_chat_id = ? AND payment_method_id = ? AND status = ? AND amount = 0',
-                [ctx.from.id, methodId, 'pending']
-            );
-        } catch (error) {
-            console.error('[TopupHandler] Ошибка при удалении предварительной записи о пополнении:', error);
-        }
+            const methodId = parseInt(ctx.match[1]);
+            console.log('[TopupHandler] methodId:', methodId);
+            await ctx.answerCbQuery();
 
-        // Возвращаемся к выбору метода пополнения
-        await showTopupMenu(ctx);
+            // Удаляем предварительную запись о пополнении, если она была создана
+            const { database } = await import('../../database/db.js');
+            try {
+                await database.run(
+                    'DELETE FROM topups WHERE user_chat_id = ? AND payment_method_id = ? AND status = ? AND amount = 0',
+                    [ctx.from.id, methodId, 'pending']
+                );
+            } catch (error) {
+                console.error('[TopupHandler] Ошибка при удалении предварительной записи о пополнении:', error);
+            }
+
+            // Возвращаемся к выбору метода пополнения
+            await showTopupMenu(ctx);
+        } catch (error) {
+            console.error('[TopupHandler] Ошибка при обработке отмены ТРАНСГРАН:', error);
+            await ctx.answerCbQuery('Произошла ошибка. Попробуйте еще раз.');
+        }
     });
+
+    console.log('[TopupHandler] Обработчики пополнения зарегистрированы');
 
     // Обработка кнопки "Скопировать реквизиты" для пополнения
     bot.action(/^copy_topup_(\d+)$/, async (ctx) => {
@@ -226,10 +244,17 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
             // Показываем предупреждение для ТРАНСГРАН
             const warningText = `⚠️ Оплата на реквизиты другой страны (СНГ).\nВы точно хотите продолжить?`;
 
+            // Формируем callback_data, убеждаясь что amount - это число без лишних символов
+            const confirmCallback = `confirm_transgran_${methodId}_${amount}`;
+            const cancelCallback = `cancel_transgran_${methodId}`;
+            console.log('[TopupHandler] Формирование callback_data для ТРАНСГРАН:');
+            console.log('[TopupHandler] confirmCallback:', confirmCallback);
+            console.log('[TopupHandler] cancelCallback:', cancelCallback);
+
             const warningMarkup = {
                 inline_keyboard: [
-                    [{ text: 'Да', callback_data: `confirm_transgran_${methodId}_${amount}` }],
-                    [{ text: 'Нет', callback_data: `cancel_transgran_${methodId}` }]
+                    [{ text: 'Да', callback_data: confirmCallback }],
+                    [{ text: 'Нет', callback_data: cancelCallback }]
                 ]
             };
 
