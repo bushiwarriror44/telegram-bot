@@ -1,7 +1,6 @@
 import { userService } from '../../services/userService.js';
 import { cityService } from '../../services/cityService.js';
 import { settingsService } from '../../services/settingsService.js';
-import { showStorefrontMenu } from './catalogHandler.js';
 import { showCitiesMenu, showDistrictsMenu, showProductsMenu, showProductDetails } from './catalogHandler.js';
 
 /**
@@ -9,12 +8,12 @@ import { showCitiesMenu, showDistrictsMenu, showProductsMenu, showProductDetails
  * @param {Object} bot - Экземпляр Telegraf бота
  */
 export function registerNavigationHandlers(bot) {
-    // Вернуться к витрине
+    // Вернуться к городам (раньше было "к витрине", теперь сразу к городам)
     bot.action('back_to_storefront', async (ctx) => {
         try {
-            await showStorefrontMenu(ctx);
+            await showCitiesMenu(ctx);
         } catch (error) {
-            console.error('[NavigationHandler] Ошибка при возврате к витрине:', error);
+            console.error('[NavigationHandler] Ошибка при возврате к городам:', error);
             await ctx.reply('Произошла ошибка. Попробуйте позже.');
         }
     });

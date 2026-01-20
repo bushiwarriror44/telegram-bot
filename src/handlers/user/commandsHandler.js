@@ -60,7 +60,7 @@ export async function processStartCommand(ctx, isAdmin) {
  */
 export async function registerCommands(bot, isAdmin) {
     // Импортируем функции из других модулей
-    const { showStorefrontMenu } = await import('./catalogHandler.js');
+    const { showCitiesMenu } = await import('./catalogHandler.js');
     const { showCabinetMenu } = await import('./cabinetHandler.js');
     // Главное меню - выбор города
     bot.start(async (ctx) => {
@@ -89,9 +89,9 @@ export async function registerCommands(bot, isAdmin) {
                     const { readFileSync } = await import('fs');
                     const { createCaptchaButtons } = await import('../../utils/captchaHelper.js');
                     const imageBuffer = readFileSync(captcha.imagePath);
-                    
+
                     const buttons = createCaptchaButtons(captcha.options);
-                    
+
                     await ctx.replyWithPhoto(
                         { source: imageBuffer },
                         {
@@ -134,7 +134,7 @@ export async function registerCommands(bot, isAdmin) {
     });
     console.log('[UserHandlers] Обработчик /start зарегистрирован');
 
-    // Команда /catalog - каталог товаров (показ меню витрины)
+    // Команда /catalog - каталог товаров (показ меню городов)
     bot.command('catalog', async (ctx) => {
         console.log('[UserHandlers] Команда /catalog получена');
         try {
@@ -143,7 +143,7 @@ export async function registerCommands(bot, isAdmin) {
                 first_name: ctx.from.first_name,
                 last_name: ctx.from.last_name
             });
-            await showStorefrontMenu(ctx);
+            await showCitiesMenu(ctx);
         } catch (error) {
             console.error('[UserHandlers] ОШИБКА в обработчике /catalog:', error);
             await ctx.reply('Произошла ошибка. Попробуйте позже.');

@@ -48,36 +48,9 @@ export function registerAuthHandlers(bot, adminSessions, showAdminPanel, showAdm
                 });
                 console.log('[AdminHandlers] Приветственное сообщение отправлено');
 
-                // Настройка админского меню команд для этого пользователя
-                console.log('[AdminHandlers] Настройка админского меню команд...');
-                try {
-                    const adminCommands = [
-                        { command: 'apanel', description: 'Админ-панель' },
-                        { command: 'sendnotification', description: 'Создать уведомление' },
-                        { command: 'addcity', description: 'Добавить город' },
-                        { command: 'addproduct', description: 'Добавить товар' },
-                        { command: 'addpayment', description: 'Добавить метод оплаты' },
-                        { command: 'setaddress', description: 'Установить адрес оплаты' },
-                        { command: 'addcard', description: 'Добавить карточный счет' },
-                        { command: 'addpack', description: 'Добавить фасовку' }
-                    ];
-
-                    bot.telegram.setMyCommands(adminCommands, {
-                        scope: {
-                            type: 'chat',
-                            chat_id: ctx.from.id
-                        }
-                    }).then(() => {
-                        console.log('[AdminHandlers] Админское меню команд установлено для пользователя:', ctx.from.id);
-                    }).catch((error) => {
-                        console.error('[AdminHandlers] Ошибка при установке админского меню команд:', error);
-                        bot.telegram.setMyCommands(adminCommands).catch(err => {
-                            console.error('[AdminHandlers] Ошибка при установке команд глобально:', err);
-                        });
-                    });
-                } catch (error) {
-                    console.error('[AdminHandlers] Критическая ошибка при настройке меню команд:', error);
-                }
+                // Админские команды остаются доступными, но не отображаются в меню
+                // Это позволяет использовать команды напрямую, но не засоряет меню
+                console.log('[AdminHandlers] Админские команды доступны, но не отображаются в меню');
 
                 // Показываем админские reply keyboard кнопки
                 await showAdminMenuKeyboard(ctx);

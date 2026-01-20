@@ -8,7 +8,7 @@ import { topupAmountMode } from './topupHandler.js';
 import { promocodeInputMode } from './catalogHandler.js';
 import { showTopupMethod } from './topupHandler.js';
 import { createOrder } from './catalogHandler.js';
-import { showStorefrontMenu } from './catalogHandler.js';
+import { showCitiesMenu } from './catalogHandler.js';
 import { showCabinetMenu } from './cabinetHandler.js';
 import { showHelpMenu, showSupportInput } from './supportHandler.js';
 import { showReviews } from './reviewsHandler.js';
@@ -40,13 +40,13 @@ export function registerTextHandlers(bot) {
             if (isValid) {
                 // Капча пройдена, выполняем логику команды /start
                 await ctx.reply('✅ Капча пройдена!');
-                
+
                 try {
                     // Импортируем функцию обработки start
                     const { processStartCommand } = await import('./commandsHandler.js');
                     const { getIsAdminFunction } = await import('../userHandlers.js');
                     const isAdmin = getIsAdminFunction();
-                    
+
                     // Выполняем логику start
                     await processStartCommand(ctx, isAdmin);
                 } catch (error) {
@@ -58,13 +58,13 @@ export function registerTextHandlers(bot) {
                 try {
                     const captcha = await generateCaptcha();
                     saveCaptcha(ctx.from.id, captcha.imagePath, captcha.answer, captcha.options);
-                    
+
                     const { readFileSync } = await import('fs');
                     const { createCaptchaButtons } = await import('../../utils/captchaHelper.js');
                     const imageBuffer = readFileSync(captcha.imagePath);
-                    
+
                     const buttons = createCaptchaButtons(captcha.options);
-                    
+
                     await ctx.replyWithPhoto(
                         { source: imageBuffer },
                         {
@@ -98,11 +98,11 @@ export function registerTextHandlers(bot) {
             const supportType = supportMode.get(ctx.from.id);
             await supportService.saveUserMessage(ctx.from.id, ctx.message.text, supportType);
             supportMode.delete(ctx.from.id);
-            
+
             // Восстанавливаем обычную клавиатуру меню
             const { getMenuKeyboard } = await import('../../utils/keyboardHelpers.js');
             const keyboard = await getMenuKeyboard();
-            
+
             await ctx.reply('✅ Ваше сообщение отправлено в поддержку. Мы свяжемся с вами как можно быстрее!', {
                 reply_markup: keyboard
             });
@@ -222,7 +222,7 @@ export function registerTextHandlers(bot) {
             first_name: ctx.from.first_name,
             last_name: ctx.from.last_name
         });
-        await showStorefrontMenu(ctx);
+        await showCitiesMenu(ctx);
     });
 
     bot.hears(['⚙️ Мой кабинет', 'Мой кабинет'], async (ctx) => {
