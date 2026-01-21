@@ -5,7 +5,7 @@ import { settingsService } from '../../services/settingsService.js';
 import { reviewService } from '../../services/reviewService.js';
 import { database } from '../../database/db.js';
 import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import sqlite3 from 'sqlite3';
 import { isAdmin } from './authHandler.js';
@@ -45,7 +45,9 @@ export function registerMediaHandlers(bot) {
                 // Создаем директорию для изображений товаров, если её нет
                 const __filename = fileURLToPath(import.meta.url);
                 const __dirname = dirname(__filename);
-                const imagesDir = join(__dirname, '../..', 'src/assets/products');
+                // projectRoot: .../telegram-bot (нужно, чтобы совпадало с поиском в user/catalogHandler.js)
+                const projectRoot = join(__dirname, '../../..');
+                const imagesDir = join(projectRoot, 'src/assets/products');
                 if (!existsSync(imagesDir)) {
                     mkdirSync(imagesDir, { recursive: true });
                 }
@@ -57,9 +59,10 @@ export function registerMediaHandlers(bot) {
                 writeFileSync(imagePath, Buffer.from(buffer));
 
                 // Сохраняем относительный путь в БД
-                const relativePath = `src/assets/products/${imagePath.split('products/')[1]}`;
+                const relativePath = `src/assets/products/${basename(imagePath)}`;
                 console.log('[AdminMediaHandler] Product photo saved:', {
                     productId,
+                    projectRoot,
                     imagesDir,
                     imagePath,
                     relativePath,
@@ -128,7 +131,8 @@ export function registerMediaHandlers(bot) {
                 // Создаем директорию для изображений, если её нет
                 const __filename = fileURLToPath(import.meta.url);
                 const __dirname = dirname(__filename);
-                const imagesDir = join(__dirname, '../..', 'src/assets/products');
+                const projectRoot = join(__dirname, '../../..');
+                const imagesDir = join(projectRoot, 'src/assets/products');
                 if (!existsSync(imagesDir)) {
                     mkdirSync(imagesDir, { recursive: true });
                 }
@@ -140,11 +144,12 @@ export function registerMediaHandlers(bot) {
                 writeFileSync(imagePath, Buffer.from(buffer));
 
                 // Сохраняем относительный путь в шаблоне
-                const relativePath = `src/assets/products/${imagePath.split('products/')[1]}`;
+                const relativePath = `src/assets/products/${basename(imagePath)}`;
                 template.image_path = relativePath;
                 console.log('[AdminMediaHandler] Predefined photo saved:', {
                     index,
                     templateName: template.name,
+                    projectRoot,
                     imagesDir,
                     imagePath,
                     relativePath,
