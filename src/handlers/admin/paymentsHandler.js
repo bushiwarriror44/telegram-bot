@@ -11,7 +11,7 @@ export function registerPaymentsHandlers(bot) {
         await showPaymentsAdmin(ctx);
     });
 
-    bot.hears('Управление методами оплаты', async (ctx) => {
+    bot.hears('Управление счетами (Crypto)', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showPaymentsAdmin(ctx);
     });
@@ -212,7 +212,7 @@ export async function showPaymentsAdmin(ctx) {
     const methods = await paymentService.getAllMethods(true);
 
     const text = `
-💳 <b>Управление методами оплаты</b>
+💳 <b>Управление счетами (Crypto)</b>
 
 Доступные методы:
 ${methods.map(m => `• ${m.name} (${m.network})`).join('\n') || 'Методов оплаты пока нет'}

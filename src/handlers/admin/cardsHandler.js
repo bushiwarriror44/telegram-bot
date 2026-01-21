@@ -11,7 +11,7 @@ export function registerCardsHandlers(bot) {
         await showCardsAdmin(ctx);
     });
 
-    bot.hears('Управление карточными счетами', async (ctx) => {
+    bot.hears('Управление счетами (Карты)', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showCardsAdmin(ctx);
     });
@@ -184,7 +184,7 @@ export async function showCardsAdmin(ctx) {
     }
 
     const text = `
-💳 <b>Управление карточными счетами</b>
+💳 <b>Управление счетами (Карты)</b>
 
 Текущие карточные счета:
 ${cardsText}
