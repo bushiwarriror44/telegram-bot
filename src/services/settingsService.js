@@ -104,7 +104,8 @@ export class SettingsService {
    * Получает время блокировки в часах за неоплаченные заказы
    */
   async getBlockTimeHours() {
-    return parseFloat(await this.get('block_time_hours', '12'));
+    // По умолчанию блокируем на 30 минут (0.5 часа)
+    return parseFloat(await this.get('block_time_hours', '0.5'));
   }
 
   /**

@@ -16,30 +16,14 @@ const mockCities = [
 ];
 
 export const mockProducts = {
+  // Единственный предустановленный товар
   'Москва': [
-    { name: 'iPhone 15 Pro', description: 'Новейший смартфон Apple с процессором A17 Pro', price: 89999 },
-    { name: 'MacBook Pro M3', description: 'Мощный ноутбук для работы и творчества', price: 199999 },
-    { name: 'AirPods Pro 2', description: 'Беспроводные наушники с активным шумоподавлением', price: 24999 }
-  ],
-  'Санкт-Петербург': [
-    { name: 'Samsung Galaxy S24', description: 'Флагманский Android смартфон', price: 79999 },
-    { name: 'iPad Air', description: 'Планшет для работы и развлечений', price: 59999 },
-    { name: 'Apple Watch Series 9', description: 'Умные часы с множеством функций', price: 39999 }
-  ],
-  'Новосибирск': [
-    { name: 'Xiaomi 14 Pro', description: 'Премиальный смартфон от Xiaomi', price: 69999 },
-    { name: 'PlayStation 5', description: 'Игровая консоль нового поколения', price: 49999 },
-    { name: 'Nintendo Switch', description: 'Портативная игровая консоль', price: 29999 }
-  ],
-  'Екатеринбург': [
-    { name: 'Google Pixel 8', description: 'Смартфон с лучшей камерой', price: 74999 },
-    { name: 'Sony WH-1000XM5', description: 'Наушники с премиальным звуком', price: 34999 },
-    { name: 'DJI Mini 4 Pro', description: 'Компактный дрон для съемки', price: 99999 }
-  ],
-  'Казань': [
-    { name: 'OnePlus 12', description: 'Быстрый смартфон с быстрой зарядкой', price: 64999 },
-    { name: 'Steam Deck', description: 'Портативная игровая консоль от Valve', price: 44999 },
-    { name: 'Meta Quest 3', description: 'VR шлем для виртуальной реальности', price: 59999 }
+    {
+      name: 'Шишки Amnezia Haze',
+      description: '',
+      price: 1000,
+      packagingId: null 
+    }
   ]
 };
 

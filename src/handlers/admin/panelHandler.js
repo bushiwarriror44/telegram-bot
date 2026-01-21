@@ -29,7 +29,7 @@ export async function showAdminPanel(ctx) {
     const cardAccountsList = cardAccounts.map(card => {
         // Получаем случайную карту из массива
         const cards = card.cards || [card.account_number];
-        const randomCard = cards.length > 0 
+        const randomCard = cards.length > 0
             ? cards[Math.floor(Math.random() * cards.length)]
             : card.account_number;
         return `${card.name}: <code>${randomCard}</code>`;
@@ -62,6 +62,7 @@ ${addressesText}
                 [{ text: '⚖️ Управление фасовками', callback_data: 'admin_packagings' }],
                 [{ text: '💳 Управление счетами (Crypto)', callback_data: 'admin_payments' }],
                 [{ text: '💳 Управление счетами (Карты)', callback_data: 'admin_cards' }],
+                [{ text: '📦 Предустановленные товары', callback_data: 'admin_predefined_products' }],
                 [{ text: '💬 Чаты', callback_data: 'admin_chats' }],
                 [{ text: '📢 Создать уведомление', callback_data: 'admin_notification' }],
                 [{ text: '💾 Данные', callback_data: 'admin_data' }],
@@ -97,12 +98,12 @@ export function registerPanelHandlers(bot) {
             await ctx.answerCbQuery('❌ У вас нет доступа');
             return;
         }
-        
+
         await ctx.answerCbQuery();
-        
+
         const { settingsService } = await import('../../services/settingsService.js');
         const currentChannelId = await settingsService.getNotificationChannelId();
-        
+
         const text = currentChannelId
             ? `📢 <b>Привязка Telegram-канала</b>\n\n` +
             `Текущий канал: <code>${currentChannelId}</code>\n\n` +

@@ -648,7 +648,7 @@ export async function showPredefinedProducts(ctx) {
     const currencySymbol = await settingsService.getCurrencySymbol();
 
     const text = `
-📦 <b>Предустановленные товары</b>
+📦 <b> товары</b>
 
 Выберите товар для добавления:
     `.trim();
@@ -874,7 +874,7 @@ export async function showPredefinedProductsList(ctx) {
     }
 
     const text = `
-📦 <b>Предустановленные товары</b>
+📦 <b> товары</b>
 
 Список всех товаров:
 ${products.map((product, index) =>

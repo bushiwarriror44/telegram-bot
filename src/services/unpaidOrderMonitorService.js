@@ -48,7 +48,8 @@ export class UnpaidOrderMonitorService {
 
             // Получаем время на оплату из настроек (по умолчанию 30 минут)
             const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes() || 30;
-            const blockTimeHours = await settingsService.getBlockTimeHours() || 24;
+            const blockTimeHours = await settingsService.getBlockTimeHours() || 0.5;
+            const blockTimeMinutes = Math.round(blockTimeHours * 60);
 
             // Получаем всех пользователей
             const allUsers = await userService.getAllUsers();
@@ -83,7 +84,7 @@ export class UnpaidOrderMonitorService {
                             await this.bot.telegram.sendMessage(
                                 chatId,
                                 `🥲 Заявка на пополнение №${lastUnpaidOrder.id} не была вовремя оплачена.\n\n` +
-                                `<b>Внимание!</b> Запрещено создавать заявки на пополнение и не оплачивать их. За это Вы будете заблокированы на ${blockTimeHours} часов.\n\n` +
+                                `<b>Внимание!</b> Запрещено создавать заявки на пополнение и не оплачивать их. За это Вы будете заблокированы на ${blockTimeMinutes} минут.\n\n` +
                                 `У Вас осталось ${remainingAttempts} попытки получения реквизитов.`,
                                 { parse_mode: 'HTML' }
                             );
@@ -124,6 +125,10 @@ export class UnpaidOrderMonitorService {
         try {
             console.log('[UnpaidOrderMonitor] Начало проверки истекших заказов...');
 
+            // Время блокировки при не оплате (часы)
+            const blockTimeHours = await settingsService.getBlockTimeHours() || 0.5;
+            const blockTimeMinutes = Math.round(blockTimeHours * 60);
+
             // Получаем все заказы со статусом expired, для которых еще не было отправлено уведомление
             const expiredOrders = await orderService.getExpiredOrdersWithoutNotification();
             console.log('[UnpaidOrderMonitor] Найдено истекших заказов без уведомлений:', expiredOrders.length);
@@ -142,7 +147,7 @@ export class UnpaidOrderMonitorService {
                     try {
                         await this.bot.telegram.sendMessage(
                             chatId,
-                            `🥲 Ваш заказ №${order.id} не была вовремя оплачен. \n\n<b>Внимание!</b> Запрещено создавать заказы и не оплачивать их. За это Вы будете заблокированы на ${blockTimeHours} часов.`,
+                            `🥲 Ваш заказ №${order.id} не была вовремя оплачен. \n\n<b>Внимание!</b> Запрещено создавать заказы и не оплачивать их. За это Вы будете заблокированы на ${blockTimeMinutes} минут.`,
                             { parse_mode: 'HTML' }
                         );
 
