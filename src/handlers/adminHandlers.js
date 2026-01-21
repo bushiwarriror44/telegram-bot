@@ -91,7 +91,7 @@ export function setupAdminHandlers(bot) {
         await showCurrencySettings(ctx);
     });
 
-    bot.hears(['Реквизиты оплаты', '💳 Реквизиты оплаты'], async (ctx) => {
+    bot.hears(['Крипто адреса', '💳 Крипто адреса'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showPaymentsAdmin } = await import('./admin/paymentsHandler.js');
@@ -105,7 +105,7 @@ export function setupAdminHandlers(bot) {
         await showMenuButtonsAdmin(ctx);
     });
 
-    bot.hears(['Карты', '💳 Карты'], async (ctx) => {
+    bot.hears(['Карточные адреса', '💳 Карточные адреса'], async (ctx) => {
         const { isAdmin } = await import('./admin/authHandler.js');
         if (!isAdmin(ctx.from.id)) return;
         const { showCardsAdmin } = await import('./admin/cardsHandler.js');
