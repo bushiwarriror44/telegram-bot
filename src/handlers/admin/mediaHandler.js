@@ -58,6 +58,13 @@ export function registerMediaHandlers(bot) {
 
                 // Сохраняем относительный путь в БД
                 const relativePath = `src/assets/products/${imagePath.split('products/')[1]}`;
+                console.log('[AdminMediaHandler] Product photo saved:', {
+                    productId,
+                    imagesDir,
+                    imagePath,
+                    relativePath,
+                    exists: existsSync(imagePath)
+                });
                 await productService.updateImage(productId, relativePath);
 
                 productImageUploadMode.delete(ctx.from.id);
@@ -135,6 +142,14 @@ export function registerMediaHandlers(bot) {
                 // Сохраняем относительный путь в шаблоне
                 const relativePath = `src/assets/products/${imagePath.split('products/')[1]}`;
                 template.image_path = relativePath;
+                console.log('[AdminMediaHandler] Predefined photo saved:', {
+                    index,
+                    templateName: template.name,
+                    imagesDir,
+                    imagePath,
+                    relativePath,
+                    exists: existsSync(imagePath)
+                });
 
                 // Применяем изображение ко всем уже созданным товарам с таким названием
                 await productService.updateImageByName(template.name, relativePath);
