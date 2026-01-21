@@ -25,6 +25,14 @@ export function registerPackagingsHandlers(bot) {
         );
     });
 
+    // Добавление товара из предустановленного шаблона (через раздел фасовок)
+    bot.action('admin_packaging_add_product', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await ctx.answerCbQuery();
+        const { showPredefinedProductsForPlacement } = await import('./productsHandler.js');
+        await showPredefinedProductsForPlacement(ctx);
+    });
+
     bot.command('addpack', async (ctx) => {
         if (!isAdmin(ctx.from.id)) {
             await ctx.reply('❌ У вас нет доступа.');
@@ -77,6 +85,7 @@ ${packagings.map((p) => `• ${formatPackaging(p.value)} (id: ${p.id})`).join('\
     const replyMarkup = {
         inline_keyboard: [
             [{ text: '➕ Добавить фасовку', callback_data: 'admin_packaging_add' }],
+            [{ text: '➕ Добавить товар из шаблона', callback_data: 'admin_packaging_add_product' }],
             [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
         ]
     };

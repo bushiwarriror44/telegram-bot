@@ -21,8 +21,7 @@ export const mockProducts = {
     {
       name: 'Шишки Amnezia Haze',
       description: '',
-      price: 1000,
-      packagingId: null,
+      // ВАЖНО: цена и фасовка задаются при размещении товара по районам
       image_path: null
     }
   ]

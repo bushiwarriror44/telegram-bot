@@ -24,11 +24,15 @@ export const productPackagingEditMode = new Map(); // userId -> productId
 
 // Режимы добавления/размещения предустановленных товаров
 export const predefinedProductSelectMode = new Map(); // userId -> true (выбор предустановленного товара)
-export const predefinedProductCityMode = new Map(); // userId -> { name, description, price, image_path } (выбор города)
-export const predefinedProductDistrictMode = new Map(); // userId -> { name, description, price, image_path, cityId, cityName } (выбор района)
+export const predefinedProductCityMode = new Map(); // userId -> { name, description, image_path } (выбор города)
+export const predefinedProductDistrictMode = new Map(); // userId -> { name, description, image_path, cityId, cityName } (выбор района)
 export const predefinedProductAddMode = new Map(); // userId -> 'name' | 'description' | 'price' | 'packaging' (добавление нового предустановленного товара)
 export const predefinedProductAddSource = new Map(); // userId -> 'settings' | 'products' (источник вызова добавления товара)
 export const predefinedProductImageUploadMode = new Map(); // userId -> predefinedIndex (загрузка фото для предустановленного товара)
+
+// Новый flow: добавление товара из шаблона через "Фасовки"
+export const predefinedPlacementMode = new Map(); // userId -> 'city_input'|'district_input'|'packaging_input'|'price_input'
+export const predefinedPlacementState = new Map(); // userId -> { templateIndex, name, description, image_path, cityId, cityName, districtIds:Set<number>, packagingId, packagingValue, price }
 
 /**
  * Регистрирует обработчики управления товарами
@@ -337,7 +341,112 @@ export function registerProductsHandlers(bot) {
     // Обработчик для добавления предустановленного товара
     bot.action('admin_products_add_predefined', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
-        await showPredefinedProducts(ctx);
+        await showPredefinedProductsForPlacement(ctx);
+    });
+
+    // Новый flow: выбор шаблона для размещения (используется в разделе "Фасовки" и кнопке "Добавить из шаблона")
+    bot.action(/^admin_predef_place_template_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const templateIndex = parseInt(ctx.match[1]);
+        const templates = getMockProducts();
+        const tpl = templates[templateIndex];
+        if (!tpl) {
+            await ctx.answerCbQuery('❌ Товар не найден');
+            return;
+        }
+        predefinedPlacementState.set(ctx.from.id, {
+            templateIndex,
+            name: tpl.name,
+            description: tpl.description || '',
+            image_path: tpl.image_path || null,
+            cityId: null,
+            cityName: null,
+            districtIds: new Set(),
+            packagingId: null,
+            packagingValue: null,
+            price: null
+        });
+        await ctx.answerCbQuery();
+        await showCitiesForPlacement(ctx);
+    });
+
+    // Выбор города (кнопкой)
+    bot.action(/^admin_predef_place_city_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const cityId = parseInt(ctx.match[1]);
+        const city = await cityService.getById(cityId);
+        if (!city) {
+            await ctx.answerCbQuery('❌ Город не найден');
+            return;
+        }
+        const st = predefinedPlacementState.get(ctx.from.id);
+        if (!st) return;
+        st.cityId = city.id;
+        st.cityName = city.name;
+        st.districtIds = new Set();
+        predefinedPlacementState.set(ctx.from.id, st);
+        await ctx.answerCbQuery();
+        await showDistrictsForPlacement(ctx);
+    });
+
+    // Ввод города вручную
+    bot.action('admin_predef_place_city_manual', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        predefinedPlacementMode.set(ctx.from.id, 'city_input');
+        await ctx.answerCbQuery();
+        await ctx.reply('✏️ Введите название города (если нет — будет создан автоматически):');
+    });
+
+    // Multi-select районов
+    bot.action(/^admin_predef_place_toggle_district_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const districtId = parseInt(ctx.match[1]);
+        const st = predefinedPlacementState.get(ctx.from.id);
+        if (!st) return;
+        if (!st.districtIds) st.districtIds = new Set();
+        if (st.districtIds.has(districtId)) st.districtIds.delete(districtId);
+        else st.districtIds.add(districtId);
+        predefinedPlacementState.set(ctx.from.id, st);
+        await ctx.answerCbQuery();
+        await showDistrictsForPlacement(ctx, true);
+    });
+
+    bot.action('admin_predef_place_district_manual', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        predefinedPlacementMode.set(ctx.from.id, 'district_input');
+        await ctx.answerCbQuery();
+        await ctx.reply('✏️ Введите название района (если нет — будет создан в выбранном городе):');
+    });
+
+    bot.action('admin_predef_place_district_done', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await ctx.answerCbQuery();
+        await showPackagingForPlacement(ctx);
+    });
+
+    // Выбор существующей фасовки
+    bot.action(/^admin_predef_place_packaging_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const packagingId = parseInt(ctx.match[1]);
+        const packaging = await packagingService.getById(packagingId);
+        if (!packaging) {
+            await ctx.answerCbQuery('❌ Фасовка не найдена');
+            return;
+        }
+        const st = predefinedPlacementState.get(ctx.from.id);
+        if (!st) return;
+        st.packagingId = packaging.id;
+        st.packagingValue = packaging.value;
+        predefinedPlacementState.set(ctx.from.id, st);
+        await ctx.answerCbQuery();
+        await promptPriceForPlacement(ctx);
+    });
+
+    bot.action('admin_predef_place_packaging_manual', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        predefinedPlacementMode.set(ctx.from.id, 'packaging_input');
+        await ctx.answerCbQuery();
+        await ctx.reply('✏️ Введите фасовку (в граммах). Пример: 7.5 или 7,5гр');
     });
 
     // Обработчик для выбора предустановленного товара
@@ -354,7 +463,6 @@ export function registerProductsHandlers(bot) {
         predefinedProductCityMode.set(ctx.from.id, {
             name: product.name,
             description: product.description,
-            price: product.price,
             image_path: product.image_path || null
         });
         await showCitiesForPredefinedProduct(ctx);
@@ -672,7 +780,7 @@ export async function showPredefinedProducts(ctx) {
 
     const keyboard = products.map((product, index) => [
         {
-            text: `${product.name} - ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`,
+            text: `${product.name}`,
             callback_data: `admin_predefined_product_${index}`
         }
     ]);
@@ -697,6 +805,141 @@ export async function showPredefinedProducts(ctx) {
             reply_markup: { inline_keyboard: keyboard }
         });
     }
+}
+
+// Новый список шаблонов для размещения (без цены/фасовки)
+export async function showPredefinedProductsForPlacement(ctx) {
+    const templates = getMockProducts();
+    const text = `
+📦 <b>Добавление товара из шаблона</b>
+
+Выберите предустановленный товар:
+    `.trim();
+
+    const keyboard = templates.map((t, idx) => [
+        { text: t.name, callback_data: `admin_predef_place_template_${idx}` }
+    ]);
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_packagings' }]);
+
+    const reply_markup = { inline_keyboard: keyboard };
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup });
+        } catch {
+            await ctx.reply(text, { parse_mode: 'HTML', reply_markup });
+        }
+    } else {
+        await ctx.reply(text, { parse_mode: 'HTML', reply_markup });
+    }
+}
+
+async function showCitiesForPlacement(ctx) {
+    const st = predefinedPlacementState.get(ctx.from.id);
+    const cities = await cityService.getAll();
+    const text = `
+📦 <b>${st?.name || 'Товар'}</b>
+
+Выберите город или введите его вручную:
+    `.trim();
+
+    const keyboard = cities.map((c) => [
+        { text: `🏙️ ${c.name}`, callback_data: `admin_predef_place_city_${c.id}` }
+    ]);
+    keyboard.push([{ text: '✏️ Ввести город вручную', callback_data: 'admin_predef_place_city_manual' }]);
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_packagings' }]);
+
+    const reply_markup = { inline_keyboard: keyboard };
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup });
+        } catch {
+            await ctx.reply(text, { parse_mode: 'HTML', reply_markup });
+        }
+    } else {
+        await ctx.reply(text, { parse_mode: 'HTML', reply_markup });
+    }
+}
+
+async function showDistrictsForPlacement(ctx, tryEdit = false) {
+    const st = predefinedPlacementState.get(ctx.from.id);
+    if (!st?.cityId) {
+        await ctx.reply('❌ Сначала выберите город.');
+        return;
+    }
+    const districts = await districtService.getByCityId(st.cityId);
+    const selected = st.districtIds || new Set();
+    const text = `
+📍 <b>Город: ${st.cityName}</b>
+📦 Товар: <b>${st.name}</b>
+
+Выберите один или несколько районов:
+    `.trim();
+
+    const keyboard = districts.map((d) => {
+        const mark = selected.has(d.id) ? '✅' : '☐';
+        return [{ text: `${mark} ${d.name}`, callback_data: `admin_predef_place_toggle_district_${d.id}` }];
+    });
+    keyboard.push([{ text: '✏️ Ввести район вручную', callback_data: 'admin_predef_place_district_manual' }]);
+    keyboard.push([{ text: '✅ Готово', callback_data: 'admin_predef_place_district_done' }]);
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_predef_place_city_manual' }]);
+
+    const reply_markup = { inline_keyboard: keyboard };
+    if (ctx.callbackQuery && tryEdit) {
+        try {
+            await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup });
+            return;
+        } catch { }
+    }
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup });
+        } catch {
+            await ctx.reply(text, { parse_mode: 'HTML', reply_markup });
+        }
+    } else {
+        await ctx.reply(text, { parse_mode: 'HTML', reply_markup });
+    }
+}
+
+async function showPackagingForPlacement(ctx) {
+    const st = predefinedPlacementState.get(ctx.from.id);
+    const selectedCount = st?.districtIds?.size || 0;
+    if (!selectedCount) {
+        await ctx.reply('❌ Выберите хотя бы один район и нажмите "Готово".');
+        return;
+    }
+    const packagings = await packagingService.getAll();
+    const text = `
+🏷️ <b>Фасовка</b>
+
+Товар: <b>${st.name}</b>
+Город: <b>${st.cityName}</b>
+Районов выбрано: <b>${selectedCount}</b>
+
+Выберите фасовку из существующих или введите свою:
+    `.trim();
+
+    const keyboard = packagings.slice(0, 40).map((p) => [
+        { text: formatPackaging(p.value), callback_data: `admin_predef_place_packaging_${p.id}` }
+    ]);
+    keyboard.push([{ text: '✏️ Ввести фасовку вручную', callback_data: 'admin_predef_place_packaging_manual' }]);
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_predef_place_district_done' }]);
+
+    const reply_markup = { inline_keyboard: keyboard };
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup });
+        } catch {
+            await ctx.reply(text, { parse_mode: 'HTML', reply_markup });
+        }
+    } else {
+        await ctx.reply(text, { parse_mode: 'HTML', reply_markup });
+    }
+}
+
+async function promptPriceForPlacement(ctx) {
+    predefinedPlacementMode.set(ctx.from.id, 'price_input');
+    await ctx.reply('💰 Введите цену (только число), например: 1000');
 }
 
 /**
@@ -891,11 +1134,11 @@ export async function showPredefinedProductsList(ctx) {
     }
 
     const text = `
-📦 <b> товары</b>
+📦 <b>Предустановленные товары</b>
 
 Список всех товаров:
 ${products.map((product, index) =>
-        `${index + 1}. <b>${product.name}</b>\n   Описание: ${product.description}\n   Цена: ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`
+        `${index + 1}. <b>${product.name}</b>\n   Описание: ${product.description || '—'}`
     ).join('\n\n')}
     `.trim();
 
@@ -972,7 +1215,7 @@ export async function showPredefinedProductsDeleteMenu(ctx) {
 
     const keyboard = products.map((product, index) => [
         {
-            text: `🗑️ ${product.name} - ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`,
+            text: `🗑️ ${product.name}`,
             callback_data: `admin_predefined_delete_confirm_${index}`
         }
     ]);
@@ -1013,7 +1256,6 @@ export async function handlePredefinedUploadPhotoSelection(ctx, index) {
 📷 <b>Загрузка/изменение фото предустановленного товара</b>
 
 Товар: <b>${product.name}</b>
-Цена: ${product.price.toLocaleString('ru-RU')} ${await settingsService.getCurrencySymbol()}
 
 1️⃣ Отправьте изображение этого товара в чат как <b>фото</b> (не как документ).
 2️⃣ После загрузки фото оно будет автоматически привязано ко всем товарам, созданным из этого шаблона.
@@ -1071,7 +1313,7 @@ export async function showPredefinedProductsPhotoMenu(ctx) {
 
     const keyboard = products.map((product, index) => [
         {
-            text: `${product.name} - ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`,
+            text: `${product.name}`,
             callback_data: `admin_predefined_upload_photo_${index}`
         }
     ]);

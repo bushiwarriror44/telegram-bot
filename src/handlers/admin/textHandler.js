@@ -25,7 +25,7 @@ import { showConversation } from './chatsHandler.js';
 import { adminMessageUserMode } from './usersHandler.js';
 import { channelBindMode } from './panelHandler.js';
 import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
-import { productImageUploadMode, productPackagingEditMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
+import { productImageUploadMode, productPackagingEditMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, predefinedPlacementMode, predefinedPlacementState, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
 import { mockProducts } from '../../utils/mockData.js';
 import { cardAddMode, showCardDetails } from './cardsHandler.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
@@ -69,6 +69,8 @@ export function registerTextHandlers(bot) {
                 predefinedProductDistrictMode.delete(ctx.from.id);
                 predefinedProductAddMode.delete(ctx.from.id);
                 predefinedProductAddSource.delete(ctx.from.id);
+                predefinedPlacementMode.delete(ctx.from.id);
+                predefinedPlacementState.delete(ctx.from.id);
                 await ctx.reply('❌ Операция отменена.');
                 await showAdminPanel(ctx);
                 return; // Не передаем дальше, так как команда обработана
@@ -134,8 +136,10 @@ export function registerTextHandlers(bot) {
                 reviewImportMode.has(ctx.from.id) ||
                 adminReplyMode.has(ctx.from.id) ||
                 cardAddMode.has(ctx.from.id);
+            // режимы нового flow размещения
+            const isInPlacementMode = predefinedPlacementMode.has(ctx.from.id);
 
-            if (!isInEditMode) {
+            if (!isInEditMode && !isInPlacementMode) {
                 console.log('[AdminHandlers] bot.on(text): Пропуск админской кнопки (передаем дальше через next()):', ctx.message.text);
                 return next(); // Позволяем bot.hears() обработать кнопку
             }
@@ -811,6 +815,113 @@ export function registerTextHandlers(bot) {
                 console.error('[AdminHandlers] Ошибка при обработке района:', error);
                 await ctx.reply('❌ Ошибка: ' + error.message);
             }
+            return;
+        }
+
+        // Новый flow: ручной ввод города
+        if (predefinedPlacementMode.get(ctx.from.id) === 'city_input') {
+            const cityName = ctx.message.text.trim();
+            if (!cityName) {
+                await ctx.reply('❌ Название города не может быть пустым.');
+                return;
+            }
+            let city = await cityService.getByName(cityName);
+            if (!city) {
+                city = await cityService.create(cityName);
+                await districtService.create(city.id, 'Центральный');
+                await ctx.reply(`✅ Город "${cityName}" создан автоматически!`);
+            }
+            const st = predefinedPlacementState.get(ctx.from.id);
+            if (!st) return;
+            st.cityId = city.id;
+            st.cityName = city.name;
+            st.districtIds = new Set();
+            predefinedPlacementState.set(ctx.from.id, st);
+            predefinedPlacementMode.delete(ctx.from.id);
+            // Покажем районы (через триггер кнопки — просто вызываем handler через import)
+            const { showPredefinedProductsForPlacement } = await import('./productsHandler.js'); // no-op, чтобы модуль был загружен
+            await ctx.reply('✅ Город выбран. Теперь выберите районы кнопками в меню.');
+            // пользователь продолжит через inline-клавиатуру (которая уже показана)
+            return;
+        }
+
+        // Новый flow: ручной ввод района (добавляем и автоматически выбираем)
+        if (predefinedPlacementMode.get(ctx.from.id) === 'district_input') {
+            const districtName = ctx.message.text.trim();
+            if (!districtName) {
+                await ctx.reply('❌ Название района не может быть пустым.');
+                return;
+            }
+            const st = predefinedPlacementState.get(ctx.from.id);
+            if (!st?.cityId) {
+                await ctx.reply('❌ Сначала выберите город.');
+                predefinedPlacementMode.delete(ctx.from.id);
+                return;
+            }
+            const existing = (await districtService.getByCityId(st.cityId)).find(d => d.name.toLowerCase() === districtName.toLowerCase());
+            const district = existing || await districtService.create(st.cityId, districtName);
+            if (!existing) await ctx.reply(`✅ Район "${districtName}" создан автоматически!`);
+            if (!st.districtIds) st.districtIds = new Set();
+            st.districtIds.add(district.id);
+            predefinedPlacementState.set(ctx.from.id, st);
+            predefinedPlacementMode.delete(ctx.from.id);
+            await ctx.reply('✅ Район добавлен. Продолжайте выбор районов кнопками и нажмите "Готово".');
+            return;
+        }
+
+        // Новый flow: ручной ввод фасовки (в граммах)
+        if (predefinedPlacementMode.get(ctx.from.id) === 'packaging_input') {
+            const raw = ctx.message.text.trim().toLowerCase();
+            const cleaned = raw.replace(/\s/g, '').replace('гр', '').replace('g', '').replace(',', '.');
+            const value = parseFloat(cleaned);
+            if (isNaN(value) || value <= 0) {
+                await ctx.reply('❌ Фасовка должна быть положительным числом (в граммах). Пример: 7.5 или 7,5гр');
+                return;
+            }
+            const packaging = await packagingService.getOrCreate(value);
+            const st = predefinedPlacementState.get(ctx.from.id);
+            if (!st) return;
+            st.packagingId = packaging.id;
+            st.packagingValue = packaging.value;
+            predefinedPlacementState.set(ctx.from.id, st);
+            predefinedPlacementMode.set(ctx.from.id, 'price_input');
+            await ctx.reply(`✅ Фасовка выбрана: ${formatPackaging(packaging.value)}.\n\nТеперь введите цену (только число):`);
+            return;
+        }
+
+        // Новый flow: ввод цены и создание товаров во всех выбранных районах
+        if (predefinedPlacementMode.get(ctx.from.id) === 'price_input') {
+            const raw = ctx.message.text.trim().replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '');
+            const price = parseFloat(raw);
+            if (isNaN(price) || price <= 0) {
+                await ctx.reply('❌ Цена должна быть положительным числом. Пример: 1000');
+                return;
+            }
+            const st = predefinedPlacementState.get(ctx.from.id);
+            if (!st?.cityId || !st?.districtIds?.size || !st?.packagingId) {
+                await ctx.reply('❌ Не хватает данных (город/районы/фасовка). Пройдите шаги заново.');
+                predefinedPlacementMode.delete(ctx.from.id);
+                return;
+            }
+            st.price = price;
+            predefinedPlacementState.set(ctx.from.id, st);
+
+            let created = 0;
+            for (const districtId of st.districtIds) {
+                await productService.create(
+                    st.cityId,
+                    districtId,
+                    st.name,
+                    st.description || '',
+                    price,
+                    st.packagingId,
+                    st.image_path || null
+                );
+                created += 1;
+            }
+            predefinedPlacementMode.delete(ctx.from.id);
+            predefinedPlacementState.delete(ctx.from.id);
+            await ctx.reply(`✅ Товар "${st.name}" добавлен в ${created} район(а/ов).`);
             return;
         }
 
