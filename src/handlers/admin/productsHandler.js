@@ -22,12 +22,13 @@ export const productImageUploadMode = new Map(); // userId -> productId
 // Режим редактирования фасовки товара
 export const productPackagingEditMode = new Map(); // userId -> productId
 
-// Режимы добавления предустановленных товаров
+// Режимы добавления/размещения предустановленных товаров
 export const predefinedProductSelectMode = new Map(); // userId -> true (выбор предустановленного товара)
-export const predefinedProductCityMode = new Map(); // userId -> { productName, description, price } (выбор города)
-export const predefinedProductDistrictMode = new Map(); // userId -> { productName, description, price, cityId, cityName } (выбор района)
+export const predefinedProductCityMode = new Map(); // userId -> { name, description, price, image_path } (выбор города)
+export const predefinedProductDistrictMode = new Map(); // userId -> { name, description, price, image_path, cityId, cityName } (выбор района)
 export const predefinedProductAddMode = new Map(); // userId -> 'name' | 'description' | 'price' | 'packaging' (добавление нового предустановленного товара)
 export const predefinedProductAddSource = new Map(); // userId -> 'settings' | 'products' (источник вызова добавления товара)
+export const predefinedProductImageUploadMode = new Map(); // userId -> predefinedIndex (загрузка фото для предустановленного товара)
 
 /**
  * Регистрирует обработчики управления товарами
@@ -353,7 +354,8 @@ export function registerProductsHandlers(bot) {
         predefinedProductCityMode.set(ctx.from.id, {
             name: product.name,
             description: product.description,
-            price: product.price
+            price: product.price,
+            image_path: product.image_path || null
         });
         await showCitiesForPredefinedProduct(ctx);
     });
@@ -470,6 +472,13 @@ export function registerProductsHandlers(bot) {
         await showPredefinedProductsList(ctx);
     });
 
+    // Обработчик для управления фото предустановленных товаров
+    bot.action('admin_predefined_photo', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await ctx.answerCbQuery();
+        await showPredefinedProductsPhotoMenu(ctx);
+    });
+
     // Обработчик для удаления предустановленного товара
     bot.action('admin_predefined_delete', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
@@ -495,6 +504,14 @@ export function registerProductsHandlers(bot) {
         } else {
             await ctx.answerCbQuery('❌ Ошибка при удалении');
         }
+    });
+
+    // Обработчик выбора предустановленного товара для загрузки фото
+    bot.action(/^admin_predefined_upload_photo_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const index = parseInt(ctx.match[1]);
+        await ctx.answerCbQuery();
+        await handlePredefinedUploadPhotoSelection(ctx, index);
     });
 }
 
@@ -813,7 +830,7 @@ export async function placePredefinedProduct(ctx, districtId, productData) {
             productData.description,
             productData.price,
             packaging.id,
-            null // imagePath
+            productData.image_path || null // наследуем изображение из предустановленного товара, если есть
         );
 
         predefinedProductDistrictMode.delete(ctx.from.id);
@@ -981,6 +998,105 @@ export async function showPredefinedProductsDeleteMenu(ctx) {
     }
 }
 
+// Обработчик выбора предустановленного товара для загрузки фото
+export async function handlePredefinedUploadPhotoSelection(ctx, index) {
+    const products = getMockProducts();
+    if (index < 0 || index >= products.length) {
+        await ctx.answerCbQuery('❌ Товар не найден');
+        return;
+    }
+
+    const product = products[index];
+    predefinedProductImageUploadMode.set(ctx.from.id, index);
+
+    const text = `
+📷 <b>Загрузка/изменение фото предустановленного товара</b>
+
+Товар: <b>${product.name}</b>
+Цена: ${product.price.toLocaleString('ru-RU')} ${await settingsService.getCurrencySymbol()}
+
+1️⃣ Отправьте изображение этого товара в чат как <b>фото</b> (не как документ).
+2️⃣ После загрузки фото оно будет автоматически привязано ко всем товарам, созданным из этого шаблона.
+
+Для отмены отправьте /cancel
+    `.trim();
+
+    await ctx.reply(text, { parse_mode: 'HTML' });
+}
+
+/**
+ * Показ меню выбора предустановленного товара для загрузки/изменения фото
+ */
+export async function showPredefinedProductsPhotoMenu(ctx) {
+    const products = getMockProducts();
+    const currencySymbol = await settingsService.getCurrencySymbol();
+
+    if (products.length === 0) {
+        const text = `
+📷 <b>Фото предустановленных товаров</b>
+
+Товаров пока нет.
+        `.trim();
+
+        const keyboard = [
+            [{ text: '◀️ Назад', callback_data: 'admin_predefined_products' }]
+        ];
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            } catch (error) {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: keyboard }
+                });
+            }
+        } else {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+        return;
+    }
+
+    const text = `
+📷 <b>Фото предустановленных товаров</b>
+
+Выберите товар, для которого хотите загрузить или изменить фото:
+    `.trim();
+
+    const keyboard = products.map((product, index) => [
+        {
+            text: `${product.name} - ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`,
+            callback_data: `admin_predefined_upload_photo_${index}`
+        }
+    ]);
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_predefined_products' }]);
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+    } else {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    }
+}
+
 /**
  * Показ меню управления предустановленными товарами (из настроек)
  */
@@ -999,6 +1115,7 @@ export async function showPredefinedProductsManagement(ctx) {
     const keyboard = [
         [{ text: '📋 Список товаров', callback_data: 'admin_predefined_list' }],
         [{ text: '➕ Добавить товар', callback_data: 'admin_predefined_add_new' }],
+        [{ text: '📷 Фото товаров', callback_data: 'admin_predefined_photo' }],
         [{ text: '🗑️ Удалить товар', callback_data: 'admin_predefined_delete' }],
         [{ text: '◀️ Назад', callback_data: 'admin_settings' }]
     ];

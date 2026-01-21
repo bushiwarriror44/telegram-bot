@@ -9,12 +9,13 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import sqlite3 from 'sqlite3';
 import { isAdmin } from './authHandler.js';
-import { productImageUploadMode } from './productsHandler.js';
+import { productImageUploadMode, predefinedProductImageUploadMode } from './productsHandler.js';
 import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
 import { databaseImportMode, showDataMenu } from './dataHandler.js';
 import { channelBindMode } from './panelHandler.js';
 import { settingsService as settingsServiceForChannel } from '../../services/settingsService.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
+import { getMockProducts } from '../../utils/mockData.js';
 
 /**
  * Регистрирует обработчики медиа (фото и документы)
@@ -94,6 +95,58 @@ export function registerMediaHandlers(bot) {
                 console.error('[AdminHandlers] Ошибка при загрузке фото товара:', error);
                 await ctx.reply('❌ Ошибка при загрузке фото: ' + error.message);
                 productImageUploadMode.delete(ctx.from.id);
+            }
+            return;
+        }
+
+        // Загрузка фото для предустановленного товара (шаблона)
+        if (predefinedProductImageUploadMode.has(ctx.from.id)) {
+            try {
+                const index = predefinedProductImageUploadMode.get(ctx.from.id);
+                const products = getMockProducts();
+
+                if (index < 0 || index >= products.length) {
+                    await ctx.reply('❌ Предустановленный товар не найден.');
+                    predefinedProductImageUploadMode.delete(ctx.from.id);
+                    return;
+                }
+
+                const template = products[index];
+
+                // Получаем фото наибольшего размера
+                const photo = ctx.message.photo[ctx.message.photo.length - 1];
+                const file = await bot.telegram.getFile(photo.file_id);
+                const fileUrl = `https://api.telegram.org/file/bot${config.botToken}/${file.file_path}`;
+
+                // Создаем директорию для изображений, если её нет
+                const __filename = fileURLToPath(import.meta.url);
+                const __dirname = dirname(__filename);
+                const imagesDir = join(__dirname, '../..', 'src/assets/products');
+                if (!existsSync(imagesDir)) {
+                    mkdirSync(imagesDir, { recursive: true });
+                }
+
+                // Скачиваем и сохраняем изображение
+                const response = await fetch(fileUrl);
+                const buffer = await response.arrayBuffer();
+                const imagePath = join(imagesDir, `predefined_${index}_${Date.now()}.jpg`);
+                writeFileSync(imagePath, Buffer.from(buffer));
+
+                // Сохраняем относительный путь в шаблоне
+                const relativePath = `src/assets/products/${imagePath.split('products/')[1]}`;
+                template.image_path = relativePath;
+
+                predefinedProductImageUploadMode.delete(ctx.from.id);
+
+                await ctx.reply(
+                    '✅ <b>Изображение предустановленного товара успешно загружено!</b>\n\n' +
+                    `📷 Фото будет использоваться для всех товаров, созданных из шаблона "${template.name}".`,
+                    { parse_mode: 'HTML' }
+                );
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при загрузке фото предустановленного товара:', error);
+                await ctx.reply('❌ Ошибка при загрузке фото предустановленного товара: ' + error.message);
+                predefinedProductImageUploadMode.delete(ctx.from.id);
             }
             return;
         }

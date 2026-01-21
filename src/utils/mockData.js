@@ -22,7 +22,8 @@ export const mockProducts = {
       name: 'Шишки Amnezia Haze',
       description: '',
       price: 1000,
-      packagingId: null 
+      packagingId: null,
+      image_path: null
     }
   ]
 };
