@@ -69,6 +69,14 @@ export class ProductService {
         return await this.getById(id);
     }
 
+    // Обновляет изображение для всех товаров с указанным названием
+    async updateImageByName(name, imagePath) {
+        await database.run(
+            'UPDATE products SET image_path = ? WHERE name = ?',
+            [imagePath, name]
+        );
+    }
+
     async delete(id) {
         await database.run('DELETE FROM products WHERE id = ?', [id]);
     }

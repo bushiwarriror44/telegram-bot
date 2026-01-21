@@ -136,6 +136,9 @@ export function registerMediaHandlers(bot) {
                 const relativePath = `src/assets/products/${imagePath.split('products/')[1]}`;
                 template.image_path = relativePath;
 
+                // Применяем изображение ко всем уже созданным товарам с таким названием
+                await productService.updateImageByName(template.name, relativePath);
+
                 predefinedProductImageUploadMode.delete(ctx.from.id);
 
                 await ctx.reply(
