@@ -505,7 +505,9 @@ export async function showProductDetails(ctx, productId) {
         [{ text: '🔙 Назад', callback_data: `back_to_products_${district.id}` }]
     ];
 
-    // Определяем путь к изображению (только если фото загружено)
+    // Определяем источник изображения:
+    // 1) локальный файл (если существует)
+    // 2) иначе используем сохраненный путь/URL/file_id как есть
     let photoPath = null;
     if (product.image_path) {
         if (product.image_path.startsWith('./') || product.image_path.startsWith('../')) {
@@ -513,47 +515,33 @@ export async function showProductDetails(ctx, productId) {
         } else if (product.image_path.startsWith('src/')) {
             photoPath = join(__dirname, '../../..', product.image_path);
         } else {
-            photoPath = product.image_path;
-        }
-        // Проверяем, что файл действительно существует
-        if (!existsSync(photoPath)) {
-            photoPath = null;
+            photoPath = product.image_path; // может быть абсолютный путь, URL или file_id
         }
     }
+
+    // Логируем наличие и путь к изображению
+    console.log('[CatalogHandler] showProductDetails image_path:', product.image_path || 'нет');
+    console.log('[CatalogHandler] showProductDetails resolved photoPath:', photoPath || 'нет');
 
     const replyMarkup = {
         inline_keyboard: keyboard
     };
 
-    // Если есть фото, отправляем его с текстом, иначе только текст
-    if (photoPath && existsSync(photoPath)) {
-        try {
-            if (ctx.callbackQuery) {
-                await ctx.deleteMessage();
-            }
-            await ctx.replyWithPhoto(
-                { source: photoPath },
-                {
-                    caption: text,
-                    parse_mode: 'HTML',
-                    reply_markup: replyMarkup
-                }
-            );
-        } catch (error) {
-            console.error('[CatalogHandler] Ошибка при отправке фото:', error);
-            if (ctx.callbackQuery) {
-                await ctx.editMessageText(text, {
-                    parse_mode: 'HTML',
-                    reply_markup: replyMarkup
-                });
-            } else {
-                await ctx.reply(text, {
-                    parse_mode: 'HTML',
-                    reply_markup: replyMarkup
-                });
-            }
+    const sendPhoto = async (source) => {
+        if (ctx.callbackQuery) {
+            await ctx.deleteMessage().catch(() => { });
         }
-    } else {
+        await ctx.replyWithPhoto(
+            source,
+            {
+                caption: text,
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+            }
+        );
+    };
+
+    const sendText = async () => {
         if (ctx.callbackQuery) {
             await ctx.editMessageText(text, {
                 parse_mode: 'HTML',
@@ -565,6 +553,20 @@ export async function showProductDetails(ctx, productId) {
                 reply_markup: replyMarkup
             });
         }
+    };
+
+    // Сначала пробуем отправить фото: если локальный файл существует — используем его,
+    // иначе используем исходный путь (URL/file_id). При ошибке падаем обратно на текст.
+    if (product.image_path) {
+        try {
+            const canUseFile = photoPath && existsSync(photoPath);
+            await sendPhoto(canUseFile ? { source: photoPath } : photoPath);
+        } catch (error) {
+            console.error('[CatalogHandler] Ошибка при отправке фото, отправляем текст:', error);
+            await sendText();
+        }
+    } else {
+        await sendText();
     }
 }
 
