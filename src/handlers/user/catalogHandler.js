@@ -527,26 +527,39 @@ export async function showProductDetails(ctx, productId) {
         inline_keyboard: keyboard
     };
 
+    const looksLikeLocalPath = (p) =>
+        typeof p === 'string' && (p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p));
+
     const sendPhoto = async (source) => {
+        // ВАЖНО: не удаляем сообщение заранее — иначе при ошибке фото нечего будет "edit"-ить.
+        const sent = await ctx.replyWithPhoto(source, {
+            caption: text,
+            parse_mode: 'HTML',
+            reply_markup: replyMarkup
+        });
+
+        // Если пришли из callback — аккуратно удаляем старое сообщение уже ПОСЛЕ успешной отправки фото
         if (ctx.callbackQuery) {
             await ctx.deleteMessage().catch(() => { });
         }
-        await ctx.replyWithPhoto(
-            source,
-            {
-                caption: text,
-                parse_mode: 'HTML',
-                reply_markup: replyMarkup
-            }
-        );
+
+        return sent;
     };
 
     const sendText = async () => {
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(text, {
-                parse_mode: 'HTML',
-                reply_markup: replyMarkup
-            });
+            try {
+                await ctx.editMessageText(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            } catch (e) {
+                // Если сообщение уже удалено/не найдено — просто отправляем новое
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: replyMarkup
+                });
+            }
         } else {
             await ctx.reply(text, {
                 parse_mode: 'HTML',
@@ -560,7 +573,19 @@ export async function showProductDetails(ctx, productId) {
     if (product.image_path) {
         try {
             const canUseFile = photoPath && existsSync(photoPath);
-            await sendPhoto(canUseFile ? { source: photoPath } : photoPath);
+
+            if (canUseFile) {
+                await sendPhoto({ source: photoPath });
+            } else {
+                // Если это похоже на локальный путь, но файла нет — не пытаемся слать строкой (Telegram сочтет это URL)
+                if (looksLikeLocalPath(photoPath)) {
+                    console.log('[CatalogHandler] Фото не найдено на диске, пропускаем отправку фото:', photoPath);
+                    await sendText();
+                } else {
+                    // URL / file_id
+                    await sendPhoto(photoPath);
+                }
+            }
         } catch (error) {
             console.error('[CatalogHandler] Ошибка при отправке фото, отправляем текст:', error);
             await sendText();
