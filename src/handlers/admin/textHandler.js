@@ -946,85 +946,14 @@ export function registerTextHandlers(bot) {
                         'Для отмены отправьте /cancel'
                     );
                 } else if (mode === 'description') {
-                    // Сохраняем описание и переходим к цене
+                    // Сохраняем описание и завершаем создание шаблона (цена/фасовка задаются при размещении)
                     const productData = predefinedProductCityMode.get(ctx.from.id);
                     productData.description = text;
-                    predefinedProductAddMode.set(ctx.from.id, 'price');
-                    await ctx.reply(
-                        '✅ Описание сохранено!\n\n' +
-                        'Введите цену товара (только число):\n\n' +
-                        'Для отмены отправьте /cancel'
-                    );
-                } else if (mode === 'price') {
-                    // Сохраняем цену и переходим к фасовке
-                    const price = parseFloat(text.replace(',', '.'));
-                    if (isNaN(price) || price <= 0) {
-                        await ctx.reply('❌ Цена должна быть положительным числом. Попробуйте еще раз.');
-                        return;
-                    }
 
-                    const productData = predefinedProductCityMode.get(ctx.from.id);
-                    if (!productData || !productData.name) {
-                        await ctx.reply('❌ Ошибка: данные товара не найдены');
-                        predefinedProductAddMode.delete(ctx.from.id);
-                        predefinedProductCityMode.delete(ctx.from.id);
-                        return;
-                    }
-
-                    productData.price = price;
-                    predefinedProductAddMode.set(ctx.from.id, 'packaging');
-
-                    // Получаем список всех фасовок
-                    const { packagingService } = await import('../../services/packagingService.js');
-                    const packagings = await packagingService.getAll();
-                    const packagingList = packagings.length > 0
-                        ? packagings.map(p => `• ${formatPackaging(p.value)}`).join('\n')
-                        : 'Фасовки не добавлены. Сначала добавьте фасовки в админ-панели.';
-
-                    await ctx.reply(
-                        '✅ Цена сохранена!\n\n' +
-                        'Введите фасовку товара (только число, например: 0.5, 1, 2.5):\n\n' +
-                        `Доступные фасовки:\n${packagingList}\n\n` +
-                        'Для отмены отправьте /cancel'
-                    );
-                } else if (mode === 'packaging') {
-                    // Сохраняем фасовку и добавляем товар в mockProducts
-                    const packagingValue = parseFloat(text.trim().replace(',', '.'));
-                    if (isNaN(packagingValue) || packagingValue <= 0) {
-                        await ctx.reply('❌ Фасовка должна быть положительным числом. Попробуйте еще раз.\nПример: 0.5, 1, 2.5');
-                        return;
-                    }
-
-                    const productData = predefinedProductCityMode.get(ctx.from.id);
-                    if (!productData || !productData.name) {
-                        await ctx.reply('❌ Ошибка: данные товара не найдены');
-                        predefinedProductAddMode.delete(ctx.from.id);
-                        predefinedProductCityMode.delete(ctx.from.id);
-                        return;
-                    }
-
-                    // Проверяем, существует ли такая фасовка
-                    const { packagingService } = await import('../../services/packagingService.js');
-                    let packaging = await packagingService.getByValue(packagingValue);
-                    if (!packaging) {
-                        await ctx.reply(
-                            `❌ Фасовка ${formatPackaging(packagingValue)} не найдена.\n\n` +
-                            `Сначала добавьте её в админ-панели (Фасовки).`
-                        );
-                        return;
-                    }
-
-                    // Сохраняем фасовку в данных товара
-                    productData.packagingId = packaging.id;
-                    productData.packagingValue = packagingValue;
-
-                    // Добавляем товар в mockProducts
                     const { addMockProduct } = await import('../../utils/mockData.js');
                     addMockProduct({
                         name: productData.name,
-                        description: productData.description,
-                        price: productData.price,
-                        packagingValue: productData.packagingValue
+                        description: productData.description
                     });
 
                     predefinedProductAddMode.delete(ctx.from.id);
@@ -1035,10 +964,9 @@ export function registerTextHandlers(bot) {
 
                     await ctx.reply(
                         `✅ Предустановленный товар "${productData.name}" успешно добавлен!\n\n` +
-                        `Он будет доступен в списке предустановленных товаров.`
+                        `Цена и фасовка будут задаваться при размещении через "Фасовки".`
                     );
 
-                    // Возвращаемся в правильное меню в зависимости от источника
                     if (source === 'settings') {
                         await showPredefinedProductsManagement(ctx);
                     } else {
