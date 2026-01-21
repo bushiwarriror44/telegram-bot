@@ -209,13 +209,17 @@ export function registerPaymentsHandlers(bot) {
  * Показ меню управления методами оплаты
  */
 export async function showPaymentsAdmin(ctx) {
-    const methods = await paymentService.getAllMethods(true);
+    // Показываем только крипто-методы, карточные скрываем (они идут в блок "Карты")
+    const methods = (await paymentService.getAllMethods(true))
+        .filter(m => m.type !== 'card');
 
     const text = `
 💳 <b>Управление счетами (Crypto)</b>
 
 Доступные методы:
-${methods.map(m => `• ${m.name} (${m.network})`).join('\n') || 'Методов оплаты пока нет'}
+${methods.length > 0
+            ? methods.map(m => `• ${m.name} (${m.network || '—'})`).join('\n')
+            : 'Методов оплаты пока нет'}
     `.trim();
 
     const replyMarkup = {
