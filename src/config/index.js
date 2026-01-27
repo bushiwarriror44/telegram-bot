@@ -1,26 +1,59 @@
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { existsSync } from 'fs';
+import { dirname, join, resolve } from 'path';
+import { existsSync, readFileSync } from 'fs';
 
 // Получаем путь к текущему файлу и директорию проекта
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const projectRoot = join(__dirname, '../..');
+// Поднимаемся на 2 уровня вверх от src/config/index.js до корня проекта
+const projectRoot = resolve(__dirname, '../..');
 
-// Загружаем .env файл из корня проекта
-const envPath = join(projectRoot, '.env');
-console.log('[CONFIG] Путь к проекту:', projectRoot);
-console.log('[CONFIG] Ожидаемый путь к .env:', envPath);
-console.log('[CONFIG] Файл .env существует:', existsSync(envPath));
+// Список возможных путей к .env файлу
+const possibleEnvPaths = [
+  join(projectRoot, '.env'),           // Корень проекта (основной вариант)
+  join(process.cwd(), '.env'),           // Текущая рабочая директория
+  resolve('.env'),                      // Относительно текущей директории
+];
 
-if (existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-  console.log('[CONFIG] ✅ Файл .env загружен из:', envPath);
-} else {
-  // Пробуем загрузить из текущей директории (для обратной совместимости)
-  console.log('[CONFIG] ⚠️ Файл .env не найден по пути:', envPath);
-  console.log('[CONFIG] Пробуем загрузить из текущей директории...');
+console.log('[CONFIG] ========== Загрузка конфигурации ==========');
+console.log('[CONFIG] Путь к файлу конфига:', __filename);
+console.log('[CONFIG] Директория конфига:', __dirname);
+console.log('[CONFIG] Корень проекта (вычисленный):', projectRoot);
+console.log('[CONFIG] Текущая рабочая директория:', process.cwd());
+
+let envLoaded = false;
+let loadedEnvPath = null;
+
+// Пробуем загрузить .env из разных возможных мест
+for (const envPath of possibleEnvPaths) {
+  console.log('[CONFIG] Проверка пути:', envPath);
+  if (existsSync(envPath)) {
+    console.log('[CONFIG] ✅ Файл .env найден по пути:', envPath);
+    try {
+      // Читаем содержимое файла для диагностики (первые 200 символов)
+      const envContent = readFileSync(envPath, 'utf8');
+      console.log('[CONFIG] Содержимое .env (первые 200 символов):');
+      console.log('[CONFIG]', envContent.substring(0, 200).replace(/\n/g, '\\n'));
+      
+      // Загружаем переменные окружения
+      dotenv.config({ path: envPath });
+      envLoaded = true;
+      loadedEnvPath = envPath;
+      console.log('[CONFIG] ✅ Переменные окружения загружены из:', envPath);
+      break;
+    } catch (error) {
+      console.error('[CONFIG] ❌ Ошибка при чтении .env файла:', error.message);
+    }
+  } else {
+    console.log('[CONFIG] ❌ Файл .env не найден по пути:', envPath);
+  }
+}
+
+// Если ни один путь не сработал, пробуем стандартный способ dotenv
+if (!envLoaded) {
+  console.log('[CONFIG] ⚠️ Файл .env не найден ни в одном из проверенных путей');
+  console.log('[CONFIG] Пробуем стандартный способ dotenv.config()...');
   dotenv.config();
   console.log('[CONFIG] Используется стандартный путь dotenv');
 }
@@ -46,13 +79,25 @@ const botTokensString = (process.env.BOT_TOKEN || '').trim();
 const botTokens = parseBotTokens(botTokensString);
 
 // Логирование для отладки
-console.log('[CONFIG] BOT_TOKEN из env:', botTokensString ? `${botTokensString.substring(0, 10)}...` : 'НЕ НАЙДЕН');
+console.log('[CONFIG] ========== Проверка переменных окружения ==========');
+console.log('[CONFIG] BOT_TOKEN из process.env (сырой):', process.env.BOT_TOKEN ? `"${process.env.BOT_TOKEN.substring(0, 20)}..."` : 'НЕ НАЙДЕН');
+console.log('[CONFIG] BOT_TOKEN после trim:', botTokensString ? `"${botTokensString.substring(0, 20)}..."` : 'НЕ НАЙДЕН');
 console.log('[CONFIG] Количество токенов после парсинга:', botTokens.length);
 if (botTokens.length > 0) {
   botTokens.forEach((token, index) => {
     console.log(`[CONFIG] Токен #${index + 1}: ${token.substring(0, 10)}...`);
   });
+} else {
+  console.log('[CONFIG] ⚠️ ВНИМАНИЕ: Токены не найдены!');
+  console.log('[CONFIG] Проверьте, что файл .env находится в правильном месте и содержит BOT_TOKEN');
+  if (loadedEnvPath) {
+    console.log('[CONFIG] Файл .env был загружен из:', loadedEnvPath);
+  }
 }
+console.log('[CONFIG] ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'установлен' : 'НЕ НАЙДЕН');
+console.log('[CONFIG] DB_PATH:', process.env.DB_PATH || 'не установлен');
+console.log('[CONFIG] CAPTCHA_ENABLED:', process.env.CAPTCHA_ENABLED || 'не установлен');
+console.log('[CONFIG] ================================================');
 
 export const config = {
   // Для обратной совместимости: если указан один токен, используем его
