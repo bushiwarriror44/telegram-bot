@@ -1,11 +1,18 @@
 import { Telegraf } from 'telegraf';
 import { config } from './config/index.js';
+console.log('[INDEX] Конфиг загружен');
+
 import { database } from './database/db.js';
+console.log('[INDEX] Модуль database загружен');
+
 import { setupUserHandlers, setAdminSessions } from './handlers/userHandlers.js';
 import { setupAdminHandlers, adminSessions } from './handlers/adminHandlers.js';
+console.log('[INDEX] Модули handlers загружены');
+
 import { initializeMockData, ensureTransgranExists } from './utils/mockData.js';
 import { menuButtonService } from './services/menuButtonService.js';
 import { UnpaidOrderMonitorService } from './services/unpaidOrderMonitorService.js';
+console.log('[INDEX] Все модули загружены');
 
 // Хранилище запущенных ботов для graceful shutdown
 const runningBots = [];
@@ -247,5 +254,14 @@ async function startBot() {
   }
 }
 
-startBot();
+console.log('[INDEX] Вызов startBot()...');
+startBot()
+  .then(() => {
+    console.log('[INDEX] startBot() завершился успешно (промис резолвлен)');
+  })
+  .catch((err) => {
+    console.error('[INDEX] startBot() завершился с ошибкой:', err);
+    console.error('[INDEX] Stack:', err?.stack);
+    process.exit(1);
+  });
 
