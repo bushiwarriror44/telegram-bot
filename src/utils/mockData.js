@@ -233,13 +233,15 @@ export async function initializeMockData() {
           try {
             // Товары создаются без фото (imagePath = null)
             let imagePath = null;
+            // Цена по умолчанию для предустановленных товаров (1000, как было указано ранее)
+            const defaultPrice = product.price || 1000;
 
             await productService.create(
               city.id,
               district.id,
               product.name,
-              product.description,
-              product.price,
+              product.description || '',
+              defaultPrice,
               packaging ? packaging.id : null,
               imagePath
             );
@@ -266,29 +268,55 @@ export async function initializeMockData() {
     } else {
       // Проверяем и создаем недостающие методы оплаты
       console.log('[MOCK] Проверка наличия всех методов оплаты...');
-      const existingNames = existingPayments.map(p => p.name);
+      // Нормализуем имена существующих методов (убираем пробелы, приводим к нижнему регистру для сравнения)
+      const existingNamesNormalized = existingPayments.map(p => p.name.trim().toLowerCase());
+      const existingNames = existingPayments.map(p => p.name.trim());
 
       // Проверяем криптовалютные методы
       for (const method of paymentMethods) {
-        if (!existingNames.includes(method.name)) {
-          console.log(`[MOCK] Создание недостающего метода оплаты: ${method.name}`);
+        const methodNameNormalized = method.name.trim().toLowerCase();
+        const methodName = method.name.trim();
+        
+        // Проверяем по нормализованному имени
+        if (!existingNamesNormalized.includes(methodNameNormalized)) {
+          console.log(`[MOCK] Создание недостающего метода оплаты: ${methodName}`);
           try {
-            await paymentService.createMethod(method.name, method.network, 'crypto');
+            await paymentService.createMethod(methodName, method.network, 'crypto');
+            console.log(`[MOCK] ✅ Метод оплаты ${methodName} успешно создан`);
           } catch (error) {
-            console.error(`[MOCK] Ошибка при создании метода ${method.name}:`, error);
+            // Игнорируем ошибки UNIQUE constraint - это значит метод уже существует
+            if (error.code === 'SQLITE_CONSTRAINT') {
+              console.log(`[MOCK] ⚠️ Метод оплаты ${methodName} уже существует, пропускаем`);
+            } else {
+              console.error(`[MOCK] ❌ Ошибка при создании метода ${methodName}:`, error.message);
+            }
           }
+        } else {
+          console.log(`[MOCK] ✓ Метод оплаты ${methodName} уже существует`);
         }
       }
 
       // Проверяем карточные методы
       for (const method of cardPaymentMethods) {
-        if (!existingNames.includes(method.name)) {
-          console.log(`[MOCK] Создание недостающего метода оплаты: ${method.name}`);
+        const methodNameNormalized = method.name.trim().toLowerCase();
+        const methodName = method.name.trim();
+        
+        // Проверяем по нормализованному имени
+        if (!existingNamesNormalized.includes(methodNameNormalized)) {
+          console.log(`[MOCK] Создание недостающего метода оплаты: ${methodName}`);
           try {
-            await paymentService.createMethod(method.name, method.network, 'card');
+            await paymentService.createMethod(methodName, method.network, 'card');
+            console.log(`[MOCK] ✅ Метод оплаты ${methodName} успешно создан`);
           } catch (error) {
-            console.error(`[MOCK] Ошибка при создании метода ${method.name}:`, error);
+            // Игнорируем ошибки UNIQUE constraint - это значит метод уже существует
+            if (error.code === 'SQLITE_CONSTRAINT') {
+              console.log(`[MOCK] ⚠️ Метод оплаты ${methodName} уже существует, пропускаем`);
+            } else {
+              console.error(`[MOCK] ❌ Ошибка при создании метода ${methodName}:`, error.message);
+            }
           }
+        } else {
+          console.log(`[MOCK] ✓ Метод оплаты ${methodName} уже существует`);
         }
       }
     }
@@ -386,13 +414,15 @@ export async function initializeMockData() {
         try {
           // Товары создаются без фото (imagePath = null)
           let imagePath = null;
+          // Цена по умолчанию для предустановленных товаров (1000, как было указано ранее)
+          const defaultPrice = product.price || 1000;
 
           await productService.create(
             city.id,
             district.id,
             product.name,
-            product.description,
-            product.price,
+            product.description || '',
+            defaultPrice,
             packaging ? packaging.id : null,
             imagePath
           );
