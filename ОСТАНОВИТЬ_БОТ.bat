@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
 if "%~1"=="" (
@@ -30,10 +29,10 @@ if errorlevel 1 (
 
 if exist "scripts\stop-all-from-cwd.js" (
   echo INFO: Stopping all PM2 processes from this folder...
-  call node "scripts\stop-all-from-cwd.js"
+  node "scripts\stop-all-from-cwd.js"
 ) else (
   echo WARN: scripts\stop-all-from-cwd.js not found. Stopping src/index.js...
-  call pm2 stop src/index.js 2>nul
+  pm2 stop src/index.js 2>nul
 )
 
 echo.

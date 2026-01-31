@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
 if "%~1"=="" (
@@ -40,14 +39,16 @@ if not exist "node_modules" (
 
 if exist "scripts\stop-all-from-cwd.js" (
   echo INFO: Stopping all PM2 processes from this folder...
-  call node "scripts\stop-all-from-cwd.js"
+  node "scripts\stop-all-from-cwd.js"
   echo.
 ) else (
-  call pm2 stop src/index.js 2>nul
+  pm2 stop src/index.js 2>nul
 )
 
-echo INFO: Starting pm2...
-call pm2 start src/index.js --cwd "%cd%"
+for %%a in ("%cd%") do set "DIRNAME=%%~nxa"
+if "!DIRNAME!"=="" set "DIRNAME=bot"
+echo INFO: Starting pm2 (one instance per folder; name: bot-!DIRNAME!)...
+pm2 start src/index.js --name "bot-!DIRNAME!" --cwd "%cd%"
 
 echo.
 echo INFO: Bot started. Use logs.bat to view logs.

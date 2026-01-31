@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
 if "%~1"=="" (
@@ -23,15 +22,12 @@ if errorlevel 1 (
 )
 
 echo INFO: Process list:
-call pm2 list
+pm2 list
 echo.
-echo INFO: Last 300 lines, then live stream. Press Ctrl+C to exit.
+echo INFO: Last 200 lines, then live stream. Press Ctrl+C to exit.
 echo.
 
-call pm2 logs --lines 300 --nostream
-echo.
-echo --- Live stream below. Press Ctrl+C to exit ---
-call pm2 logs --lines 100
+pm2 logs --lines 200
 :eof
 echo.
 pause
