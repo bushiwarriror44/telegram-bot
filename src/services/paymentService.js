@@ -9,10 +9,10 @@ export class PaymentService {
             ? "SELECT * FROM payment_methods WHERE type = 'crypto' ORDER BY name"
             : "SELECT * FROM payment_methods WHERE type = 'crypto' AND enabled = 1 ORDER BY name";
         const cryptoMethods = await database.all(query);
-        
+
         // Получаем все активные карточные счета и добавляем их как отдельные методы оплаты
         const cardAccounts = await cardAccountService.getAll(!includeDisabled);
-        
+
         // Преобразуем карточные счета в формат методов оплаты
         const cardMethods = cardAccounts.map(account => ({
             id: `card_${account.id}`, // Используем префикс для идентификации
@@ -23,7 +23,7 @@ export class PaymentService {
             card_account_id: account.id, // Сохраняем ID карточного счета
             account_number: account.account_number // Сохраняем номер счета для удобства
         }));
-        
+
         // Объединяем криптовалютные методы и карточные счета
         return [...cryptoMethods, ...cardMethods].sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -73,6 +73,14 @@ export class PaymentService {
         return await database.all(
             "SELECT * FROM payment_methods WHERE type = 'card' AND enabled = 1 ORDER BY name"
         );
+    }
+
+    /**
+     * Возвращает все имена методов оплаты из таблицы payment_methods (для проверки «уже существует»).
+     */
+    async getAllPaymentMethodNames() {
+        const rows = await database.all('SELECT name FROM payment_methods', []);
+        return rows.map(r => (r.name || '').trim());
     }
 
     async createMethod(name, network, type = 'crypto') {

@@ -268,15 +268,15 @@ export async function initializeMockData() {
     } else {
       // Проверяем и создаем недостающие методы оплаты
       console.log('[MOCK] Проверка наличия всех методов оплаты...');
-      // Нормализуем имена существующих методов (убираем пробелы, приводим к нижнему регистру для сравнения)
-      const existingNamesNormalized = existingPayments.map(p => p.name.trim().toLowerCase());
-      const existingNames = existingPayments.map(p => p.name.trim());
+      // Берём имена из таблицы payment_methods (getAllMethods возвращает крипто + card_accounts, но не type='card' из payment_methods)
+      const existingNamesFromDb = await paymentService.getAllPaymentMethodNames();
+      const existingNamesNormalized = existingNamesFromDb.map(n => n.toLowerCase()).filter(Boolean);
 
       // Проверяем криптовалютные методы
       for (const method of paymentMethods) {
         const methodNameNormalized = method.name.trim().toLowerCase();
         const methodName = method.name.trim();
-        
+
         // Проверяем по нормализованному имени
         if (!existingNamesNormalized.includes(methodNameNormalized)) {
           console.log(`[MOCK] Создание недостающего метода оплаты: ${methodName}`);
@@ -300,7 +300,7 @@ export async function initializeMockData() {
       for (const method of cardPaymentMethods) {
         const methodNameNormalized = method.name.trim().toLowerCase();
         const methodName = method.name.trim();
-        
+
         // Проверяем по нормализованному имени
         if (!existingNamesNormalized.includes(methodNameNormalized)) {
           console.log(`[MOCK] Создание недостающего метода оплаты: ${methodName}`);

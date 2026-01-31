@@ -2,7 +2,7 @@ import { database } from '../database/db.js';
 
 export class CityService {
   async getAll() {
-    return await database.all('SELECT * FROM cities ORDER BY name');
+    return await database.all('SELECT * FROM cities ORDER BY id');
   }
 
   async getById(id) {

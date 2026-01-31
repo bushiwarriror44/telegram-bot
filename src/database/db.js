@@ -62,7 +62,12 @@ class Database {
           console.log('[DB.run] Все свойства this:', Object.keys(this || {}));
 
           if (err) {
-            console.error('[DB.run] ОШИБКА при выполнении:', err);
+            // UNIQUE constraint при повторной вставке — ожидаемо, не логируем как ошибку
+            if (err.code === 'SQLITE_CONSTRAINT' && /UNIQUE constraint failed/i.test(err.message)) {
+              console.log('[DB.run] UNIQUE constraint (запись уже существует):', err.message);
+            } else {
+              console.error('[DB.run] ОШИБКА при выполнении:', err);
+            }
             reject(err);
             return;
           }
@@ -316,7 +321,7 @@ class Database {
         FOREIGN KEY (user_chat_id) REFERENCES users(chat_id) ON DELETE CASCADE
       )
     `);
-    
+
     // Добавляем колонку message_type, если её нет (для существующих БД)
     const supportMessagesColumns = await this.db.all('PRAGMA table_info(support_messages)');
     const hasMessageType = supportMessagesColumns.some((col) => col.name === 'message_type');

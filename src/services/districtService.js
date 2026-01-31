@@ -2,11 +2,11 @@ import { database } from '../database/db.js';
 
 export class DistrictService {
   async getAll() {
-    return await database.all('SELECT * FROM districts ORDER BY city_id, name');
+    return await database.all('SELECT * FROM districts ORDER BY city_id, id');
   }
 
   async getByCityId(cityId) {
-    return await database.all('SELECT * FROM districts WHERE city_id = ? ORDER BY name', [cityId]);
+    return await database.all('SELECT * FROM districts WHERE city_id = ? ORDER BY id', [cityId]);
   }
 
   async getById(id) {
