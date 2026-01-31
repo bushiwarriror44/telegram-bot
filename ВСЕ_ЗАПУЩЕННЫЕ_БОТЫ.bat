@@ -40,12 +40,26 @@ echo ========================================
 echo   All running bots: folder and script
 echo ========================================
 echo.
+set "DIDLIST=0"
 if exist "%~dp0scripts\list-pm2-with-cwd.js" (
   node "%~dp0scripts\list-pm2-with-cwd.js"
-) else if exist "scripts\list-pm2-with-cwd.js" (
+  if not errorlevel 1 set "DIDLIST=1"
+)
+if "!DIDLIST!"=="0" if exist "scripts\list-pm2-with-cwd.js" (
   node "scripts\list-pm2-with-cwd.js"
-) else (
-  echo INFO: scripts\list-pm2-with-cwd.js not found. Run this bat from project folder.
+  if not errorlevel 1 set "DIDLIST=1"
+)
+if "!DIDLIST!"=="0" (
+  echo INFO: Using pm2 show to list folders...
+  echo.
+  for /L %%i in (0,1,31) do (
+    pm2 show %%i 2>nul | findstr /c:"exec cwd" /c:"script path" >nul 2>&1
+    if not errorlevel 1 (
+      echo   --- Process %%i ---
+      pm2 show %%i 2>nul | findstr /c:"exec cwd" /c:"script path"
+      echo.
+    )
+  )
 )
 
 :eof
