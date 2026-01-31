@@ -3,11 +3,11 @@ chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
 if "%~1"=="" (
-  start "Telegram Bot - Delete" cmd /k "cd /d "%~dp0" && "%~f0" _run"
+  start "PM2 Delete" cmd /k "%~f0" _run
   exit /b 0
 )
-if not "%~1"=="_run" goto :main
-
+cd /d "%~dp0."
+if not "%~1"=="_run" goto :eof
 :main
 echo ========================================
 echo   Удаление бота из PM2

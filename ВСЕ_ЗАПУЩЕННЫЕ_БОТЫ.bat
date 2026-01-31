@@ -4,11 +4,11 @@ setlocal EnableDelayedExpansion
 
 REM При двойном клике открываем окно, которое не закроется
 if "%~1"=="" (
-  start "Telegram Bot - Список процессов PM2" cmd /k "cd /d "%~dp0" && "%~f0" _run"
+  start "PM2 List" cmd /k "%~f0" _run
   exit /b 0
 )
-if not "%~1"=="_run" goto :main
-
+cd /d "%~dp0."
+if not "%~1"=="_run" goto :eof
 :main
 echo ========================================
 echo   Список процессов PM2 (все боты)

@@ -3,11 +3,11 @@ chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
 if "%~1"=="" (
-  start "Telegram Bot - Clear Logs" cmd /k "cd /d "%~dp0" && "%~f0" _run"
+  start "PM2 Clear Logs" cmd /k "%~f0" _run
   exit /b 0
 )
-if not "%~1"=="_run" goto :main
-
+cd /d "%~dp0."
+if not "%~1"=="_run" goto :eof
 :main
 echo ========================================
 echo   Очистка логов PM2

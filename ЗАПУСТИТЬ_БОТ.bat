@@ -4,11 +4,11 @@ setlocal EnableDelayedExpansion
 
 REM При двойном клике перезапускаем себя в новом окне, которое не закроется
 if "%~1"=="" (
-  start "Telegram Bot - Start" cmd /k "cd /d "%~dp0" && "%~f0" _run"
+  start "PM2 Start" cmd /k "%~f0" _run
   exit /b 0
 )
-if not "%~1"=="_run" goto :main
-
+cd /d "%~dp0."
+if not "%~1"=="_run" goto :eof
 :main
 echo ========================================
 echo   Старт Telegram-бота через PM2
