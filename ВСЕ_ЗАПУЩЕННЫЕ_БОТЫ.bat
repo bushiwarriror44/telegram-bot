@@ -35,10 +35,17 @@ if errorlevel 1 (
   goto :eof
 )
 
-if exist "scripts\list-pm2-with-cwd.js" (
+echo.
+echo ========================================
+echo   All running bots: folder and script
+echo ========================================
+echo.
+if exist "%~dp0scripts\list-pm2-with-cwd.js" (
+  node "%~dp0scripts\list-pm2-with-cwd.js"
+) else if exist "scripts\list-pm2-with-cwd.js" (
   node "scripts\list-pm2-with-cwd.js"
 ) else (
-  echo INFO: scripts\list-pm2-with-cwd.js not found.
+  echo INFO: scripts\list-pm2-with-cwd.js not found. Run this bat from project folder.
 )
 
 :eof
