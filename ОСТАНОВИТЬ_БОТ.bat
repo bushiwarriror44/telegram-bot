@@ -9,35 +9,35 @@ if "%~1"=="" (
 cd /d "%~dp0."
 if not "%~1"=="_run" goto :eof
 :main
+
 echo ========================================
-echo   Стоп ВСЕХ ботов из текущей папки (PM2)
+echo   Stop ALL bots from this folder (PM2)
 echo ========================================
-echo Текущая папка: %cd%
+echo Folder: %cd%
 echo.
 
 where pm2 >nul 2>&1
 if errorlevel 1 (
-  echo [ОШИБКА] PM2 не найден. Установи: npm install -g pm2
+  echo ERROR: PM2 not found. Run: npm install -g pm2
   goto :eof
 )
 
 where node >nul 2>&1
 if errorlevel 1 (
-  echo [ОШИБКА] Node.js не найден. Установи Node.js.
+  echo ERROR: Node.js not found.
   goto :eof
 )
 
-if not exist "scripts\stop-all-from-cwd.js" (
-  echo [ОШИБКА] Файл scripts\stop-all-from-cwd.js не найден.
-  goto :eof
+if exist "scripts\stop-all-from-cwd.js" (
+  echo INFO: Stopping all PM2 processes from this folder...
+  call node "scripts\stop-all-from-cwd.js"
+) else (
+  echo WARN: scripts\stop-all-from-cwd.js not found. Stopping src/index.js...
+  call pm2 stop src/index.js 2>nul
 )
 
-echo [INFO] Поиск и остановка всех процессов PM2 из этой папки...
 echo.
-call node scripts\stop-all-from-cwd.js
-
-echo.
-echo [INFO] Готово.
+echo INFO: Done.
 :eof
 echo.
 pause

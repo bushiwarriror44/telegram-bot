@@ -9,23 +9,24 @@ if "%~1"=="" (
 cd /d "%~dp0."
 if not "%~1"=="_run" goto :eof
 :main
+
 echo ========================================
-echo   Очистка логов PM2
+echo   Clear PM2 Logs
 echo ========================================
-echo Текущая папка: %cd%
+echo Folder: %cd%
 echo.
 
 where pm2 >nul 2>&1
 if errorlevel 1 (
-  echo [ОШИБКА] PM2 не найден. Установи: npm install -g pm2
+  echo ERROR: PM2 not found. Run: npm install -g pm2
   goto :eof
 )
 
-echo [INFO] Очистка логов: pm2 flush
+echo INFO: Clearing logs with pm2 flush...
 call pm2 flush
 
 echo.
-echo [INFO] Логи очищены.
+echo INFO: Logs cleared.
 :eof
 echo.
 pause

@@ -9,28 +9,28 @@ if "%~1"=="" (
 cd /d "%~dp0."
 if not "%~1"=="_run" goto :eof
 :main
+
 echo ========================================
-echo   Логи Telegram-бота (PM2)
+echo   PM2 Logs (Telegram Bot)
 echo ========================================
-echo Текущая папка: %cd%
+echo Folder: %cd%
 echo.
 
 where pm2 >nul 2>&1
 if errorlevel 1 (
-  echo [ОШИБКА] PM2 не найден. Установи: npm install -g pm2
+  echo ERROR: PM2 not found. Run: npm install -g pm2
   goto :eof
 )
 
-echo [INFO] Список процессов PM2:
+echo INFO: Process list:
 call pm2 list
 echo.
-echo [INFO] Логи (последние 300 строк, затем поток). Ctrl+C для выхода.
+echo INFO: Last 300 lines, then live stream. Press Ctrl+C to exit.
 echo.
 
-REM Сначала выводим последние строки без потока (--nostream), чтобы сразу увидеть логи
 call pm2 logs --lines 300 --nostream
 echo.
-echo --- Live: новые строки будут появляться ниже (Ctrl+C для выхода) ---
+echo --- Live stream below. Press Ctrl+C to exit ---
 call pm2 logs --lines 100
 :eof
 echo.

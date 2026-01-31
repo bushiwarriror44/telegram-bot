@@ -16,29 +16,24 @@ echo ========================================
 echo Текущая папка: %cd%
 echo.
 
-REM Проверяем, что pm2 доступен (через npm global или PATH)
-set "PM2_CMD=pm2"
+REM Проверяем, что pm2 доступен, и вызываем без переменной (чтобы не было ошибки _CMD / "")
+echo [INFO] Таблица процессов PM2:
+echo.
 where pm2 >nul 2>&1
 if errorlevel 1 (
-  REM Пробуем через npx или полный путь к pm2
   if exist "%APPDATA%\npm\pm2.cmd" (
-    set "PM2_CMD=%APPDATA%\npm\pm2.cmd"
+    call "%APPDATA%\npm\pm2.cmd" list
   ) else if exist "%APPDATA%\npm\pm2" (
-    set "PM2_CMD=%APPDATA%\npm\pm2"
+    call "%APPDATA%\npm\pm2" list
   ) else (
-    echo [ОШИБКА] PM2 не найден в PATH и в %%APPDATA%%\npm
-    echo Установи: npm install -g pm2
+    echo [ОШИБКА] PM2 не найден. Установи: npm install -g pm2
     goto :eof
   )
+) else (
+  call pm2 list
 )
-
-echo [INFO] Таблица процессов: %PM2_CMD% list
-echo.
-call "%PM2_CMD%" list
 if errorlevel 1 (
-  echo.
   echo [ОШИБКА] Команда pm2 list завершилась с ошибкой.
-  echo Проверь, что Node.js и PM2 установлены: npm install -g pm2
   goto :eof
 )
 

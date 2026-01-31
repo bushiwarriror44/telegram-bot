@@ -2,7 +2,6 @@
 chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
-REM При двойном клике перезапускаем себя в новом окне, которое не закроется
 if "%~1"=="" (
   start "PM2 Start" cmd /k "%~f0" _run
   exit /b 0
@@ -10,50 +9,48 @@ if "%~1"=="" (
 cd /d "%~dp0."
 if not "%~1"=="_run" goto :eof
 :main
+
 echo ========================================
-echo   Старт Telegram-бота через PM2
+echo   Start Telegram Bot (PM2)
 echo ========================================
-echo Текущая папка: %cd%
+echo Folder: %cd%
 echo.
 
 if not exist ".env" (
-  echo [ОШИБКА] Файл .env не найден в текущей папке!
-  echo Убедись, что запускаешь скрипт из корня проекта.
+  echo ERROR: File .env not found in current folder.
   goto :eof
 )
 
 where pm2 >nul 2>&1
 if errorlevel 1 (
-  echo [ОШИБКА] PM2 не найден.
-  echo Установи: npm install -g pm2
+  echo ERROR: PM2 not found. Run: npm install -g pm2
   goto :eof
 )
 
 if not exist "node_modules" (
-  echo [INFO] Устанавливаю зависимости: npm install
+  echo INFO: Installing dependencies...
   call npm install
   if errorlevel 1 (
-    echo [ОШИБКА] npm install завершился с ошибкой.
+    echo ERROR: npm install failed.
     goto :eof
   )
 ) else (
-  echo [INFO] node_modules найден, пропускаю npm install.
+  echo INFO: node_modules exists, skipping npm install.
 )
 
-REM Если боты уже запущены из этой папки — останавливаем все, иначе pm2 start выдаст ошибку
 if exist "scripts\stop-all-from-cwd.js" (
-  echo [INFO] Остановка всех процессов PM2 из этой папки...
-  call node scripts\stop-all-from-cwd.js
+  echo INFO: Stopping all PM2 processes from this folder...
+  call node "scripts\stop-all-from-cwd.js"
   echo.
 ) else (
   call pm2 stop src/index.js 2>nul
 )
 
-echo [INFO] Запуск: pm2 start src/index.js --cwd "%cd%"
+echo INFO: Starting pm2...
 call pm2 start src/index.js --cwd "%cd%"
 
 echo.
-echo [INFO] Бот запущен. Логи: logs.bat
+echo INFO: Bot started. Use logs.bat to view logs.
 :eof
 echo.
 pause
