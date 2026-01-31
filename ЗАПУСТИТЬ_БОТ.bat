@@ -47,10 +47,8 @@ if exist "scripts\stop-all-from-cwd.js" (
 
 for %%a in ("%cd%") do set "DIRNAME=%%~nxa"
 if "!DIRNAME!"=="" set "DIRNAME=bot"
-set "APPNAME=bot-!DIRNAME!"
-echo INFO: Starting pm2 (one instance per folder; name: !APPNAME!)...
-pm2 start src/index.js --name "!APPNAME!" --cwd "%cd%"
-
+echo INFO: Starting pm2 (one instance per folder; name: bot-!DIRNAME!)...
+for %%n in ("bot-!DIRNAME!") do pm2 start src/index.js --name "%%~n" --cwd "%cd%"
 echo.
 echo INFO: Bot started. Use logs.bat to view logs.
 :eof
