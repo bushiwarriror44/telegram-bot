@@ -1,7 +1,7 @@
 import { userService } from '../../services/userService.js';
 import { cityService } from '../../services/cityService.js';
 import { settingsService } from '../../services/settingsService.js';
-import { showCitiesMenu, showDistrictsMenu, showProductsMenu, showProductDetails } from './catalogHandler.js';
+import { showCitiesMenu, showDistrictsMenu, showProductsMenu, showProductDetails, showCityProductsMenu } from './catalogHandler.js';
 
 /**
  * Регистрирует обработчики навигации (back кнопки)
@@ -43,6 +43,16 @@ export function registerNavigationHandlers(bot) {
             await showDistrictsMenu(ctx, cityId);
         } catch (error) {
             await ctx.reply('Ошибка при загрузке районов. Попробуйте снова.');
+        }
+    });
+
+    // Вернуться к списку товаров по городу (после выбора товара -> район)
+    bot.action(/^back_to_city_products_(\d+)$/, async (ctx) => {
+        const cityId = parseInt(ctx.match[1]);
+        try {
+            await showCityProductsMenu(ctx, cityId);
+        } catch (error) {
+            await ctx.reply('Ошибка при загрузке товаров. Попробуйте снова.');
         }
     });
 

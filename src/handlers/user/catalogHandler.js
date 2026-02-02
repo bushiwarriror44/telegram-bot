@@ -49,7 +49,7 @@ export function registerCatalogHandlers(bot) {
         await showCitiesMenu(ctx);
     });
 
-    // Обработка выбора города
+    // Обработка выбора города: сразу показываем витрину товаров по городу
     bot.action(/^city_(\d+)$/, async (ctx) => {
         await userService.saveOrUpdate(ctx.from.id, {
             username: ctx.from.username,
@@ -57,7 +57,7 @@ export function registerCatalogHandlers(bot) {
             last_name: ctx.from.last_name
         });
         const cityId = parseInt(ctx.match[1]);
-        await showDistrictsMenu(ctx, cityId);
+        await showCityProductsMenu(ctx, cityId);
     });
 
     // Обработка выбора района
@@ -83,6 +83,82 @@ export function registerCatalogHandlers(bot) {
         const { statisticsService } = await import('../../services/statisticsService.js');
         await statisticsService.recordProductView(productId, ctx.from.id);
         await showProductDetails(ctx, productId);
+    });
+
+    // Обработка выбора товара по городу (сначала город -> товар, потом выбор района)
+    bot.action(/^cityproduct_(\d+)_(\d+)$/, async (ctx) => {
+        await userService.saveOrUpdate(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            last_name: ctx.from.last_name
+        });
+
+        const cityId = parseInt(ctx.match[1]);
+        const baseProductId = parseInt(ctx.match[2]);
+
+        const city = await cityService.getById(cityId);
+        if (!city) {
+            await ctx.reply('Город не найден.');
+            return;
+        }
+
+        const baseProduct = await productService.getById(baseProductId);
+        if (!baseProduct) {
+            await ctx.reply('Товар не найден.');
+            return;
+        }
+
+        // Ищем все варианты этого товара (по имени и фасовке) во всех районах выбранного города
+        const cityProducts = await productService.getByCityId(cityId);
+        const sameProducts = cityProducts.filter(p =>
+            p.name === baseProduct.name &&
+            (p.packaging_value || null) === (baseProduct.packaging_value || null)
+        );
+
+        if (sameProducts.length === 0) {
+            await ctx.reply('Товар в этом городе больше не доступен.');
+            return;
+        }
+
+        // Получаем районы для всех вариантов товара
+        const districtsInCity = await districtService.getByCityId(cityId);
+        const districtById = new Map(districtsInCity.map(d => [d.id, d]));
+
+        const keyboard = sameProducts
+            .map(product => {
+                const district = districtById.get(product.district_id);
+                if (!district) return null;
+                return [
+                    {
+                        text: district.name,
+                        // После выбора района просто переходим к детали конкретного товара
+                        callback_data: `product_${product.id}`
+                    }
+                ];
+            })
+            .filter(Boolean);
+
+        if (keyboard.length === 0) {
+            await ctx.reply('Для этого товара не найдено доступных районов.');
+            return;
+        }
+
+        keyboard.push([
+            { text: '◀️ Назад к товарам', callback_data: `back_to_city_products_${cityId}` }
+        ]);
+
+        const packagingLabel = baseProduct.packaging_value
+            ? ` (${formatPackaging(baseProduct.packaging_value)})`
+            : '';
+
+        await ctx.reply(
+            `🏙️ Город: ${city.name}\n📦 Товар: ${baseProduct.name}${packagingLabel}\n\n📍 Выберите район:`,
+            {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            }
+        );
     });
 
     // Обработка ввода промокода
@@ -221,50 +297,20 @@ export function registerCatalogHandlers(bot) {
             return;
         }
 
-        // Получаем детали оплаты для копирования
-        const method = await paymentService.getMethodById(order.payment_method_id);
-        if (!method) {
-            await ctx.answerCbQuery('Метод оплаты не выбран');
+        // Берём текст именно того сообщения, по которому нажата кнопка
+        const originalText = ctx.callbackQuery?.message?.text;
+
+        if (!originalText) {
+            await ctx.answerCbQuery('Текст реквизитов не найден');
             return;
         }
 
-        let paymentDetails = '';
+        await ctx.answerCbQuery('Реквизиты скопированы');
 
-        if (method.type === 'card') {
-            let cardAccount;
-            if (method.card_account_id) {
-                cardAccount = await cardAccountService.getById(method.card_account_id);
-            } else if (method.name) {
-                if (method.name === 'ТРАНСГРАН') {
-                    cardAccount = await cardAccountService.getRandomCardByName('ТРАНСГРАН');
-                } else {
-                    cardAccount = await cardAccountService.getRandomCardByName(method.name);
-                }
-            }
-
-            if (cardAccount) {
-                const cards = cardAccount.cards || [cardAccount.account_number];
-                const randomCard = cards.length > 0
-                    ? cards[Math.floor(Math.random() * cards.length)]
-                    : cardAccount.account_number;
-                paymentDetails = randomCard;
-            }
-        } else {
-            const address = await paymentService.getPaymentAddress(method.id);
-            if (address) {
-                paymentDetails = address;
-            }
-        }
-
-        if (paymentDetails) {
-            await ctx.answerCbQuery('Реквизиты скопированы');
-            await ctx.reply(`📋 Реквизиты для оплаты:\n\n<code>${paymentDetails}</code>`, {
-                parse_mode: 'HTML'
-            });
-        } else {
-            await ctx.answerCbQuery('Реквизиты не найдены');
-            await ctx.reply('❌ Реквизиты не найдены. Обратитесь к администратору.');
-        }
+        // Дублируем реквизиты отдельным сообщением в виде кода, чтобы было удобно скопировать
+        await ctx.reply(`📋 Реквизиты для оплаты (скопируйте из блока ниже):\n\n<code>${originalText}</code>`, {
+            parse_mode: 'HTML'
+        });
     });
 
     // Обработка кнопки "Отменить заявку"
@@ -349,6 +395,73 @@ export async function showCitiesMenu(ctx) {
 
     await ctx.reply(
         '🛍 Каталог товаров:',
+        {
+            reply_markup: {
+                inline_keyboard: keyboard
+            }
+        }
+    );
+}
+
+/**
+ * Показ меню товаров по городу (город -> список товаров, потом выбор района)
+ */
+export async function showCityProductsMenu(ctx, cityId) {
+    const city = await cityService.getById(cityId);
+    if (!city) {
+        await ctx.reply('Город не найден.');
+        return;
+    }
+
+    const products = await productService.getByCityId(cityId);
+
+    if (products.length === 0) {
+        await ctx.reply(
+            `В городе ${city.name} пока нет товаров.`,
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]
+                    ]
+                }
+            }
+        );
+        return;
+    }
+
+    const currencySymbol = await getCurrencySymbol();
+
+    // Группируем товары по имени + фасовке, чтобы показывать единый товар на город
+    const groups = new Map();
+    for (const p of products) {
+        const key = `${p.name}::${p.packaging_value || ''}`;
+        if (!groups.has(key)) {
+            groups.set(key, []);
+        }
+        groups.get(key).push(p);
+    }
+
+    const keyboard = [];
+    for (const [, group] of groups.entries()) {
+        // Берем первый вариант как базовый для кнопки
+        const sample = group[0];
+        const packagingLabel = sample.packaging_value
+            ? ` (${formatPackaging(sample.packaging_value)})`
+            : '';
+
+        // Можно взять минимальную цену по городским вариантам
+        const minPrice = Math.min(...group.map(g => g.price));
+
+        keyboard.push([{
+            text: `${sample.name}${packagingLabel} - от ${minPrice.toLocaleString('ru-RU')} ${currencySymbol}`,
+            callback_data: `cityproduct_${cityId}_${sample.id}`
+        }]);
+    }
+
+    keyboard.push([{ text: '◀️ Назад к городам', callback_data: 'back_to_cities' }]);
+
+    await ctx.reply(
+        `🏙️ Город: ${city.name}\n\n🛍 Выберите товар:`,
         {
             reply_markup: {
                 inline_keyboard: keyboard
@@ -728,9 +841,9 @@ export async function showOrderDetails(ctx, orderId) {
         const storefrontName = await settingsService.getStorefrontName();
         const text = `<b>Создан заказ #95${order.id}73</b>
 
-<b>Витрина:</b> ${storefrontName} 
-<b>Категория:</b> ${order.city_name} 
-<b>Раздел:</b> ${order.district_name} 
+
+<b>Город:</b> ${order.city_name} 
+<b>Район:</b> ${order.district_name} 
 
 <b>Товар:</b> ${order.product_name} ${packagingLabel} 
 <b>Кол-во:</b> 1 
