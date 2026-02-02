@@ -170,6 +170,25 @@ export class SettingsService {
   async setCurrencySymbol(symbol) {
     return await this.set('currency_symbol', symbol);
   }
+
+  /**
+   * Получает глобальную наценку (комиссию) в процентах
+   * Применяется к итоговой сумме заказа при выдаче реквизитов.
+   * Значение хранится как строка, но возвращается как число.
+   */
+  async getGlobalMarkupPercent() {
+    const raw = await this.get('global_markup_percent', '0');
+    const num = parseFloat(raw);
+    return Number.isNaN(num) ? 0 : num;
+  }
+
+  /**
+   * Устанавливает глобальную наценку (комиссию) в процентах
+   */
+  async setGlobalMarkupPercent(percent) {
+    const value = typeof percent === 'number' ? percent.toString() : String(percent);
+    return await this.set('global_markup_percent', value);
+  }
 }
 
 export const settingsService = new SettingsService();

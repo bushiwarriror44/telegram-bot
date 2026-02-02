@@ -8,6 +8,7 @@ export const iconEditMode = new Map(); // userId -> true
 export const referralDiscountEditMode = new Map(); // userId -> 'discount' | 'max_discount' | 'cashback'
 export const storefrontNameEditMode = new Map(); // userId -> true
 export const currencyEditMode = new Map(); // userId -> true
+export const markupEditMode = new Map(); // userId -> true
 
 /**
  * Регистрирует обработчики настроек
@@ -179,6 +180,29 @@ export function registerSettingsHandlers(bot) {
         );
     });
 
+    bot.action('admin_markup', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) {
+            await ctx.answerCbQuery('❌ У вас нет доступа');
+            return;
+        }
+        await ctx.answerCbQuery();
+        await showMarkupSettings(ctx);
+    });
+
+    bot.action('edit_markup', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        markupEditMode.set(ctx.from.id, true);
+        const current = await settingsService.getGlobalMarkupPercent();
+        await ctx.reply(
+            '✏️ <b>Редактирование наценки (комиссии)</b>\n\n' +
+            'Введите новый процент наценки для всех товаров.\n' +
+            'Например: 5 или 10 (без знака %).\n\n' +
+            `Текущее значение: <b>${current}%</b>\n\n` +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
+    });
+
     bot.action('admin_welcome', async (ctx) => {
         if (!isAdmin(ctx.from.id)) {
             await ctx.answerCbQuery('❌ У вас нет доступа');
@@ -258,6 +282,7 @@ export async function showSettingsMenu(ctx) {
             [{ text: '📦 Предустановленные товары', callback_data: 'admin_predefined_products' }],
             [{ text: '🏪 Изменить название витрины', callback_data: 'admin_storefront_name' }],
             [{ text: '💱 Изменить валюту', callback_data: 'admin_currency' }],
+            [{ text: '💸 Наценка (комиссия)', callback_data: 'admin_markup' }],
             [{ text: '📊 Статистика', callback_data: 'admin_stats' }],
             [{ text: '💾 Данные', callback_data: 'admin_data' }],
             [{ text: '💬 Чаты', callback_data: 'admin_chats' }],
@@ -499,6 +524,59 @@ export async function showCurrencySettings(ctx) {
     const keyboard = {
         inline_keyboard: [
             [{ text: '✏️ Изменить символ валюты', callback_data: 'edit_currency' }],
+            [{ text: '◀️ Назад', callback_data: 'admin_settings' }]
+        ]
+    };
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    } else {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: keyboard
+        });
+    }
+}
+
+/**
+ * Показ настроек наценки (комиссии)
+ */
+export async function showMarkupSettings(ctx) {
+    if (!isAdmin(ctx.from.id)) {
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
+        } else {
+            await ctx.reply('❌ У вас нет доступа к админ-панели.');
+        }
+        return;
+    }
+
+    const current = await settingsService.getGlobalMarkupPercent();
+
+    const text = `
+💸 <b>Настройка наценки (комиссии)</b>
+
+Текущая наценка для всех товаров: <b>${current}%</b>
+
+Эта наценка применяется к итоговой сумме заказа при выдаче реквизитов.
+Пример: при сумме 5000 и наценке 10% клиент увидит 5500.
+
+Выберите действие:
+    `.trim();
+
+    const keyboard = {
+        inline_keyboard: [
+            [{ text: '✏️ Изменить процент наценки', callback_data: 'edit_markup' }],
             [{ text: '◀️ Назад', callback_data: 'admin_settings' }]
         ]
     };

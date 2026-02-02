@@ -11,11 +11,12 @@ import { supportService } from '../../services/supportService.js';
 import { database } from '../../database/db.js';
 import { isAdmin } from './authHandler.js';
 import { showAdminPanel } from './panelHandler.js';
-import { showWelcomeSettings, welcomeEditMode, iconEditMode, referralDiscountEditMode, storefrontNameEditMode, currencyEditMode } from './settingsHandler.js';
+import { showWelcomeSettings, welcomeEditMode, iconEditMode, referralDiscountEditMode, storefrontNameEditMode, currencyEditMode, markupEditMode } from './settingsHandler.js';
 import { showIconsSettings } from './settingsHandler.js';
 import { showReferralSettings } from './settingsHandler.js';
 import { showStorefrontNameSettings } from './settingsHandler.js';
 import { showCurrencySettings } from './settingsHandler.js';
+import { showMarkupSettings } from './settingsHandler.js';
 import { promocodeAddMode, promocodeAssignMode } from './promocodesHandler.js';
 import { menuButtonEditMode } from './menuButtonsHandler.js';
 import { reviewCreateMode } from './reviewsHandler.js';
@@ -63,6 +64,7 @@ export function registerTextHandlers(bot) {
                 reviewImportMode.delete(ctx.from.id);
                 storefrontNameEditMode.delete(ctx.from.id);
                 currencyEditMode.delete(ctx.from.id);
+                markupEditMode.delete(ctx.from.id);
                 cardAddMode.delete(ctx.from.id);
                 predefinedProductSelectMode.delete(ctx.from.id);
                 predefinedProductCityMode.delete(ctx.from.id);
@@ -123,6 +125,7 @@ export function registerTextHandlers(bot) {
                 referralDiscountEditMode.has(ctx.from.id) ||
                 storefrontNameEditMode.has(ctx.from.id) ||
                 currencyEditMode.has(ctx.from.id) ||
+                markupEditMode.has(ctx.from.id) ||
                 importPaymentMode.has(ctx.from.id) ||
                 importProductMode.has(ctx.from.id) ||
                 databaseImportMode.has(ctx.from.id) ||
@@ -177,6 +180,30 @@ export function registerTextHandlers(bot) {
             } catch (error) {
                 console.error('[AdminHandlers] Ошибка при сохранении символа валюты:', error);
                 await ctx.reply('❌ Ошибка при сохранении символа валюты: ' + error.message);
+            }
+            return;
+        }
+
+        // Обработка изменения наценки (комиссии)
+        if (markupEditMode.has(ctx.from.id)) {
+            try {
+                const raw = ctx.message.text.trim().replace('%', '').replace(',', '.');
+                const num = parseFloat(raw);
+                if (Number.isNaN(num)) {
+                    await ctx.reply('❌ Не удалось распознать число. Введите процент, например: 5 или 10.');
+                    return;
+                }
+                if (num < 0 || num > 100) {
+                    await ctx.reply('❌ Наценка должна быть в диапазоне от 0 до 100%. Попробуйте еще раз.');
+                    return;
+                }
+                await settingsService.setGlobalMarkupPercent(num);
+                markupEditMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Наценка успешно изменена на ${num}%`);
+                await showMarkupSettings(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении наценки:', error);
+                await ctx.reply('❌ Ошибка при сохранении наценки: ' + error.message);
             }
             return;
         }

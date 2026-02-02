@@ -931,6 +931,13 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     // Добавляем задержку перед показом блока с реквизитами (7 секунд)
     await new Promise(resolve => setTimeout(resolve, 7000));
 
+    // Получаем глобальную наценку (комиссию) в процентах
+    const markupPercent = await settingsService.getGlobalMarkupPercent();
+
+    // Итоговая сумма с учетом наценки
+    const baseAmount = order.total_price;
+    const finalAmount = Math.round(baseAmount * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
+
     // Для карточных методов используем карточные счета, для криптовалют - адреса
     let paymentDetails = '';
 
@@ -960,7 +967,7 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
 
         const currencySymbol = await getCurrencySymbol();
         const txid = generateTXID(order.id);
-        const amountText = `${order.total_price.toLocaleString('ru-RU')} ${currencySymbol}`;
+        const amountText = `${finalAmount.toLocaleString('ru-RU')} ${currencySymbol}`;
         paymentDetails = generatePaymentRequestText(order.id, txid, amountText, randomCard);
     } else {
         const address = await paymentService.getPaymentAddress(methodId);
@@ -970,8 +977,8 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
             return;
         }
 
-        // Для криптовалюты конвертируем рубли в криптовалюту
-        const conversion = await cryptoExchangeService.convertRublesToCrypto(order.total_price, method.network);
+        // Для криптовалюты конвертируем рубли в криптовалюту (с учетом наценки)
+        const conversion = await cryptoExchangeService.convertRublesToCrypto(finalAmount, method.network);
 
         if (conversion.error) {
             await ctx.reply(`❌ Ошибка при конвертации: ${conversion.error}`);
