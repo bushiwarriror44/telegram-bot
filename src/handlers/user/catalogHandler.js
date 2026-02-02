@@ -617,7 +617,7 @@ export async function showProductDetails(ctx, productId) {
     const text = `Вы выбрали: ${product.name}${packagingLabel}
 
 
-<b>Цена:</b> ${priceWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}${markupPercent > 0 ? ` (включая наценку ${markupPercent}%; базовая цена ${product.price.toLocaleString('ru-RU')} ${currencySymbol})` : ''}
+<b>Цена:</b> ${priceWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}
 <b>Описание:</b> ${product.description || 'Описание отсутствует'}
 
 ❔ У вас есть промо-код ❔`;
