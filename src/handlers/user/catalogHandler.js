@@ -414,6 +414,8 @@ export async function showCityProductsMenu(ctx, cityId) {
     }
 
     const products = await productService.getByCityId(cityId);
+    const markupPercent = await settingsService.getGlobalMarkupPercent();
+    const markupFactor = 1 + (markupPercent > 0 ? markupPercent : 0) / 100;
 
     if (products.length === 0) {
         await ctx.reply(
@@ -449,11 +451,12 @@ export async function showCityProductsMenu(ctx, cityId) {
             ? ` (${formatPackaging(sample.packaging_value)})`
             : '';
 
-        // Можно взять минимальную цену по городским вариантам
-        const minPrice = Math.min(...group.map(g => g.price));
+        // Можно взять минимальную цену по городским вариантам (с учетом наценки)
+        const minBasePrice = Math.min(...group.map(g => g.price));
+        const minPriceWithMarkup = Math.round(minBasePrice * markupFactor);
 
         keyboard.push([{
-            text: `${sample.name}${packagingLabel} - от ${minPrice.toLocaleString('ru-RU')} ${currencySymbol}`,
+            text: `${sample.name}${packagingLabel} - от ${minPriceWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}`,
             callback_data: `cityproduct_${cityId}_${sample.id}`
         }]);
     }
@@ -536,6 +539,8 @@ export async function showProductsMenu(ctx, districtId) {
 
     const city = await cityService.getById(district.city_id);
     const products = await productService.getByDistrictId(districtId);
+    const markupPercent = await settingsService.getGlobalMarkupPercent();
+    const markupFactor = 1 + (markupPercent > 0 ? markupPercent : 0) / 100;
 
     if (products.length === 0) {
         await ctx.reply(
@@ -556,9 +561,10 @@ export async function showProductsMenu(ctx, districtId) {
         const packagingLabel = product.packaging_value
             ? ` (${formatPackaging(product.packaging_value)})`
             : '';
+        const displayPrice = Math.round(product.price * markupFactor);
         return [
             {
-                text: `${product.name}${packagingLabel} - ${product.price.toLocaleString('ru-RU')} ${currencySymbol}`,
+                text: `${product.name}${packagingLabel} - ${displayPrice.toLocaleString('ru-RU')} ${currencySymbol}`,
                 callback_data: `product_${product.id}`
             }
         ];
@@ -604,10 +610,14 @@ export async function showProductDetails(ctx, productId) {
 
     // Формируем текст в новом формате
     const currencySymbol = await getCurrencySymbol();
+    const markupPercent = await settingsService.getGlobalMarkupPercent();
+    const markupFactor = 1 + (markupPercent > 0 ? markupPercent : 0) / 100;
+    const priceWithMarkup = Math.round(product.price * markupFactor);
+
     const text = `Вы выбрали: ${product.name}${packagingLabel}
 
 
-<b>Цена (без комиссии):</b> ${product.price.toLocaleString('ru-RU')} ${currencySymbol}
+<b>Цена:</b> ${priceWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}${markupPercent > 0 ? ` (включая наценку ${markupPercent}%; базовая цена ${product.price.toLocaleString('ru-RU')} ${currencySymbol})` : ''}
 <b>Описание:</b> ${product.description || 'Описание отсутствует'}
 
 ❔ У вас есть промо-код ❔`;
@@ -837,6 +847,9 @@ export async function showOrderDetails(ctx, orderId) {
         const promocodeText = order.promocode_code ? order.promocode_code : 'Нет';
         const currencySymbol = await getCurrencySymbol();
         const discountText = order.discount > 0 ? `${order.discount.toLocaleString('ru-RU')} ${currencySymbol}` : `0 ${currencySymbol}`;
+        const markupPercent = await settingsService.getGlobalMarkupPercent();
+        const markupFactor = 1 + (markupPercent > 0 ? markupPercent : 0) / 100;
+        const finalWithMarkup = Math.round(order.total_price * markupFactor);
 
         const storefrontName = await settingsService.getStorefrontName();
         const text = `<b>Создан заказ #95${order.id}73</b>
@@ -851,7 +864,7 @@ export async function showOrderDetails(ctx, orderId) {
 
 <b>Промокод:</b> ${promocodeText} 
 <b>Скидка:</b> ${discountText} 
-<b>Финальная сумма:</b> ${order.total_price.toLocaleString('ru-RU')} <b><i>${currencySymbol}</i></b>`;
+<b>Финальная сумма:</b> ${finalWithMarkup.toLocaleString('ru-RU')} <b><i>${currencySymbol}</i></b>${markupPercent > 0 ? ` (включая наценку ${markupPercent}%)` : ''}`;
 
         // Отправляем детали заказа без кнопок
         await ctx.reply(text, {
