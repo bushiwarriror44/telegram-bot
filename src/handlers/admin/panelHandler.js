@@ -76,6 +76,7 @@ ${addressesText}
                 [{ text: '💬 Управление отзывами', callback_data: 'admin_reviews' }],
                 [{ text: '🏪 Изменить название витрины', callback_data: 'admin_storefront_name' }],
                 [{ text: '💰 Изменить валюту', callback_data: 'admin_currency' }],
+                [{ text: '💸 Наценка (комиссия)', callback_data: 'admin_markup' }],
                 [{ text: '👥 Пользователи', callback_data: 'admin_users' }],
                 [{ text: '🚪 Выход из админ-панели', callback_data: 'admin_logout' }]
             ]
