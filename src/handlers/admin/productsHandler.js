@@ -206,10 +206,13 @@ export function registerProductsHandlers(bot) {
         const districtId = parseInt(ctx.match[2]);
 
         try {
+            const product = await productService.getById(productId);
             await productService.delete(productId);
+            console.log(`[ProductsAdmin] Удалён товар id=${productId}, название="${product?.name || '?'}", район id=${districtId}`);
             await ctx.editMessageText('✅ Товар успешно удален!');
             await showDistrictProductsAdmin(ctx, districtId);
         } catch (error) {
+            console.error('[ProductsAdmin] Ошибка удаления товара:', productId, error);
             await ctx.editMessageText(`❌ Ошибка: ${error.message}`);
         }
     });
@@ -630,7 +633,7 @@ export function registerProductsHandlers(bot) {
         await showPredefinedProductsDeleteMenu(ctx);
     });
 
-    // Обработчик для подтверждения удаления товара
+    // Обработчик для подтверждения удаления товара (шаблон + все размещённые в районах)
     bot.action(/^admin_predefined_delete_confirm_(\d+)$/, async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         const productIndex = parseInt(ctx.match[1]);
@@ -640,12 +643,22 @@ export function registerProductsHandlers(bot) {
             return;
         }
         const product = products[productIndex];
-        const { removeMockProduct } = await import('../../utils/mockData.js');
-        const removed = removeMockProduct(product.name);
-        if (removed) {
-            await ctx.answerCbQuery('✅ Товар удален!');
-            await showPredefinedProductsManagement(ctx);
-        } else {
+        const productName = product.name;
+        try {
+            // Удаляем из БД все товары с этим именем (во всех районах)
+            const deletedFromDb = await productService.deleteByName(productName);
+            console.log(`[PredefinedProducts] Удаление предустановленного товара "${productName}": из БД удалено записей: ${deletedFromDb}`);
+            const { removeMockProduct } = await import('../../utils/mockData.js');
+            const removed = removeMockProduct(productName);
+            console.log(`[PredefinedProducts] Шаблон "${productName}" удалён из mockData: ${removed}`);
+            if (removed || deletedFromDb > 0) {
+                await ctx.answerCbQuery('✅ Товар удален!');
+                await showPredefinedProductsManagement(ctx);
+            } else {
+                await ctx.answerCbQuery('❌ Ошибка при удалении');
+            }
+        } catch (err) {
+            console.error('[PredefinedProducts] Ошибка при удалении предустановленного товара:', productName, err);
             await ctx.answerCbQuery('❌ Ошибка при удалении');
         }
     });

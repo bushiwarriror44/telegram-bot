@@ -81,6 +81,24 @@ export class ProductService {
         await database.run('DELETE FROM products WHERE id = ?', [id]);
     }
 
+    /** Удаляет все товары с указанным названием (размещённые в разных районах) */
+    async deleteByName(name) {
+        const rows = await database.all('SELECT id, district_id FROM products WHERE name = ?', [name]);
+        for (const row of rows) {
+            await database.run('DELETE FROM products WHERE id = ?', [row.id]);
+        }
+        return rows.length;
+    }
+
+    /** Удаляет все товары в указанном районе. Возвращает количество удалённых. */
+    async deleteByDistrictId(districtId) {
+        const rows = await database.all('SELECT id FROM products WHERE district_id = ?', [districtId]);
+        for (const row of rows) {
+            await database.run('DELETE FROM products WHERE id = ?', [row.id]);
+        }
+        return rows.length;
+    }
+
     async exists(id) {
         const product = await this.getById(id);
         return !!product;

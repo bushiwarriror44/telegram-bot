@@ -1,5 +1,6 @@
 import { cityService } from '../../services/cityService.js';
 import { districtService } from '../../services/districtService.js';
+import { productService } from '../../services/productService.js';
 import { isAdmin } from './authHandler.js';
 
 // Режимы редактирования
@@ -236,10 +237,14 @@ export function registerCitiesHandlers(bot) {
         }
 
         try {
+            const deletedProducts = await productService.deleteByDistrictId(districtId);
+            console.log(`[DistrictDelete] Район id=${districtId} "${district.name}": удалено товаров в районе: ${deletedProducts}`);
             await districtService.delete(districtId);
+            console.log(`[DistrictDelete] Район id=${districtId} "${district.name}" успешно удалён`);
             await ctx.editMessageText('✅ Район успешно удален!');
             await showDistrictsForCity(ctx, district.city_id);
         } catch (error) {
+            console.error('[DistrictDelete] Ошибка при удалении района:', districtId, error);
             await ctx.editMessageText(`❌ Ошибка: ${error.message}`);
         }
     });

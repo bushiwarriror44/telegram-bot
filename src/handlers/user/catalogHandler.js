@@ -448,7 +448,7 @@ export async function showCityProductsMenu(ctx, cityId) {
         // Берем первый вариант как базовый для кнопки
         const sample = group[0];
         const packagingLabel = sample.packaging_value
-            ? ` (${formatPackaging(sample.packaging_value)})`
+            ? ` ${formatPackaging(sample.packaging_value)}`
             : '';
 
         // Можно взять минимальную цену по городским вариантам (с учетом наценки)
@@ -559,7 +559,7 @@ export async function showProductsMenu(ctx, districtId) {
     const currencySymbol = await getCurrencySymbol();
     const keyboard = products.map(product => {
         const packagingLabel = product.packaging_value
-            ? ` (${formatPackaging(product.packaging_value)})`
+            ? ` ${formatPackaging(product.packaging_value)}`
             : '';
         const displayPrice = Math.round(product.price * markupFactor);
         return [
