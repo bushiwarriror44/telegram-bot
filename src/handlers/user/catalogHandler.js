@@ -391,7 +391,7 @@ export async function showCitiesMenu(ctx) {
         { text: `${displayIcon}${city.name}`, callback_data: `city_${city.id}` }
     ]);
 
-    keyboard.push([{ text: 'Вернуться назад', callback_data: 'back_to_storefront' }]);
+    // keyboard.push([{ text: 'Вернуться назад', callback_data: 'back_to_storefront' }]);
 
     await ctx.reply(
         '🛍 Каталог товаров:',
