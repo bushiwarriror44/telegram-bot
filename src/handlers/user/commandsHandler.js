@@ -95,8 +95,7 @@ export async function registerCommands(bot, isAdmin) {
                     await ctx.replyWithPhoto(
                         { source: imageBuffer },
                         {
-                            caption: `🔒 <b>Проверка капчи</b>\n\n` +
-                                `Выберите правильный вариант из кнопок ниже:`,
+                            caption: `Выберите правильный вариант из кнопок ниже`,
                             parse_mode: 'HTML',
                             reply_markup: buttons
                         }
