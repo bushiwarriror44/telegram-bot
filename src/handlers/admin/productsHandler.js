@@ -52,7 +52,7 @@ export function registerProductsHandlers(bot) {
     bot.action(/^admin_products_city_(\d+)$/, async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         const cityId = parseInt(ctx.match[1]);
-        await showDistrictsForProducts(ctx, cityId);
+        await showDistrictsForProducts(ctx, cityId, 0);
     });
 
     bot.action(/^admin_products_district_(\d+)$/, async (ctx) => {
@@ -408,7 +408,43 @@ export function registerProductsHandlers(bot) {
         else st.districtIds.add(districtId);
         predefinedPlacementState.set(ctx.from.id, st);
         await ctx.answerCbQuery();
-        await showDistrictsForPlacement(ctx, true);
+        const currentPage = st.districtPage || 0;
+        await showDistrictsForPlacement(ctx, true, currentPage);
+    });
+
+    // Переключение страниц районов
+    bot.action(/^admin_predef_place_districts_page_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const page = parseInt(ctx.match[1]);
+        await ctx.answerCbQuery();
+        await showDistrictsForPlacement(ctx, true, page);
+    });
+
+    // Пагинация списка районов для управления товарами
+    bot.action(/^admin_products_districts_page_(\d+)_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const cityId = parseInt(ctx.match[1]);
+        const page = parseInt(ctx.match[2]);
+        await ctx.answerCbQuery();
+        await showDistrictsForProducts(ctx, cityId, page);
+    });
+
+    // Пагинация списка районов для размещения предустановленного товара
+    bot.action(/^admin_predefined_districts_page_(\d+)_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const cityId = parseInt(ctx.match[1]);
+        const page = parseInt(ctx.match[2]);
+        await ctx.answerCbQuery();
+        await showDistrictsForPredefinedProduct(ctx, cityId, page);
+    });
+
+    // Пагинация списка товаров в районе
+    bot.action(/^admin_products_list_page_(\d+)_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const districtId = parseInt(ctx.match[1]);
+        const page = parseInt(ctx.match[2]);
+        await ctx.answerCbQuery();
+        await showDistrictProductsAdmin(ctx, districtId, page);
     });
 
     bot.action('admin_predef_place_district_manual', async (ctx) => {
@@ -664,9 +700,9 @@ export async function showProductsAdmin(ctx) {
 }
 
 /**
- * Показ районов для выбора товаров
+ * Показ районов для выбора товаров (с пагинацией)
  */
-export async function showDistrictsForProducts(ctx, cityId) {
+export async function showDistrictsForProducts(ctx, cityId, page = 0) {
     const city = await cityService.getById(cityId);
     if (!city) {
         await ctx.reply('Город не найден.');
@@ -675,44 +711,71 @@ export async function showDistrictsForProducts(ctx, cityId) {
 
     const districts = await districtService.getByCityId(cityId);
 
+    const ITEMS_PER_PAGE = 20;
+    const totalPages = Math.ceil(districts.length / ITEMS_PER_PAGE) || 1;
+    const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+    const startIdx = currentPage * ITEMS_PER_PAGE;
+    const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, districts.length);
+    const pageItems = districts.slice(startIdx, endIdx);
+
     const text = `
 📦 <b>Управление товарами</b>
 
 Город: <b>${city.name}</b>
 
-Выберите район:
+Выберите район:${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages}` : ''}
     `.trim();
 
-    const keyboard = districts.map(district => [
+    const keyboard = pageItems.map(district => [
         { text: `📍 ${district.name}`, callback_data: `admin_products_district_${district.id}` }
     ]);
+
+    if (totalPages > 1) {
+        const navRow = [];
+        if (currentPage > 0) {
+            navRow.push({
+                text: '◀️ Предыдущая',
+                callback_data: `admin_products_districts_page_${cityId}_${currentPage - 1}`
+            });
+        }
+        if (currentPage < totalPages - 1) {
+            navRow.push({
+                text: 'Следующая ▶️',
+                callback_data: `admin_products_districts_page_${cityId}_${currentPage + 1}`
+            });
+        }
+        if (navRow.length) keyboard.push(navRow);
+    }
+
     keyboard.push([{ text: '➕ Добавить новый предустановленный товар', callback_data: 'admin_predefined_add_new' }]);
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_products' }]);
+
+    const reply_markup = { inline_keyboard: keyboard };
 
     if (ctx.callbackQuery) {
         try {
             await ctx.editMessageText(text, {
                 parse_mode: 'HTML',
-                reply_markup: { inline_keyboard: keyboard }
+                reply_markup
             });
         } catch (error) {
             await ctx.reply(text, {
                 parse_mode: 'HTML',
-                reply_markup: { inline_keyboard: keyboard }
+                reply_markup
             });
         }
     } else {
         await ctx.reply(text, {
             parse_mode: 'HTML',
-            reply_markup: { inline_keyboard: keyboard }
+            reply_markup
         });
     }
 }
 
 /**
- * Показ товаров в районе
+ * Показ товаров в районе (с пагинацией)
  */
-export async function showDistrictProductsAdmin(ctx, districtId) {
+export async function showDistrictProductsAdmin(ctx, districtId, page = 0) {
     const district = await districtService.getById(districtId);
     if (!district) {
         await ctx.reply('Район не найден.');
@@ -722,22 +785,46 @@ export async function showDistrictProductsAdmin(ctx, districtId) {
     const city = await cityService.getById(district.city_id);
     const products = await productService.getByDistrictId(districtId);
 
+    const ITEMS_PER_PAGE = 20;
+    const totalPages = Math.ceil(products.length / ITEMS_PER_PAGE) || 1;
+    const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+    const startIdx = currentPage * ITEMS_PER_PAGE;
+    const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, products.length);
+    const pageItems = products.slice(startIdx, endIdx);
+
     const currencySymbol = await settingsService.getCurrencySymbol();
     const text = `
-📦 <b>Товары в районе: ${district.name} (${city.name})</b>
+📦 <b>Товары в районе: ${district.name} (${city.name})</b>${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages}` : ''}
 
-${products.map(p => {
+${pageItems.map(p => {
         const packagingLabel = p.packaging_value ? ` (${formatPackaging(p.packaging_value)})` : '';
         return `• ${p.name}${packagingLabel} - ${p.price} ${currencySymbol}`;
     }).join('\n') || 'Товаров пока нет'}
     `.trim();
 
-    const keyboard = [
-        [{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }],
-        [{ text: '✏️ Редактировать товар', callback_data: `admin_product_edit_${districtId}` }],
-        [{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${districtId}` }],
-        [{ text: '◀️ Назад к районам', callback_data: `admin_products_city_${city.id}` }]
-    ];
+    const keyboard = [];
+
+    if (totalPages > 1) {
+        const navRow = [];
+        if (currentPage > 0) {
+            navRow.push({
+                text: '◀️ Предыдущая',
+                callback_data: `admin_products_list_page_${districtId}_${currentPage - 1}`
+            });
+        }
+        if (currentPage < totalPages - 1) {
+            navRow.push({
+                text: 'Следующая ▶️',
+                callback_data: `admin_products_list_page_${districtId}_${currentPage + 1}`
+            });
+        }
+        if (navRow.length) keyboard.push(navRow);
+    }
+
+    keyboard.push([{ text: '➕ Добавить товар', callback_data: `admin_product_add_${districtId}` }]);
+    keyboard.push([{ text: '✏️ Редактировать товар', callback_data: `admin_product_edit_${districtId}` }]);
+    keyboard.push([{ text: '🗑️ Удалить товар', callback_data: `admin_product_delete_${districtId}` }]);
+    keyboard.push([{ text: '◀️ Назад к районам', callback_data: `admin_products_city_${city.id}` }]);
 
     if (ctx.callbackQuery) {
         try {
@@ -860,7 +947,7 @@ async function showCitiesForPlacement(ctx) {
     }
 }
 
-async function showDistrictsForPlacement(ctx, tryEdit = false) {
+async function showDistrictsForPlacement(ctx, tryEdit = false, page = 0) {
     const st = predefinedPlacementState.get(ctx.from.id);
     if (!st?.cityId) {
         await ctx.reply('❌ Сначала выберите город.');
@@ -868,17 +955,46 @@ async function showDistrictsForPlacement(ctx, tryEdit = false) {
     }
     const districts = await districtService.getByCityId(st.cityId);
     const selected = st.districtIds || new Set();
+    
+    // Пагинация: по 20 районов на страницу
+    const ITEMS_PER_PAGE = 20;
+    const totalPages = Math.ceil(districts.length / ITEMS_PER_PAGE);
+    const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+    const startIdx = currentPage * ITEMS_PER_PAGE;
+    const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, districts.length);
+    const districtsOnPage = districts.slice(startIdx, endIdx);
+    
+    // Сохраняем текущую страницу в состоянии
+    st.districtPage = currentPage;
+    predefinedPlacementState.set(ctx.from.id, st);
+    
     const text = `
 📍 <b>Город: ${st.cityName}</b>
 📦 Товар: <b>${st.name}</b>
 
 Выберите один или несколько районов:
+${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages}` : ''}
     `.trim();
 
-    const keyboard = districts.map((d) => {
+    const keyboard = districtsOnPage.map((d) => {
         const mark = selected.has(d.id) ? '✅' : '☐';
         return [{ text: `${mark} ${d.name}`, callback_data: `admin_predef_place_toggle_district_${d.id}` }];
     });
+    
+    // Навигация по страницам
+    if (totalPages > 1) {
+        const navRow = [];
+        if (currentPage > 0) {
+            navRow.push({ text: '◀️ Предыдущая', callback_data: `admin_predef_place_districts_page_${currentPage - 1}` });
+        }
+        if (currentPage < totalPages - 1) {
+            navRow.push({ text: 'Следующая ▶️', callback_data: `admin_predef_place_districts_page_${currentPage + 1}` });
+        }
+        if (navRow.length > 0) {
+            keyboard.push(navRow);
+        }
+    }
+    
     keyboard.push([{ text: '✏️ Ввести район вручную', callback_data: 'admin_predef_place_district_manual' }]);
     keyboard.push([{ text: '✅ Готово', callback_data: 'admin_predef_place_district_done' }]);
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_predef_place_city_manual' }]);
@@ -991,7 +1107,7 @@ export async function showCitiesForPredefinedProduct(ctx) {
 /**
  * Показ районов для выбора места размещения предустановленного товара
  */
-export async function showDistrictsForPredefinedProduct(ctx, cityId) {
+export async function showDistrictsForPredefinedProduct(ctx, cityId, page = 0) {
     const city = await cityService.getById(cityId);
     if (!city) {
         await ctx.reply('Город не найден.');
@@ -1006,17 +1122,42 @@ export async function showDistrictsForPredefinedProduct(ctx, cityId) {
         return;
     }
 
+    const ITEMS_PER_PAGE = 20;
+    const totalPages = Math.ceil(districts.length / ITEMS_PER_PAGE) || 1;
+    const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+    const startIdx = currentPage * ITEMS_PER_PAGE;
+    const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, districts.length);
+    const pageItems = districts.slice(startIdx, endIdx);
+
     const text = `
 📦 <b>Выбран товар: ${productData.name}</b>
 🏙️ <b>Город: ${city.name}</b>
 
-Выберите район для размещения товара:
+Выберите район для размещения товара:${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages}` : ''}
 (Если района нет в списке, введите его название)
     `.trim();
 
-    const keyboard = districts.map(district => [
+    const keyboard = pageItems.map(district => [
         { text: `📍 ${district.name}`, callback_data: `admin_predefined_district_${district.id}` }
     ]);
+
+    if (totalPages > 1) {
+        const navRow = [];
+        if (currentPage > 0) {
+            navRow.push({
+                text: '◀️ Предыдущая',
+                callback_data: `admin_predefined_districts_page_${cityId}_${currentPage - 1}`
+            });
+        }
+        if (currentPage < totalPages - 1) {
+            navRow.push({
+                text: 'Следующая ▶️',
+                callback_data: `admin_predefined_districts_page_${cityId}_${currentPage + 1}`
+            });
+        }
+        if (navRow.length) keyboard.push(navRow);
+    }
+
     keyboard.push([{ text: '✏️ Ввести район вручную', callback_data: 'admin_predefined_district_manual' }]);
     keyboard.push([{ text: '◀️ Назад к городам', callback_data: 'admin_products_add_predefined' }]);
 
