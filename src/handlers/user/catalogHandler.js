@@ -120,7 +120,7 @@ export function registerCatalogHandlers(bot) {
             return;
         }
 
-        // Получаем районы для всех вариантов товара
+        // Получаем районы для всех вариантов товара (только существующие)
         const districtsInCity = await districtService.getByCityId(cityId);
         const districtById = new Map(districtsInCity.map(d => [d.id, d]));
 
@@ -138,8 +138,10 @@ export function registerCatalogHandlers(bot) {
             })
             .filter(Boolean);
 
+        // Товар есть в БД, но все его районы удалены — возвращаем к списку товаров без ошибки
         if (keyboard.length === 0) {
-            await ctx.reply('Для этого товара не найдено доступных районов.');
+            await ctx.answerCbQuery();
+            await showCityProductsMenu(ctx, cityId);
             return;
         }
 
@@ -413,7 +415,12 @@ export async function showCityProductsMenu(ctx, cityId) {
         return;
     }
 
-    const products = await productService.getByCityId(cityId);
+    const allProducts = await productService.getByCityId(cityId);
+    const districts = await districtService.getByCityId(cityId);
+    const districtIds = new Set(districts.map(d => d.id));
+    // Показываем только товары, у которых есть хотя бы один существующий район (не удалённый)
+    const products = allProducts.filter(p => districtIds.has(p.district_id));
+
     const markupPercent = await settingsService.getGlobalMarkupPercent();
     const markupFactor = 1 + (markupPercent > 0 ? markupPercent : 0) / 100;
 

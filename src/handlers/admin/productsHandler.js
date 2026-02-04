@@ -1083,9 +1083,14 @@ export async function showCitiesForPredefinedProduct(ctx) {
         return;
     }
 
+    const currencySymbol = await settingsService.getCurrencySymbol();
+    const priceStr = productData.price != null && productData.price !== ''
+        ? `${Number(productData.price).toLocaleString('ru-RU')} ${currencySymbol}`
+        : 'не указана';
+
     const text = `
 📦 <b>Выбран товар: ${productData.name}</b>
-💰 Цена: ${productData.price.toLocaleString('ru-RU')} ${await settingsService.getCurrencySymbol()}
+💰 Цена: ${priceStr}
 
 Выберите город для размещения товара:
 (Если города нет в списке, введите его название)
