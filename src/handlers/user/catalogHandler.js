@@ -463,7 +463,7 @@ export async function showCityProductsMenu(ctx, cityId) {
         const minPriceWithMarkup = Math.round(minBasePrice * markupFactor);
 
         keyboard.push([{
-            text: `${sample.name}${packagingLabel} - от ${minPriceWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}`,
+            text: `${sample.name}${packagingLabel} - ${minPriceWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}`,
             callback_data: `cityproduct_${cityId}_${sample.id}`
         }]);
     }
