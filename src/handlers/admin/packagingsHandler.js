@@ -1,6 +1,8 @@
 import { packagingService } from '../../services/packagingService.js';
 import { isAdmin } from './authHandler.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
+import { getPackagingIcon } from '../../utils/packagingIconHelper.js';
+import { packagingIconEditMode } from './textHandler.js';
 
 /**
  * Регистрирует обработчики управления фасовками
@@ -67,6 +69,61 @@ export function registerPackagingsHandlers(bot) {
             await ctx.reply(`❌ Ошибка: ${error.message}`);
         }
     });
+
+    // Меню иконок фасовок
+    bot.action('admin_packaging_icons', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const packagings = await packagingService.getAll();
+
+        if (packagings.length === 0) {
+            await ctx.answerCbQuery();
+            await ctx.reply('Фасовок пока нет.');
+            return;
+        }
+
+        const rows = [];
+        for (const p of packagings) {
+            const icon = await getPackagingIcon(p.id);
+            const label = `${formatPackaging(p.value)}${icon ? ' ' + icon : ''}`;
+            rows.push([{
+                text: label,
+                callback_data: `admin_packaging_icon_${p.id}`
+            }]);
+        }
+        rows.push([{ text: '◀️ Назад', callback_data: 'admin_packagings' }]);
+
+        await ctx.editMessageText(
+            '🏷️ <b>Иконки фасовок</b>\n\nВыберите фасовку для изменения иконки:',
+            {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: rows }
+            }
+        );
+    });
+
+    // Выбор фасовки для редактирования иконки
+    bot.action(/^admin_packaging_icon_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const packagingId = parseInt(ctx.match[1]);
+        const packaging = await packagingService.getById(packagingId);
+        if (!packaging) {
+            await ctx.answerCbQuery('❌ Фасовка не найдена');
+            return;
+        }
+
+        packagingIconEditMode.set(ctx.from.id, packagingId);
+        const icon = await getPackagingIcon(packagingId);
+
+        await ctx.answerCbQuery();
+        await ctx.reply(
+            `🏷️ <b>Изменение иконки фасовки</b>\n\n` +
+            `Текущая фасовка: <b>${formatPackaging(packaging.value)}</b>\n` +
+            `Текущая иконка: ${icon || '—'}\n\n` +
+            `Отправьте новую иконку (эмодзи или текст), например: 💎\n` +
+            `Чтобы удалить иконку, отправьте '-' или пустое сообщение.`,
+            { parse_mode: 'HTML' }
+        );
+    });
 }
 
 /**
@@ -75,16 +132,25 @@ export function registerPackagingsHandlers(bot) {
 export async function showPackagingsAdmin(ctx) {
     const packagings = await packagingService.getAll();
 
+    const lines = await Promise.all(
+        packagings.map(async (p) => {
+            const icon = await getPackagingIcon(p.id);
+            const iconPart = icon ? ` ${icon}` : '';
+            return `• ${formatPackaging(p.value)}${iconPart} (id: ${p.id})`;
+        })
+    );
+
     const text = `
 ⚖️ <b>Управление фасовками</b>
 
 Текущие фасовки:
-${packagings.map((p) => `• ${formatPackaging(p.value)} (id: ${p.id})`).join('\n') || 'Фасовок пока нет'}
+${lines.join('\n') || 'Фасовок пока нет'}
     `.trim();
 
     const replyMarkup = {
         inline_keyboard: [
             [{ text: '➕ Добавить фасовку', callback_data: 'admin_packaging_add' }],
+            [{ text: '🏷️ Иконки фасовок', callback_data: 'admin_packaging_icons' }],
             [{ text: '➕ Добавить товар из шаблона', callback_data: 'admin_packaging_add_product' }],
             [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
         ]

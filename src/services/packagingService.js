@@ -32,13 +32,13 @@ export class PackagingService {
     console.log('[PackagingService.create] Тип result:', typeof result);
     console.log('[PackagingService.create] result.lastID:', result?.lastID);
     console.log('[PackagingService.create] result:', result);
-    
+
     if (!result || result.lastID === undefined) {
       console.error('[PackagingService.create] ОШИБКА: result или result.lastID undefined!');
       console.error('[PackagingService.create] Полный result:', result);
       throw new Error(`Не удалось получить lastID после INSERT. Result: ${JSON.stringify(result)}`);
     }
-    
+
     console.log('[PackagingService.create] Получение созданной записи по ID:', result.lastID);
     const created = await this.getById(result.lastID);
     console.log('[PackagingService.create] Созданная запись:', JSON.stringify(created));

@@ -32,6 +32,10 @@ import { cardAddMode, showCardDetails } from './cardsHandler.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
 import { config } from '../../config/index.js';
 import { hasActiveCaptcha } from '../../utils/captchaHelper.js';
+import { setPackagingIcon } from '../../utils/packagingIconHelper.js';
+
+// Режим редактирования иконки фасовки (userId -> packagingId)
+export const packagingIconEditMode = new Map();
 
 /**
  * Регистрирует обработчики текстовых сообщений для админа
@@ -59,6 +63,7 @@ export function registerTextHandlers(bot) {
                 referralDiscountEditMode.delete(ctx.from.id);
                 productImageUploadMode.delete(ctx.from.id);
                 productPackagingEditMode.delete(ctx.from.id);
+                packagingIconEditMode.delete(ctx.from.id);
                 channelBindMode.delete(ctx.from.id);
                 reviewCreateMode.delete(ctx.from.id);
                 reviewImportMode.delete(ctx.from.id);
@@ -161,6 +166,35 @@ export function registerTextHandlers(bot) {
             } catch (error) {
                 console.error('[AdminHandlers] Ошибка при сохранении приветственного сообщения:', error);
                 await ctx.reply('❌ Ошибка при сохранении приветственного сообщения: ' + error.message);
+            }
+            return;
+        }
+
+        // Редактирование иконки фасовки
+        if (packagingIconEditMode.has(ctx.from.id)) {
+            if (!isAdmin(ctx.from.id)) {
+                packagingIconEditMode.delete(ctx.from.id);
+                return;
+            }
+            const packagingId = packagingIconEditMode.get(ctx.from.id);
+            const icon = ctx.message.text.trim();
+            packagingIconEditMode.delete(ctx.from.id);
+
+            try {
+                await setPackagingIcon(packagingId, icon);
+
+                const cleared = !icon || icon.trim() === '-' || icon.trim() === '';
+                await ctx.reply(
+                    cleared
+                        ? '✅ Иконка для фасовки очищена.'
+                        : `✅ Иконка для фасовки обновлена: ${icon}`
+                );
+
+                const { showPackagingsAdmin } = await import('./packagingsHandler.js');
+                await showPackagingsAdmin(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при сохранении иконки фасовки:', error);
+                await ctx.reply('❌ Ошибка при сохранении иконки фасовки: ' + error.message);
             }
             return;
         }
