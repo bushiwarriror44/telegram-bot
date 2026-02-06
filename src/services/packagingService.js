@@ -22,6 +22,14 @@ export class PackagingService {
     );
   }
 
+  async getByValueAndUnit(value, unit = 'g') {
+    const u = unit || 'g';
+    return await database.get(
+      'SELECT * FROM packagings WHERE value = ? AND unit = ?',
+      [value, u]
+    );
+  }
+
   async create(value, unit = 'g') {
     console.log('[PackagingService.create] Начало создания фасовки, value:', value, 'unit:', unit);
     console.log('[PackagingService.create] Вызов database.run...');
@@ -49,10 +57,7 @@ export class PackagingService {
   async getOrCreate(value, unit = 'g') {
     console.log('[PackagingService.getOrCreate] Поиск фасовки, value:', value, 'unit:', unit);
     const u = unit || 'g';
-    const existing = await database.get(
-      'SELECT * FROM packagings WHERE value = ? AND unit = ?',
-      [value, u]
-    );
+    const existing = await this.getByValueAndUnit(value, u);
     console.log('[PackagingService.getOrCreate] Найдена существующая:', existing ? 'да' : 'нет');
     if (existing) {
       console.log('[PackagingService.getOrCreate] Возвращаем существующую:', existing.id);

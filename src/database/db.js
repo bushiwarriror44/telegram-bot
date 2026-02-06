@@ -381,6 +381,30 @@ class Database {
       await this.run("UPDATE packagings SET unit = 'g' WHERE unit IS NULL");
     }
 
+    // Миграция: снимаем старое ограничение UNIQUE(value), если оно есть, и заменяем на UNIQUE(value, unit)
+    // Для старых БД SQLite создавал автоиндекс по value, который мешает иметь несколько единиц для одного значения.
+    const packagingIndexes = await this.db.all("PRAGMA index_list('packagings')");
+    const hasValueOnlyUnique = packagingIndexes.some((idx) => idx.unique && idx.name.startsWith('sqlite_autoindex_packagings'));
+    if (hasValueOnlyUnique) {
+      console.log('[DB.init] Обновление таблицы packagings для поддержки UNIQUE(value, unit)...');
+      await this.run('ALTER TABLE packagings RENAME TO packagings_old');
+      await this.run(`
+        CREATE TABLE packagings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          value REAL NOT NULL,
+          unit TEXT DEFAULT 'g',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(value, unit)
+        )
+      `);
+      await this.run(`
+        INSERT INTO packagings (id, value, unit, created_at)
+        SELECT id, value, COALESCE(unit, 'g'), created_at FROM packagings_old
+      `);
+      await this.run('DROP TABLE packagings_old');
+      console.log('[DB.init] Таблица packagings успешно обновлена.');
+    }
+
     // Миграция: добавляем колонку packaging_id в существующую таблицу products при необходимости
     const productColumns = await this.db.all('PRAGMA table_info(products)');
     const hasPackagingId = productColumns.some((col) => col.name === 'packaging_id');

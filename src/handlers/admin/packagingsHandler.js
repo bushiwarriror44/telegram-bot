@@ -68,7 +68,7 @@ export function registerPackagingsHandlers(bot) {
         const unit = unitStr || 'g';
 
         try {
-            const existing = await packagingService.getOrCreate(value, unit);
+            const existing = await packagingService.getByValueAndUnit(value, unit);
             if (existing) {
                 await ctx.reply('⚠️ Такая фасовка уже существует.');
                 return;
