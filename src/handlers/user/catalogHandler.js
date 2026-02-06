@@ -16,6 +16,7 @@ import { generateTXID, generatePaymentRequestText } from '../../utils/textFormat
 import { cardAccountService } from '../../services/cardAccountService.js';
 import { cryptoExchangeService } from '../../services/cryptoExchangeService.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
+import { getPackagingIcon } from '../../utils/packagingIconHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -149,9 +150,12 @@ export function registerCatalogHandlers(bot) {
             { text: '◀️ Назад к товарам', callback_data: `back_to_city_products_${cityId}` }
         ]);
 
-        const packagingLabel = baseProduct.packaging_value
-            ? ` (${formatPackaging(baseProduct.packaging_value)})`
-            : '';
+        let packagingLabel = '';
+        if (baseProduct.packaging_value) {
+            const icon = await getPackagingIcon(baseProduct.packaging_id);
+            const iconPart = icon ? ` ${icon}` : '';
+            packagingLabel = ` (${formatPackaging(baseProduct.packaging_value)}${iconPart})`;
+        }
 
         await ctx.reply(
             `🏙️ Город: ${city.name}\n📦 Товар: ${baseProduct.name}${packagingLabel}\n\n📍 Выберите район:`,
@@ -454,9 +458,13 @@ export async function showCityProductsMenu(ctx, cityId) {
     for (const [, group] of groups.entries()) {
         // Берем первый вариант как базовый для кнопки
         const sample = group[0];
-        const packagingLabel = sample.packaging_value
-            ? ` ${formatPackaging(sample.packaging_value)}`
-            : '';
+
+        let packagingLabel = '';
+        if (sample.packaging_value) {
+            const icon = await getPackagingIcon(sample.packaging_id);
+            const iconPart = icon ? ` ${icon}` : '';
+            packagingLabel = ` ${formatPackaging(sample.packaging_value)}${iconPart}`;
+        }
 
         // Можно взять минимальную цену по городским вариантам (с учетом наценки)
         const minBasePrice = Math.min(...group.map(g => g.price));
@@ -564,18 +572,22 @@ export async function showProductsMenu(ctx, districtId) {
     }
 
     const currencySymbol = await getCurrencySymbol();
-    const keyboard = products.map(product => {
-        const packagingLabel = product.packaging_value
-            ? ` ${formatPackaging(product.packaging_value)}`
-            : '';
+    const keyboard = [];
+    for (const product of products) {
+        let packagingLabel = '';
+        if (product.packaging_value) {
+            const icon = await getPackagingIcon(product.packaging_id);
+            const iconPart = icon ? ` ${icon}` : '';
+            packagingLabel = ` ${formatPackaging(product.packaging_value)}${iconPart}`;
+        }
         const displayPrice = Math.round(product.price * markupFactor);
-        return [
+        keyboard.push([
             {
                 text: `${product.name}${packagingLabel} - ${displayPrice.toLocaleString('ru-RU')} ${currencySymbol}`,
                 callback_data: `product_${product.id}`
             }
-        ];
-    });
+        ]);
+    }
 
     keyboard.push([{ text: 'Вернуться назад', callback_data: `back_to_districts_${city.id}` }]);
 
@@ -613,7 +625,12 @@ export async function showProductDetails(ctx, productId) {
     const district = await districtService.getById(product.district_id);
     const city = await cityService.getById(product.city_id);
 
-    const packagingLabel = product.packaging_value ? ` ${formatPackaging(product.packaging_value)}` : '';
+    let packagingLabel = '';
+    if (product.packaging_value) {
+        const icon = await getPackagingIcon(product.packaging_id);
+        const iconPart = icon ? ` ${icon}` : '';
+        packagingLabel = ` ${formatPackaging(product.packaging_value)}${iconPart}`;
+    }
 
     // Формируем текст в новом формате
     const currencySymbol = await getCurrencySymbol();
