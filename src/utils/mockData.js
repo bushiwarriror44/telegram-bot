@@ -243,7 +243,8 @@ export async function initializeMockData() {
               product.description || '',
               defaultPrice,
               packaging ? packaging.id : null,
-              imagePath
+              imagePath,
+              null // packaging_label
             );
             console.log(`[MOCK] Товар создан: ${product.name} для города ${city.name}, района ${district.name}${imagePath ? ' (с фото)' : ''}`);
           } catch (error) {

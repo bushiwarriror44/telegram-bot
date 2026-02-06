@@ -16,7 +16,6 @@ import { generateTXID, generatePaymentRequestText } from '../../utils/textFormat
 import { cardAccountService } from '../../services/cardAccountService.js';
 import { cryptoExchangeService } from '../../services/cryptoExchangeService.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
-import { getPackagingIcon } from '../../utils/packagingIconHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -152,9 +151,9 @@ export function registerCatalogHandlers(bot) {
 
         let packagingLabel = '';
         if (baseProduct.packaging_value) {
-            const icon = await getPackagingIcon(baseProduct.packaging_id);
-            const iconPart = icon ? ` ${icon}` : '';
-            packagingLabel = ` (${formatPackaging(baseProduct.packaging_value)}${iconPart})`;
+            const decor = baseProduct.packaging_label || '';
+            const decorPart = decor ? ` ${decor}` : '';
+            packagingLabel = ` (${formatPackaging(baseProduct.packaging_value)}${decorPart})`;
         }
 
         await ctx.reply(
@@ -461,9 +460,9 @@ export async function showCityProductsMenu(ctx, cityId) {
 
         let packagingLabel = '';
         if (sample.packaging_value) {
-            const icon = await getPackagingIcon(sample.packaging_id);
-            const iconPart = icon ? ` ${icon}` : '';
-            packagingLabel = ` ${formatPackaging(sample.packaging_value)}${iconPart}`;
+            const decor = sample.packaging_label || '';
+            const decorPart = decor ? ` ${decor}` : '';
+            packagingLabel = ` ${formatPackaging(sample.packaging_value)}${decorPart}`;
         }
 
         // Можно взять минимальную цену по городским вариантам (с учетом наценки)
@@ -576,9 +575,9 @@ export async function showProductsMenu(ctx, districtId) {
     for (const product of products) {
         let packagingLabel = '';
         if (product.packaging_value) {
-            const icon = await getPackagingIcon(product.packaging_id);
-            const iconPart = icon ? ` ${icon}` : '';
-            packagingLabel = ` ${formatPackaging(product.packaging_value)}${iconPart}`;
+            const decor = product.packaging_label || '';
+            const decorPart = decor ? ` ${decor}` : '';
+            packagingLabel = ` ${formatPackaging(product.packaging_value)}${decorPart}`;
         }
         const displayPrice = Math.round(product.price * markupFactor);
         keyboard.push([
@@ -627,9 +626,9 @@ export async function showProductDetails(ctx, productId) {
 
     let packagingLabel = '';
     if (product.packaging_value) {
-        const icon = await getPackagingIcon(product.packaging_id);
-        const iconPart = icon ? ` ${icon}` : '';
-        packagingLabel = ` ${formatPackaging(product.packaging_value)}${iconPart}`;
+        const decor = product.packaging_label || '';
+        const decorPart = decor ? ` ${decor}` : '';
+        packagingLabel = ` ${formatPackaging(product.packaging_value)}${decorPart}`;
     }
 
     // Формируем текст в новом формате

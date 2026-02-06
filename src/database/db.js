@@ -157,6 +157,7 @@ class Database {
         price REAL NOT NULL,
         packaging_id INTEGER,
         image_path TEXT,
+        packaging_label TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE,
         FOREIGN KEY (district_id) REFERENCES districts(id) ON DELETE CASCADE
@@ -439,6 +440,12 @@ class Database {
     const hasImagePath = productColumns.some((col) => col.name === 'image_path');
     if (!hasImagePath) {
       await this.run('ALTER TABLE products ADD COLUMN image_path TEXT');
+    }
+
+    // Миграция: добавляем колонку packaging_label (декоративный текст/иконка фасовки) в таблицу products при необходимости
+    const hasPackagingLabel = productColumns.some((col) => col.name === 'packaging_label');
+    if (!hasPackagingLabel) {
+      await this.run('ALTER TABLE products ADD COLUMN packaging_label TEXT');
     }
 
     // Миграция: обновляем таблицу orders - добавляем новые поля

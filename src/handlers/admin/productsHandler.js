@@ -152,7 +152,8 @@ export function registerProductsHandlers(bot) {
                 description.trim(),
                 priceNum,
                 packaging.id,
-                null // imagePath будет null при создании через команду
+                null, // imagePath будет null при создании через команду
+                null // packaging_label (декоративный текст фасовки) по умолчанию отсутствует
             );
             await ctx.reply(
                 `✅ Товар "${name}" успешно добавлен!\n\n` +
@@ -1254,7 +1255,8 @@ export async function placePredefinedProduct(ctx, districtId, productData) {
             productData.description,
             price,
             packaging.id,
-            productData.image_path || null // наследуем изображение из предустановленного товара, если есть
+            productData.image_path || null, // наследуем изображение из предустановленного товара, если есть
+            null // packaging_label для этого старого flow пока не задаётся
         );
 
         predefinedProductDistrictMode.delete(ctx.from.id);

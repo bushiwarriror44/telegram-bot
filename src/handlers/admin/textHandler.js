@@ -551,7 +551,8 @@ export function registerTextHandlers(bot) {
                         item.description || '',
                         item.price,
                         packagingId,
-                        null // imagePath
+                        null, // imagePath
+                        null // packaging_label
                     );
                     createdCount++;
                 }
@@ -730,8 +731,16 @@ export function registerTextHandlers(bot) {
                     return;
                 }
 
-                // Обновляем фасовку товара
-                await productService.update(product.id, product.name, product.description, product.price, packaging.id, product.image_path);
+                // Обновляем фасовку товара (декоративный текст фасовки не меняем)
+                await productService.update(
+                    product.id,
+                    product.name,
+                    product.description,
+                    product.price,
+                    packaging.id,
+                    product.image_path,
+                    product.packaging_label || null
+                );
 
                 // Получаем обновленный товар для отображения правильной фасовки
                 const updatedProduct = await productService.getById(product.id);
@@ -967,6 +976,26 @@ export function registerTextHandlers(bot) {
             st.price = price;
             predefinedPlacementState.set(ctx.from.id, st);
 
+            // После ввода цены спрашиваем декоративный текст/иконку для фасовки
+            predefinedPlacementMode.set(ctx.from.id, 'decor_input');
+            await ctx.reply(
+                '✨ Введите иконку/текст для фасовки этого товара (например: 💎 или любой текст).\n' +
+                'Чтобы оставить без дополнительного текста, отправьте "-" или пустое сообщение.'
+            );
+            return;
+        }
+
+        // Новый flow: ввод декоративного текста/иконки фасовки для размещаемого товара
+        if (predefinedPlacementMode.get(ctx.from.id) === 'decor_input') {
+            const raw = (ctx.message.text || '').trim();
+            const label = !raw || raw === '-' ? '' : raw;
+            const st = predefinedPlacementState.get(ctx.from.id);
+            if (!st?.cityId || !st?.districtIds?.size || !st?.packagingId || !st?.price) {
+                await ctx.reply('❌ Не хватает данных (город/районы/фасовка/цена). Пройдите шаги заново.');
+                predefinedPlacementMode.delete(ctx.from.id);
+                return;
+            }
+
             let created = 0;
             for (const districtId of st.districtIds) {
                 await productService.create(
@@ -974,9 +1003,10 @@ export function registerTextHandlers(bot) {
                     districtId,
                     st.name,
                     st.description || '',
-                    price,
+                    st.price,
                     st.packagingId,
-                    st.image_path || null
+                    st.image_path || null,
+                    label || null
                 );
                 created += 1;
             }
