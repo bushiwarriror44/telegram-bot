@@ -405,6 +405,26 @@ class Database {
       console.log('[DB.init] Таблица packagings успешно обновлена.');
     }
 
+    // Добавляем предустановленные фасовки для литров, миллилитров, штук и порций, если их нет
+    const advancedPackagings = [
+      { value: 1, unit: 'л' },
+      { value: 100, unit: 'мл' },
+      { value: 1, unit: 'шт' },
+      { value: 1, unit: 'порция' }
+    ];
+    for (const p of advancedPackagings) {
+      const exists = await this.db.get(
+        'SELECT id FROM packagings WHERE value = ? AND unit = ?',
+        [p.value, p.unit]
+      );
+      if (!exists) {
+        await this.run(
+          'INSERT INTO packagings (value, unit) VALUES (?, ?)',
+          [p.value, p.unit]
+        );
+      }
+    }
+
     // Миграция: добавляем колонку packaging_id в существующую таблицу products при необходимости
     const productColumns = await this.db.all('PRAGMA table_info(products)');
     const hasPackagingId = productColumns.some((col) => col.name === 'packaging_id');

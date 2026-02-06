@@ -64,7 +64,7 @@ export class PackagingService {
       return existing;
     }
     console.log('[PackagingService.getOrCreate] Создаем новую фасовку...');
-    return await this.create(value);
+    return await this.create(value, u);
   }
 }
 
