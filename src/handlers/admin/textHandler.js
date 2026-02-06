@@ -939,16 +939,32 @@ export function registerTextHandlers(bot) {
             return;
         }
 
-        // Новый flow: ручной ввод фасовки (в граммах)
+        // Новый flow: ручной ввод фасовки (значение + опциональная единица)
         if (predefinedPlacementMode.get(ctx.from.id) === 'packaging_input') {
-            const raw = ctx.message.text.trim().toLowerCase();
-            const cleaned = raw.replace(/\s/g, '').replace('гр', '').replace('g', '').replace(',', '.');
-            const value = parseFloat(cleaned);
-            if (isNaN(value) || value <= 0) {
-                await ctx.reply('❌ Фасовка должна быть положительным числом (в граммах). Пример: 7.5 или 7,5гр');
+            const raw = ctx.message.text.trim();
+            // Разделяем число и единицу: "2 шт", "1 л", "100 мл", "7.5", "7,5гр"
+            const match = raw.match(/^([\d.,]+)\s*(.*)$/i);
+            if (!match) {
+                await ctx.reply('❌ Укажите фасовку в формате: число и, при необходимости, единица. Примеры: 2 шт, 1 л, 100 мл, 0.5 г');
                 return;
             }
-            const packaging = await packagingService.getOrCreate(value);
+            const valuePart = match[1].replace(',', '.');
+            const unitPartRaw = (match[2] || '').trim();
+            const value = parseFloat(valuePart);
+            if (isNaN(value) || value <= 0) {
+                await ctx.reply('❌ Фасовка должна быть положительным числом. Примеры: 2, 0.5, 1.25');
+                return;
+            }
+            // Определяем единицу измерения
+            let unit = 'g';
+            const u = unitPartRaw.toLowerCase();
+            if (!u || u === 'г' || u === 'гр' || u === 'g') {
+                unit = 'g';
+            } else {
+                unit = unitPartRaw;
+            }
+
+            const packaging = await packagingService.getOrCreate(value, unit);
             const st = predefinedPlacementState.get(ctx.from.id);
             if (!st) return;
             st.packagingId = packaging.id;

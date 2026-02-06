@@ -451,6 +451,14 @@ export function registerProductsHandlers(bot) {
         await showDistrictProductsAdmin(ctx, districtId, page);
     });
 
+    // Пагинация списка фасовок при размещении предустановленного товара
+    bot.action(/^admin_predef_place_packaging_page_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const page = parseInt(ctx.match[1]);
+        await ctx.answerCbQuery();
+        await showPackagingForPlacement(ctx, page);
+    });
+
     bot.action('admin_predef_place_district_manual', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         predefinedPlacementMode.set(ctx.from.id, 'district_input');
@@ -486,7 +494,11 @@ export function registerProductsHandlers(bot) {
         if (!isAdmin(ctx.from.id)) return;
         predefinedPlacementMode.set(ctx.from.id, 'packaging_input');
         await ctx.answerCbQuery();
-        await ctx.reply('✏️ Введите фасовку (в граммах). Пример: 7.5 или 7,5гр');
+        await ctx.reply(
+            '✏️ Введите фасовку.\n' +
+            'Можно указать единицу измерения: например, 2 шт, 1 л, 100 мл, 0.5 г.\n' +
+            'Если указать только число, оно будет считаться граммами.'
+        );
     });
 
     // Обработчик для выбора предустановленного товара
@@ -1031,7 +1043,7 @@ ${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages
     }
 }
 
-async function showPackagingForPlacement(ctx) {
+async function showPackagingForPlacement(ctx, page = 0) {
     const st = predefinedPlacementState.get(ctx.from.id);
     const selectedCount = st?.districtIds?.size || 0;
     if (!selectedCount) {
@@ -1039,6 +1051,13 @@ async function showPackagingForPlacement(ctx) {
         return;
     }
     const packagings = await packagingService.getAll();
+    const ITEMS_PER_PAGE = 20;
+    const totalPages = Math.ceil(packagings.length / ITEMS_PER_PAGE) || 1;
+    const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+    const startIdx = currentPage * ITEMS_PER_PAGE;
+    const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, packagings.length);
+    const pageItems = packagings.slice(startIdx, endIdx);
+
     const text = `
 🏷️ <b>Фасовка</b>
 
@@ -1047,11 +1066,22 @@ async function showPackagingForPlacement(ctx) {
 Районов выбрано: <b>${selectedCount}</b>
 
 Выберите фасовку из существующих или введите свою:
+${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages}` : ''}
     `.trim();
 
-    const keyboard = packagings.slice(0, 40).map((p) => [
+    const keyboard = pageItems.map((p) => [
         { text: formatPackaging(p.value, p.unit), callback_data: `admin_predef_place_packaging_${p.id}` }
     ]);
+    if (totalPages > 1) {
+        const navRow = [];
+        if (currentPage > 0) {
+            navRow.push({ text: '◀️ Предыдущая', callback_data: `admin_predef_place_packaging_page_${currentPage - 1}` });
+        }
+        if (currentPage < totalPages - 1) {
+            navRow.push({ text: 'Следующая ▶️', callback_data: `admin_predef_place_packaging_page_${currentPage + 1}` });
+        }
+        if (navRow.length) keyboard.push(navRow);
+    }
     keyboard.push([{ text: '✏️ Ввести фасовку вручную', callback_data: 'admin_predef_place_packaging_manual' }]);
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_predef_place_district_done' }]);
 
