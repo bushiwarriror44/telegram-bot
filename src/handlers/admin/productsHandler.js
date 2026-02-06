@@ -968,7 +968,7 @@ async function showDistrictsForPlacement(ctx, tryEdit = false, page = 0) {
     }
     const districts = await districtService.getByCityId(st.cityId);
     const selected = st.districtIds || new Set();
-    
+
     // Пагинация: по 20 районов на страницу
     const ITEMS_PER_PAGE = 20;
     const totalPages = Math.ceil(districts.length / ITEMS_PER_PAGE);
@@ -976,11 +976,11 @@ async function showDistrictsForPlacement(ctx, tryEdit = false, page = 0) {
     const startIdx = currentPage * ITEMS_PER_PAGE;
     const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, districts.length);
     const districtsOnPage = districts.slice(startIdx, endIdx);
-    
+
     // Сохраняем текущую страницу в состоянии
     st.districtPage = currentPage;
     predefinedPlacementState.set(ctx.from.id, st);
-    
+
     const text = `
 📍 <b>Город: ${st.cityName}</b>
 📦 Товар: <b>${st.name}</b>
@@ -993,7 +993,7 @@ ${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages
         const mark = selected.has(d.id) ? '✅' : '☐';
         return [{ text: `${mark} ${d.name}`, callback_data: `admin_predef_place_toggle_district_${d.id}` }];
     });
-    
+
     // Навигация по страницам
     if (totalPages > 1) {
         const navRow = [];
@@ -1007,7 +1007,7 @@ ${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages
             keyboard.push(navRow);
         }
     }
-    
+
     keyboard.push([{ text: '✏️ Ввести район вручную', callback_data: 'admin_predef_place_district_manual' }]);
     keyboard.push([{ text: '✅ Готово', callback_data: 'admin_predef_place_district_done' }]);
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_predef_place_city_manual' }]);
@@ -1210,6 +1210,28 @@ export async function placePredefinedProduct(ctx, districtId, productData) {
             return;
         }
 
+        // Проверяем, что у предустановленного товара задана цена
+        const rawPrice = productData.price;
+        const price = rawPrice != null ? Number(rawPrice) : NaN;
+        if (!Number.isFinite(price) || price <= 0) {
+            const msg =
+                '❌ Цена для этого предустановленного товара не задана.\n\n' +
+                'Размещение через этот раздел предполагает, что цена уже указана.\n' +
+                'Рекомендуется использовать раздел «Фасовки» → «Добавить товар из шаблона», где цена задаётся при размещении.';
+            if (ctx.callbackQuery) {
+                await ctx.answerCbQuery('❌ Цена не задана');
+                await ctx.reply(msg);
+            } else {
+                await ctx.reply(msg);
+            }
+            console.error('[ProductsHandler] Попытка разместить предустановленный товар без цены:', {
+                userId: ctx.from?.id,
+                productName: productData.name,
+                districtId,
+            });
+            return;
+        }
+
         // Получаем фасовку из данных товара или используем дефолтную (1 кг)
         let packaging = null;
         if (productData.packagingId) {
@@ -1230,7 +1252,7 @@ export async function placePredefinedProduct(ctx, districtId, productData) {
             districtId,
             productData.name,
             productData.description,
-            productData.price,
+            price,
             packaging.id,
             productData.image_path || null // наследуем изображение из предустановленного товара, если есть
         );
