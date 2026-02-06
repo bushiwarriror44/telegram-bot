@@ -22,7 +22,16 @@ export function registerPackagingsHandlers(bot) {
     bot.action('admin_packaging_add', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await ctx.editMessageText(
-            'Введите новую фасовку:\n\nФормат: <code>/addpack Значение</code>\n\nПример: /addpack 0.75',
+            'Введите новую фасовку:\n\n' +
+            'Форматы:\n' +
+            '<code>/addpack Значение</code> — граммы (по умолчанию)\n' +
+            '<code>/addpack Значение Единица</code> — с единицей измерения\n\n' +
+            'Примеры:\n' +
+            '/addpack 0.75\n' +
+            '/addpack 1 л\n' +
+            '/addpack 100 мл\n' +
+            '/addpack 1 шт\n' +
+            '/addpack 1 порция',
             { parse_mode: 'HTML' }
         );
     });
@@ -43,9 +52,10 @@ export function registerPackagingsHandlers(bot) {
 
         const args = ctx.message.text.split(' ').slice(1);
         const valueStr = args[0];
+        const unitStr = args.slice(1).join(' ').trim();
 
         if (!valueStr) {
-            await ctx.reply('❌ Укажите значение фасовки.\nПример: /addpack 0.35');
+            await ctx.reply('❌ Укажите значение фасовки.\nПример: /addpack 0.35 или /addpack 1 л');
             return;
         }
 
@@ -55,15 +65,17 @@ export function registerPackagingsHandlers(bot) {
             return;
         }
 
+        const unit = unitStr || 'g';
+
         try {
-            const existing = await packagingService.getByValue(value);
+            const existing = await packagingService.getOrCreate(value, unit);
             if (existing) {
                 await ctx.reply('⚠️ Такая фасовка уже существует.');
                 return;
             }
 
-            await packagingService.create(value);
-            await ctx.reply(`✅ Фасовка ${formatPackaging(value)} успешно добавлена!`);
+            await packagingService.create(value, unit);
+            await ctx.reply(`✅ Фасовка ${formatPackaging(value, unit)} успешно добавлена!`);
             await showPackagingsAdmin(ctx);
         } catch (error) {
             await ctx.reply(`❌ Ошибка: ${error.message}`);
@@ -84,7 +96,7 @@ export function registerPackagingsHandlers(bot) {
         const rows = [];
         for (const p of packagings) {
             const icon = await getPackagingIcon(p.id);
-            const label = `${formatPackaging(p.value)}${icon ? ' ' + icon : ''}`;
+            const label = `${formatPackaging(p.value, p.unit)}${icon ? ' ' + icon : ''}`;
             rows.push([{
                 text: label,
                 callback_data: `admin_packaging_icon_${p.id}`
@@ -117,7 +129,7 @@ export function registerPackagingsHandlers(bot) {
         await ctx.answerCbQuery();
         await ctx.reply(
             `🏷️ <b>Изменение иконки фасовки</b>\n\n` +
-            `Текущая фасовка: <b>${formatPackaging(packaging.value)}</b>\n` +
+            `Текущая фасовка: <b>${formatPackaging(packaging.value, packaging.unit)}</b>\n` +
             `Текущая иконка: ${icon || '—'}\n\n` +
             `Отправьте новую иконку (эмодзи или текст), например: 💎\n` +
             `Чтобы удалить иконку, отправьте '-' или пустое сообщение.`,
@@ -136,7 +148,7 @@ export async function showPackagingsAdmin(ctx) {
         packagings.map(async (p) => {
             const icon = await getPackagingIcon(p.id);
             const iconPart = icon ? ` ${icon}` : '';
-            return `• ${formatPackaging(p.value)}${iconPart} (id: ${p.id})`;
+            return `• ${formatPackaging(p.value, p.unit)}${iconPart} (id: ${p.id})`;
         })
     );
 

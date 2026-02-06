@@ -15,18 +15,19 @@ export class PackagingService {
   }
 
   async getByValue(value) {
+    // Обратная совместимость: ищем фасовку в граммах
     return await database.get(
-      'SELECT * FROM packagings WHERE value = ?',
-      [value]
+      'SELECT * FROM packagings WHERE value = ? AND (unit = ? OR unit IS NULL)',
+      [value, 'g']
     );
   }
 
-  async create(value) {
-    console.log('[PackagingService.create] Начало создания фасовки, value:', value);
+  async create(value, unit = 'g') {
+    console.log('[PackagingService.create] Начало создания фасовки, value:', value, 'unit:', unit);
     console.log('[PackagingService.create] Вызов database.run...');
     const result = await database.run(
-      'INSERT INTO packagings (value) VALUES (?)',
-      [value]
+      'INSERT INTO packagings (value, unit) VALUES (?, ?)',
+      [value, unit || 'g']
     );
     console.log('[PackagingService.create] database.run вернул результат:', JSON.stringify(result));
     console.log('[PackagingService.create] Тип result:', typeof result);
@@ -45,9 +46,13 @@ export class PackagingService {
     return created;
   }
 
-  async getOrCreate(value) {
-    console.log('[PackagingService.getOrCreate] Поиск фасовки, value:', value);
-    const existing = await this.getByValue(value);
+  async getOrCreate(value, unit = 'g') {
+    console.log('[PackagingService.getOrCreate] Поиск фасовки, value:', value, 'unit:', unit);
+    const u = unit || 'g';
+    const existing = await database.get(
+      'SELECT * FROM packagings WHERE value = ? AND unit = ?',
+      [value, u]
+    );
     console.log('[PackagingService.getOrCreate] Найдена существующая:', existing ? 'да' : 'нет');
     if (existing) {
       console.log('[PackagingService.getOrCreate] Возвращаем существующую:', existing.id);

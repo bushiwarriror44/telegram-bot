@@ -271,7 +271,7 @@ export function registerProductsHandlers(bot) {
 • Название: ${product.name}
 • Описание: ${product.description || 'Отсутствует'}
 • Цена: ${product.price} ${currencySymbol}
-• Фасовка: ${formatPackaging(product.packaging_value)}
+• Фасовка: ${formatPackaging(product.packaging_value, product.packaging_unit)}
 • Фото: ${imageStatus}${imageInstructions}
 
 Выберите действие:
@@ -304,12 +304,12 @@ export function registerProductsHandlers(bot) {
         // Получаем список всех фасовок
         const packagings = await packagingService.getAll();
         const packagingList = packagings.length > 0
-            ? packagings.map(p => `• ${formatPackaging(p.value)}`).join('\n')
+            ? packagings.map(p => `• ${formatPackaging(p.value, p.unit)}`).join('\n')
             : 'Фасовки не добавлены. Сначала добавьте фасовки в админ-панели.';
 
         await ctx.reply(
             '🏷️ <b>Редактирование фасовки товара</b>\n\n' +
-            `Текущая фасовка: <b>${formatPackaging(product.packaging_value)}</b>\n\n` +
+            `Текущая фасовка: <b>${formatPackaging(product.packaging_value, product.packaging_unit)}</b>\n\n` +
             `Доступные фасовки:\n${packagingList}\n\n` +
             `Введите новую фасовку (только число, например: 0.5, 1, 1000):\n\n` +
             `Для отмены отправьте /cancel`,
@@ -811,7 +811,7 @@ export async function showDistrictProductsAdmin(ctx, districtId, page = 0) {
 📦 <b>Товары в районе: ${district.name} (${city.name})</b>${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages}` : ''}
 
 ${pageItems.map(p => {
-        const packagingLabel = p.packaging_value ? ` (${formatPackaging(p.packaging_value)})` : '';
+        const packagingLabel = p.packaging_value ? ` (${formatPackaging(p.packaging_value, p.packaging_unit)})` : '';
         return `• ${p.name}${packagingLabel} - ${p.price} ${currencySymbol}`;
     }).join('\n') || 'Товаров пока нет'}
     `.trim();
@@ -1050,7 +1050,7 @@ async function showPackagingForPlacement(ctx) {
     `.trim();
 
     const keyboard = packagings.slice(0, 40).map((p) => [
-        { text: formatPackaging(p.value), callback_data: `admin_predef_place_packaging_${p.id}` }
+        { text: formatPackaging(p.value, p.unit), callback_data: `admin_predef_place_packaging_${p.id}` }
     ]);
     keyboard.push([{ text: '✏️ Ввести фасовку вручную', callback_data: 'admin_predef_place_packaging_manual' }]);
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_predef_place_district_done' }]);

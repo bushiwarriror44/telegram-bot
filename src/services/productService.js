@@ -6,7 +6,8 @@ export class ProductService {
             `
       SELECT 
         p.*,
-        pk.value AS packaging_value
+        pk.value AS packaging_value,
+        pk.unit AS packaging_unit
       FROM products p
       LEFT JOIN packagings pk ON pk.id = p.packaging_id
       WHERE p.district_id = ?
@@ -21,7 +22,8 @@ export class ProductService {
             `
       SELECT 
         p.*,
-        pk.value AS packaging_value
+        pk.value AS packaging_value,
+        pk.unit AS packaging_unit
       FROM products p
       LEFT JOIN packagings pk ON pk.id = p.packaging_id
       WHERE p.city_id = ?
@@ -36,7 +38,8 @@ export class ProductService {
             `
       SELECT 
         p.*,
-        pk.value AS packaging_value
+        pk.value AS packaging_value,
+        pk.unit AS packaging_unit
       FROM products p
       LEFT JOIN packagings pk ON pk.id = p.packaging_id
       WHERE p.id = ?

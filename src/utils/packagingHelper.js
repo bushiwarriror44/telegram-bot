@@ -1,23 +1,33 @@
 /**
  * Форматирует значение фасовки для отображения
- * @param {number} value - Значение фасовки в граммах
- * @returns {string} - Отформатированная строка (например: "0.25 г" или "1 кг")
+ * @param {number} value - Количество
+ * @param {string} [unit='g'] - Единица измерения (g, кг, л, мл, шт, порция и т.п.)
+ * @returns {string} - Отформатированная строка (например: "0.25 г", "1 кг", "1 л", "2 шт")
  */
-export function formatPackaging(value) {
-    if (!value || value === null || value === undefined) {
+export function formatPackaging(value, unit = 'g') {
+    if (value === null || value === undefined) {
         return 'Не указана';
     }
 
-    // Если значение >= 1000, показываем в килограммах
-    if (value >= 1000) {
-        const kg = value / 1000;
-        // Убираем лишние нули после запятой
-        const formattedKg = kg % 1 === 0 ? kg.toString() : kg.toFixed(2).replace(/\.?0+$/, '');
-        return `${formattedKg} кг`;
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+        return 'Не указана';
     }
 
-    // Если значение < 1000, показываем в граммах
-    // Убираем лишние нули после запятой
-    const formattedG = value % 1 === 0 ? value.toString() : value.toFixed(2).replace(/\.?0+$/, '');
-    return `${formattedG} г`;
+    const u = (unit || 'g').trim();
+
+    // Специальная логика для граммов (обратная совместимость):
+    if (u === 'g' || u === 'гр' || u.toLowerCase() === 'gram' || u.toLowerCase() === 'grams') {
+        if (num >= 1000) {
+            const kg = num / 1000;
+            const formattedKg = kg % 1 === 0 ? kg.toString() : kg.toFixed(2).replace(/\.?0+$/, '');
+            return `${formattedKg} кг`;
+        }
+        const formattedG = num % 1 === 0 ? num.toString() : num.toFixed(2).replace(/\.?0+$/, '');
+        return `${formattedG} г`;
+    }
+
+    // Для остальных единиц просто выводим "<число> <единица>"
+    const formatted = num % 1 === 0 ? num.toString() : num.toFixed(2).replace(/\.?0+$/, '');
+    return `${formatted} ${u}`;
 }

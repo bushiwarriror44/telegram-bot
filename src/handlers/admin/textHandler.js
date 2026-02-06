@@ -955,7 +955,7 @@ export function registerTextHandlers(bot) {
             st.packagingValue = packaging.value;
             predefinedPlacementState.set(ctx.from.id, st);
             predefinedPlacementMode.set(ctx.from.id, 'price_input');
-            await ctx.reply(`✅ Фасовка выбрана: ${formatPackaging(packaging.value)}.\n\nТеперь введите цену (только число):`);
+            await ctx.reply(`✅ Фасовка выбрана: ${formatPackaging(packaging.value, packaging.unit)}.\n\nТеперь введите цену (только число):`);
             return;
         }
 

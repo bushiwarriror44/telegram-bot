@@ -87,7 +87,7 @@ export function registerMediaHandlers(bot) {
                     `• Название: ${product.name}\n` +
                     `• Описание: ${product.description || 'Отсутствует'}\n` +
                     `• Цена: ${product.price} ${currencySymbol}\n` +
-                    `• Фасовка: ${formatPackaging(product.packaging_value)}\n` +
+                    `• Фасовка: ${formatPackaging(product.packaging_value, product.packaging_unit)}\n` +
                     `• Фото: ✅ Загружено\n\n` +
                     `Выберите действие:`,
                     {

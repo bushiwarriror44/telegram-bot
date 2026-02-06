@@ -141,8 +141,10 @@ class Database {
     await this.run(`
       CREATE TABLE IF NOT EXISTS packagings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        value REAL NOT NULL UNIQUE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        value REAL NOT NULL,
+        unit TEXT DEFAULT 'g',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(value, unit)
       )
     `);
 
@@ -369,6 +371,15 @@ class Database {
         FOREIGN KEY (promocode_id) REFERENCES promocodes(id) ON DELETE CASCADE
       )
     `);
+
+    // Миграция: добавляем колонку unit в существующую таблицу packagings при необходимости
+    const packagingColumns = await this.db.all('PRAGMA table_info(packagings)');
+    const hasPackagingUnit = packagingColumns.some((c) => c.name === 'unit');
+    if (!hasPackagingUnit) {
+      await this.run("ALTER TABLE packagings ADD COLUMN unit TEXT DEFAULT 'g'");
+      // Все существующие фасовки считаем граммами
+      await this.run("UPDATE packagings SET unit = 'g' WHERE unit IS NULL");
+    }
 
     // Миграция: добавляем колонку packaging_id в существующую таблицу products при необходимости
     const productColumns = await this.db.all('PRAGMA table_info(products)');

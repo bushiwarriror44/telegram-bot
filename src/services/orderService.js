@@ -17,6 +17,7 @@ export class OrderService {
                     p.name AS product_name,
                     p.description AS product_description,
                     pk.value AS packaging_value,
+                    pk.unit AS packaging_unit,
                     c.name AS city_name,
                     d.name AS district_name,
                     pm.name AS payment_method_name,
@@ -37,7 +38,8 @@ export class OrderService {
         return await database.all(
             `SELECT o.*, 
                     p.name AS product_name,
-                    pk.value AS packaging_value
+                    pk.value AS packaging_value,
+                    pk.unit AS packaging_unit
              FROM orders o
              LEFT JOIN products p ON p.id = o.product_id
              LEFT JOIN packagings pk ON pk.id = p.packaging_id
@@ -111,11 +113,11 @@ export class OrderService {
      */
     async getActiveOrder(userChatId) {
         console.log('[OrderService] getActiveOrder: Поиск активного заказа для пользователя', userChatId);
-        
+
         // Получаем время на оплату из настроек
         const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes() || 30;
         console.log('[OrderService] getActiveOrder: Время на оплату (минут):', paymentTimeMinutes);
-        
+
         // Получаем заказ со статусом pending или paid
         const result = await database.get(
             `SELECT * FROM orders 
@@ -125,10 +127,10 @@ export class OrderService {
              LIMIT 1`,
             [userChatId]
         );
-        
+
         console.log('[OrderService] getActiveOrder: SQL запрос выполнен');
         console.log('[OrderService] getActiveOrder: Результат:', result ? 'Найден заказ' : 'Заказ не найден');
-        
+
         if (result) {
             console.log('[OrderService] getActiveOrder: Детали найденного заказа:', {
                 id: result.id,
@@ -137,23 +139,23 @@ export class OrderService {
                 created_at: result.created_at,
                 product_id: result.product_id
             });
-            
+
             // Проверяем, не истекло ли время на оплату
             const orderDate = new Date(result.created_at);
             const now = new Date();
             const diffMinutes = (now - orderDate) / (1000 * 60);
             console.log('[OrderService] getActiveOrder: Время с момента создания заказа (минут):', diffMinutes.toFixed(2));
             console.log('[OrderService] getActiveOrder: Лимит времени (минут):', paymentTimeMinutes);
-            
+
             if (diffMinutes > paymentTimeMinutes) {
                 console.log('[OrderService] getActiveOrder: Время на оплату истекло, заказ не считается активным');
-                
+
                 // Автоматически обновляем статус просроченного заказа на 'expired'
                 if (result.status === 'pending') {
                     console.log('[OrderService] getActiveOrder: Обновление статуса заказа на expired');
                     await this.updateStatus(result.id, 'expired');
                 }
-                
+
                 // Проверяем все заказы пользователя для отладки
                 const allOrders = await database.all(
                     `SELECT id, status, created_at FROM orders 
@@ -163,7 +165,7 @@ export class OrderService {
                     [userChatId]
                 );
                 console.log('[OrderService] getActiveOrder: Все заказы пользователя (последние 10):', allOrders);
-                
+
                 return null; // Заказ просрочен, не считается активным
             } else {
                 console.log('[OrderService] getActiveOrder: Заказ еще активен, время не истекло');
@@ -179,7 +181,7 @@ export class OrderService {
             );
             console.log('[OrderService] getActiveOrder: Все заказы пользователя (последние 10):', allOrders);
         }
-        
+
         return result;
     }
 

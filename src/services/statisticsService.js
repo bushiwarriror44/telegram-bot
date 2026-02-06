@@ -92,6 +92,7 @@ export class StatisticsService {
                 p.id,
                 p.name,
                 pk.value AS packaging_value,
+                pk.unit AS packaging_unit,
                 COUNT(pv.id) AS view_count
              FROM products p
              LEFT JOIN packagings pk ON pk.id = p.packaging_id
@@ -112,6 +113,7 @@ export class StatisticsService {
                 p.id,
                 p.name,
                 pk.value AS packaging_value,
+                pk.unit AS packaging_unit,
                 COUNT(pv.id) AS view_count
              FROM products p
              LEFT JOIN packagings pk ON pk.id = p.packaging_id
