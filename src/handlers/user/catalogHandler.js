@@ -153,7 +153,7 @@ export function registerCatalogHandlers(bot) {
         if (baseProduct.packaging_value) {
             const decor = baseProduct.packaging_label || '';
             const decorPart = decor ? ` ${decor}` : '';
-            packagingLabel = ` (${formatPackaging(baseProduct.packaging_value)}${decorPart})`;
+            packagingLabel = ` (${formatPackaging(baseProduct.packaging_value, baseProduct.packaging_unit)}${decorPart})`;
         }
 
         await ctx.reply(
@@ -446,7 +446,7 @@ export async function showCityProductsMenu(ctx, cityId) {
     // Группируем товары по имени + фасовке, чтобы показывать единый товар на город
     const groups = new Map();
     for (const p of products) {
-        const key = `${p.name}::${p.packaging_value || ''}`;
+        const key = `${p.name}::${p.packaging_value || ''}::${p.packaging_unit || ''}`;
         if (!groups.has(key)) {
             groups.set(key, []);
         }
@@ -462,7 +462,7 @@ export async function showCityProductsMenu(ctx, cityId) {
         if (sample.packaging_value) {
             const decor = sample.packaging_label || '';
             const decorPart = decor ? ` ${decor}` : '';
-            packagingLabel = ` ${formatPackaging(sample.packaging_value)}${decorPart}`;
+            packagingLabel = ` ${formatPackaging(sample.packaging_value, sample.packaging_unit)}${decorPart}`;
         }
 
         // Можно взять минимальную цену по городским вариантам (с учетом наценки)
@@ -577,7 +577,7 @@ export async function showProductsMenu(ctx, districtId) {
         if (product.packaging_value) {
             const decor = product.packaging_label || '';
             const decorPart = decor ? ` ${decor}` : '';
-            packagingLabel = ` ${formatPackaging(product.packaging_value)}${decorPart}`;
+            packagingLabel = ` ${formatPackaging(product.packaging_value, product.packaging_unit)}${decorPart}`;
         }
         const displayPrice = Math.round(product.price * markupFactor);
         keyboard.push([
@@ -628,7 +628,7 @@ export async function showProductDetails(ctx, productId) {
     if (product.packaging_value) {
         const decor = product.packaging_label || '';
         const decorPart = decor ? ` ${decor}` : '';
-        packagingLabel = ` ${formatPackaging(product.packaging_value)}${decorPart}`;
+        packagingLabel = ` ${formatPackaging(product.packaging_value, product.packaging_unit)}${decorPart}`;
     }
 
     // Формируем текст в новом формате
@@ -866,7 +866,7 @@ export async function showOrderDetails(ctx, orderId) {
             return;
         }
 
-        const packagingLabel = order.packaging_value ? ` ${order.packaging_value}г` : '';
+        const packagingLabel = order.packaging_value ? ` ${formatPackaging(order.packaging_value, order.packaging_unit)}` : '';
         const promocodeText = order.promocode_code ? order.promocode_code : 'Нет';
         const currencySymbol = await getCurrencySymbol();
         const discountText = order.discount > 0 ? `${order.discount.toLocaleString('ru-RU')} ${currencySymbol}` : `0 ${currencySymbol}`;
