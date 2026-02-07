@@ -11,7 +11,7 @@ export class ProductService {
       FROM products p
       LEFT JOIN packagings pk ON pk.id = p.packaging_id
       WHERE p.district_id = ?
-      ORDER BY p.name
+      ORDER BY p.id
       `,
             [districtId]
         );
@@ -27,7 +27,7 @@ export class ProductService {
       FROM products p
       LEFT JOIN packagings pk ON pk.id = p.packaging_id
       WHERE p.city_id = ?
-      ORDER BY p.name
+      ORDER BY p.id
       `,
             [cityId]
         );
@@ -105,6 +105,24 @@ export class ProductService {
     async exists(id) {
         const product = await this.getById(id);
         return !!product;
+    }
+
+    /** Список товаров с городом, районом, фасовкой и иконкой (для генерации отзывов) */
+    async getProductsWithPlaceNames() {
+        return await database.all(
+            `SELECT 
+               p.name AS product_name,
+               p.packaging_label,
+               c.name AS city_name,
+               d.name AS district_name,
+               pk.value AS packaging_value,
+               pk.unit AS packaging_unit
+             FROM products p
+             JOIN cities c ON p.city_id = c.id
+             JOIN districts d ON p.district_id = d.id
+             LEFT JOIN packagings pk ON p.packaging_id = pk.id
+             ORDER BY p.id`
+        );
     }
 }
 

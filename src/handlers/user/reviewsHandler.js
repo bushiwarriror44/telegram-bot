@@ -54,8 +54,9 @@ export async function showReviews(ctx, page = 1) {
         let text = '💌 Отзывы:\n\n';
 
         for (const review of reviews) {
-            // Форматируем звезды
-            const stars = '⭐️'.repeat(review.rating);
+            // Оценка в виде звёзд (1–5)
+            const ratingNum = Math.min(5, Math.max(1, parseInt(review.rating, 10) || 0));
+            const stars = '⭐️'.repeat(ratingNum);
 
             // Безопасное форматирование даты
             let formattedDate = review.review_date;

@@ -189,6 +189,20 @@ export class SettingsService {
     const value = typeof percent === 'number' ? percent.toString() : String(percent);
     return await this.set('global_markup_percent', value);
   }
+
+  /**
+   * Число в скобках на кнопке «Отзывы» в главном меню (по умолчанию 561)
+   */
+  async getReviewsDisplayCount() {
+    const raw = await this.get('reviews_display_count', '561');
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) || n < 0 ? 561 : n;
+  }
+
+  async setReviewsDisplayCount(num) {
+    const value = Math.max(0, parseInt(String(num), 10) || 561);
+    return await this.set('reviews_display_count', value.toString());
+  }
 }
 
 export const settingsService = new SettingsService();

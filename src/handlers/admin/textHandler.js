@@ -25,7 +25,7 @@ import { adminReplyMode } from './chatsHandler.js';
 import { showConversation } from './chatsHandler.js';
 import { adminMessageUserMode } from './usersHandler.js';
 import { channelBindMode } from './panelHandler.js';
-import { reviewImportMode, showReviewsAdmin } from './reviewsHandler.js';
+import { reviewImportMode, reviewDisplayCountEditMode, showReviewsAdmin } from './reviewsHandler.js';
 import { productImageUploadMode, productPackagingEditMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, predefinedPlacementMode, predefinedPlacementState, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
 import { mockProducts } from '../../utils/mockData.js';
 import { cardAddMode, showCardDetails } from './cardsHandler.js';
@@ -67,6 +67,7 @@ export function registerTextHandlers(bot) {
                 channelBindMode.delete(ctx.from.id);
                 reviewCreateMode.delete(ctx.from.id);
                 reviewImportMode.delete(ctx.from.id);
+                reviewDisplayCountEditMode.delete(ctx.from.id);
                 storefrontNameEditMode.delete(ctx.from.id);
                 currencyEditMode.delete(ctx.from.id);
                 markupEditMode.delete(ctx.from.id);
@@ -142,6 +143,7 @@ export function registerTextHandlers(bot) {
                 channelBindMode.has(ctx.from.id) ||
                 reviewCreateMode.has(ctx.from.id) ||
                 reviewImportMode.has(ctx.from.id) ||
+                reviewDisplayCountEditMode.has(ctx.from.id) ||
                 adminReplyMode.has(ctx.from.id) ||
                 cardAddMode.has(ctx.from.id);
             // режимы нового flow размещения
@@ -487,6 +489,20 @@ export function registerTextHandlers(bot) {
                 await ctx.reply('❌ Ошибка при создании отзыва: ' + error.message);
                 reviewCreateMode.delete(ctx.from.id);
             }
+            return;
+        }
+
+        if (reviewDisplayCountEditMode.has(ctx.from.id)) {
+            const raw = ctx.message.text.trim().replace(/\s/g, '');
+            const num = parseInt(raw, 10);
+            if (Number.isNaN(num) || num < 0) {
+                await ctx.reply('❌ Введите целое неотрицательное число (например 561).');
+                return;
+            }
+            reviewDisplayCountEditMode.delete(ctx.from.id);
+            await settingsService.setReviewsDisplayCount(num);
+            await ctx.reply(`✅ Число на кнопке «Отзывы» установлено: <b>Отзывы (${num})</b>`, { parse_mode: 'HTML' });
+            await showReviewsAdmin(ctx);
             return;
         }
 

@@ -1,15 +1,13 @@
 import { menuButtonService } from '../services/menuButtonService.js';
-import { reviewService } from '../services/reviewService.js';
+import { settingsService } from '../services/settingsService.js';
 
 /**
  * Получает reply keyboard с кнопками главного меню
  * @returns {Promise<Object>} Объект с клавиатурой для reply_markup
  */
 export async function getMenuKeyboard() {
-    // Получаем количество отзывов
-    const reviews = await reviewService.getAllReviews();
-    const reviewsCount = reviews.length;
-    const reviewsButtonText = reviewsCount > 0 ? `📨 Отзывы (${reviewsCount})` : '📨 Отзывы';
+    const reviewsDisplayCount = await settingsService.getReviewsDisplayCount();
+    const reviewsButtonText = `📨 Отзывы (${reviewsDisplayCount})`;
 
     const topButtons = [
         ['♻️ Каталог', '⚙️ Мой кабинет'],
