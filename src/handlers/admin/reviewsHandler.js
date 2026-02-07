@@ -25,20 +25,20 @@ function shuffleArray(arr) {
     return a;
 }
 
-/** Случайная дата в текущем месяце в формате YYYY-MM-DD */
-function randomDateInCurrentMonth() {
+/** Случайная дата от 1-го числа месяца до текущей даты включительно (YYYY-MM-DD) */
+function randomDateUpToToday() {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const day = 1 + Math.floor(Math.random() * lastDay);
+    const today = now.getDate();
+    const day = today > 0 ? 1 + Math.floor(Math.random() * today) : 1;
     return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 /**
  * Генерирует 50 отзывов на текущий месяц:
  * - Товар/город/район — случайно из каталога админки
- * - Дата — случайный день текущего месяца
+ * - Дата — случайный день от 1-го до текущей даты включительно
  * - Оценка: 50% — 4, 25% — 3, 25% — 5
  * - Текст — из JSON (50 строк)
  * @returns {Promise<number>} количество созданных отзывов
@@ -79,7 +79,7 @@ async function generateMonthReviews() {
         const productName = `${productDisplay} / ${place.city_name} / ${place.district_name}`;
         const reviewText = shuffledTexts[i];
         const rating = shuffledRatings[i];
-        const reviewDate = randomDateInCurrentMonth();
+        const reviewDate = randomDateUpToToday();
         await reviewService.create(
             productName,
             place.city_name,
@@ -162,6 +162,35 @@ export function registerReviewsHandlers(bot) {
         try {
             await reviewService.deleteAll();
             await ctx.editMessageText('✅ Все отзывы успешно удалены!');
+            await showReviewsAdmin(ctx);
+        } catch (error) {
+            await ctx.editMessageText(`❌ Ошибка: ${error.message}`);
+        }
+    });
+
+    bot.action('admin_review_delete_generated', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await ctx.editMessageText(
+            '🗑️ <b>Удаление сгенерированных отзывов</b>\n\n' +
+            'Будут удалены отзывы за текущий месяц с датой не позже сегодня.\n\n' +
+            'Продолжить?',
+            {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '✅ Да, удалить сгенерированные', callback_data: 'admin_review_delete_generated_confirm' }],
+                        [{ text: '❌ Отмена', callback_data: 'admin_reviews' }]
+                    ]
+                }
+            }
+        );
+    });
+
+    bot.action('admin_review_delete_generated_confirm', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        try {
+            const deleted = await reviewService.deleteGeneratedReviews();
+            await ctx.editMessageText(`✅ Удалено сгенерированных отзывов: <b>${deleted}</b>`, { parse_mode: 'HTML' });
             await showReviewsAdmin(ctx);
         } catch (error) {
             await ctx.editMessageText(`❌ Ошибка: ${error.message}`);
@@ -268,6 +297,7 @@ export async function showReviewsAdmin(ctx) {
             [{ text: '➕ Создать отзыв вручную', callback_data: 'admin_review_create' }],
             [{ text: '📥 Загрузить существующие отзывы', callback_data: 'admin_review_import' }],
             [{ text: '📅 Сгенерировать отзывы на месяц', callback_data: 'admin_review_generate_month' }],
+            [{ text: '🗑️ Удалить сгенерированные отзывы', callback_data: 'admin_review_delete_generated' }],
             [{ text: '🗑️ Удалить все отзывы', callback_data: 'admin_review_delete_all' }],
             [{ text: `🔢 Число на кнопке «Отзывы» (${reviewsDisplayCount})`, callback_data: 'admin_reviews_display_count' }],
             [{ text: '◀️ Назад', callback_data: 'admin_panel' }]

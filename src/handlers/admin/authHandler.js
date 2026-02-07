@@ -1,6 +1,5 @@
 import { config } from '../../config/index.js';
-import { showAdminMenuKeyboard } from '../../utils/keyboardHelpers.js';
-import { menuButtonService } from '../../services/menuButtonService.js';
+import { showAdminMenuKeyboard, getMenuKeyboard } from '../../utils/keyboardHelpers.js';
 
 // Экспортируем adminSessions для использования в других модулях
 export const adminSessions = new Map();
@@ -117,20 +116,8 @@ async function handleLogout(bot, ctx, adminSessions) {
         await ctx.reply('✅ Вы вышли из админ-панели. Пользовательское меню восстановлено.');
     }
 
-    // Показываем reply keyboard снова
-    const topButtons = [
-        ['Каталог', 'Мой кабинет'],
-        ['Помощь', 'Отзывы']
-    ];
-    const menuButtons = await menuButtonService.getAll(true);
-    const dynamicButtons = menuButtons.map(btn => [btn.name]);
-    const keyboard = [...topButtons, ...dynamicButtons];
-
+    const keyboard = await getMenuKeyboard();
     await ctx.reply('Выберите действие:', {
-        reply_markup: {
-            keyboard: keyboard,
-            resize_keyboard: true,
-            one_time_keyboard: false
-        }
+        reply_markup: keyboard
     });
 }

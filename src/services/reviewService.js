@@ -63,6 +63,24 @@ export class ReviewService {
     }
 
     /**
+     * Удаляет сгенерированные отзывы: за текущий месяц с датой не позже сегодня (локальная дата).
+     * @returns {Promise<number>} количество удалённых записей (changes)
+     */
+    async deleteGeneratedReviews() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const firstOfMonth = `${year}-${month}-01`;
+        const today = `${year}-${month}-${day}`;
+        const result = await database.run(
+            `DELETE FROM reviews WHERE date(review_date) >= ? AND date(review_date) <= ?`,
+            [firstOfMonth, today]
+        );
+        return result?.changes ?? 0;
+    }
+
+    /**
      * Импортирует отзывы из массива
      */
     async importReviews(reviewsArray) {

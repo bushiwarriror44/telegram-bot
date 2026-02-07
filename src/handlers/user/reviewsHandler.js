@@ -69,7 +69,7 @@ export async function showReviews(ctx, page = 1) {
                 }
             }
 
-            text += `<b></b>Товар: ${review.product_name || 'Не указан'}\n`;
+            text += `Товар: ${review.product_name || 'Не указан'}\n`;
             text += `Дата: ${formattedDate}\n`;
             text += `Оценка: ${stars}\n`;
             text += `Отзыв: ${review.review_text || 'Нет текста'}\n\n`;
