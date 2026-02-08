@@ -69,6 +69,7 @@ ${addressesText}
                 [{ text: '📊 Статистика', callback_data: 'admin_stats' }],
                 [{ text: '👋 Настройка приветственного сообщения', callback_data: 'admin_welcome' }],
                 [{ text: '🔘 Настройка кнопок', callback_data: 'admin_menu_buttons' }],
+                [{ text: '🔐 Капча', callback_data: 'admin_settings_captcha' }],
                 [{ text: '🎨 Настройка иконок', callback_data: 'admin_icons' }],
                 [{ text: '🎁 Бонусы и промокоды', callback_data: 'admin_promocodes' }],
                 [{ text: '👥 Настройка реферальной системы', callback_data: 'admin_referrals' }],
