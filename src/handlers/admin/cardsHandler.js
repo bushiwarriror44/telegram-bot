@@ -1,4 +1,5 @@
 import { cardAccountService } from '../../services/cardAccountService.js';
+import { paymentService } from '../../services/paymentService.js';
 import { isAdmin } from './authHandler.js';
 
 /**
@@ -14,6 +15,27 @@ export function registerCardsHandlers(bot) {
     bot.hears('Управление счетами (Карты)', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showCardsAdmin(ctx);
+    });
+
+    bot.action('admin_card_add_transgran', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await ctx.answerCbQuery();
+        const existing = await cardAccountService.getByName('ТРАНСГРАН', true);
+        if (existing) {
+            await ctx.reply(
+                '✅ ТРАНСГРАН уже добавлен.\n\nЧтобы добавить ещё одну карту, используйте «Управление картами» → ТРАНСГРАН → Добавить карту.',
+                { parse_mode: 'HTML' }
+            );
+            return;
+        }
+        transgranAddMode.set(ctx.from.id, true);
+        await ctx.reply(
+            '💳 <b>Добавление счета ТРАНСГРАН</b>\n\n' +
+            'Введите номер карты для счета ТРАНСГРАН (одной строкой).\n\n' +
+            'Пример: <code>4276 1234 5678 9012</code>\n\n' +
+            'Для отмены отправьте /cancel',
+            { parse_mode: 'HTML' }
+        );
     });
 
     bot.action('admin_card_add', async (ctx) => {
@@ -163,6 +185,8 @@ export function registerCardsHandlers(bot) {
 
 // Режим добавления карты
 export const cardAddMode = new Map(); // userId -> cardId
+// Режим добавления счета ТРАНСГРАН (ввод номера карты)
+export const transgranAddMode = new Map(); // userId -> true
 
 /**
  * Показ меню управления карточными счетами
@@ -195,6 +219,7 @@ ${cardsText}
     const replyMarkup = {
         inline_keyboard: [
             [{ text: '➕ Добавить карточный счет', callback_data: 'admin_card_add' }],
+            [{ text: '💳 Добавить ТРАНСГРАН счет', callback_data: 'admin_card_add_transgran' }],
             [{ text: '✏️ Управление картами', callback_data: 'admin_card_manage' }],
             [{ text: '🗑️ Удалить карточный счет', callback_data: 'admin_card_delete' }],
             [{ text: '◀️ Назад', callback_data: 'admin_panel' }]

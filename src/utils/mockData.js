@@ -552,49 +552,19 @@ async function createMockReviews() {
   console.log('Моковые данные успешно инициализированы!');
 }
 
-// Функция для гарантированного создания ТРАНСГРАН
+// Проверка ТРАНСГРАН при старте не создаёт запись автоматически — добавление только через админку (Управление счетами (Карты) → Добавить ТРАНСГРАН счет).
+// Если запись уже есть (например, создана вручную), просто логируем.
 export async function ensureTransgranExists() {
   console.log('[MOCK] Проверка наличия ТРАНСГРАН...');
-
   try {
-    // Проверяем метод оплаты ТРАНСГРАН
-    const allMethods = await paymentService.getAllMethods(true);
-    const transgranMethod = allMethods.find(m => m.name === 'ТРАНСГРАН');
-
-    if (!transgranMethod) {
-      console.log('[MOCK] Метод оплаты ТРАНСГРАН не найден. Создаю...');
-      try {
-        await paymentService.createMethod('ТРАНСГРАН', 'TRANSGRAN', 'card');
-        console.log('[MOCK] ✅ Метод оплаты ТРАНСГРАН создан!');
-      } catch (error) {
-        console.error('[MOCK] ❌ Ошибка при создании метода ТРАНСГРАН:', error.message);
-      }
-    } else {
-      console.log('[MOCK] Метод оплаты ТРАНСГРАН найден (ID: ' + transgranMethod.id + ')');
-      // Включаем метод, если он отключен
-      if (!transgranMethod.enabled) {
-        console.log('[MOCK] Метод ТРАНСГРАН отключен. Включаю...');
-        await paymentService.enableMethod(transgranMethod.id, true);
-        console.log('[MOCK] ✅ Метод ТРАНСГРАН включен!');
-      }
-    }
-
-    // Проверяем карточный счет ТРАНСГРАН (включая отключенные)
     const transgranCard = await cardAccountService.getByName('ТРАНСГРАН', true);
-    if (!transgranCard) {
-      console.log('[MOCK] Карточный счет ТРАНСГРАН не найден. Создаю...');
-      try {
-        await cardAccountService.create('ТРАНСГРАН', '4276 1234 5678 9012');
-        console.log('[MOCK] ✅ Карточный счет ТРАНСГРАН создан!');
-      } catch (error) {
-        console.error('[MOCK] ❌ Ошибка при создании карточного счета ТРАНСГРАН:', error.message);
-      }
+    if (transgranCard) {
+      console.log('[MOCK] ТРАНСГРАН уже настроен (ID: ' + transgranCard.id + ')');
     } else {
-      console.log('[MOCK] Карточный счет ТРАНСГРАН найден (ID: ' + transgranCard.id + ')');
+      console.log('[MOCK] ТРАНСГРАН не настроен. Добавьте его в админке: Управление счетами (Карты) → Добавить ТРАНСГРАН счет');
     }
-
     console.log('[MOCK] Проверка ТРАНСГРАН завершена');
   } catch (error) {
-    console.error('[MOCK] ❌ Критическая ошибка при проверке ТРАНСГРАН:', error);
+    console.error('[MOCK] Ошибка при проверке ТРАНСГРАН:', error.message);
   }
 }

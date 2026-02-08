@@ -3,6 +3,7 @@ import { promocodeService } from '../../services/promocodeService.js';
 import { menuButtonService } from '../../services/menuButtonService.js';
 import { reviewService } from '../../services/reviewService.js';
 import { paymentService } from '../../services/paymentService.js';
+import { cardAccountService } from '../../services/cardAccountService.js';
 import { productService } from '../../services/productService.js';
 import { cityService } from '../../services/cityService.js';
 import { districtService } from '../../services/districtService.js';
@@ -28,7 +29,7 @@ import { channelBindMode } from './panelHandler.js';
 import { reviewImportMode, reviewDisplayCountEditMode, showReviewsAdmin } from './reviewsHandler.js';
 import { productImageUploadMode, productPackagingEditMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, predefinedPlacementMode, predefinedPlacementState, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
 import { mockProducts } from '../../utils/mockData.js';
-import { cardAddMode, showCardDetails } from './cardsHandler.js';
+import { cardAddMode, transgranAddMode, showCardDetails, showCardsAdmin } from './cardsHandler.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
 import { hasActiveCaptcha } from '../../utils/captchaHelper.js';
 import { setPackagingIcon } from '../../utils/packagingIconHelper.js';
@@ -71,6 +72,7 @@ export function registerTextHandlers(bot) {
                 currencyEditMode.delete(ctx.from.id);
                 markupEditMode.delete(ctx.from.id);
                 cardAddMode.delete(ctx.from.id);
+                transgranAddMode.delete(ctx.from.id);
                 predefinedProductSelectMode.delete(ctx.from.id);
                 predefinedProductCityMode.delete(ctx.from.id);
                 predefinedProductDistrictMode.delete(ctx.from.id);
@@ -145,7 +147,8 @@ export function registerTextHandlers(bot) {
                 reviewImportMode.has(ctx.from.id) ||
                 reviewDisplayCountEditMode.has(ctx.from.id) ||
                 adminReplyMode.has(ctx.from.id) ||
-                cardAddMode.has(ctx.from.id);
+                cardAddMode.has(ctx.from.id) ||
+                transgranAddMode.has(ctx.from.id);
             // режимы нового flow размещения
             const isInPlacementMode = predefinedPlacementMode.has(ctx.from.id);
 
@@ -800,6 +803,34 @@ export function registerTextHandlers(bot) {
                 console.error('[AdminHandlers] Ошибка при редактировании фасовки товара:', error);
                 await ctx.reply('❌ Ошибка при редактировании фасовки: ' + error.message);
                 productPackagingEditMode.delete(ctx.from.id);
+            }
+            return;
+        }
+
+        // Обработка добавления счета ТРАНСГРАН (номер карты)
+        if (transgranAddMode.has(ctx.from.id)) {
+            const cardNumber = ctx.message.text.trim();
+            if (!cardNumber || cardNumber.length === 0) {
+                await ctx.reply('❌ Номер карты не может быть пустым. Введите номер карты для ТРАНСГРАН.');
+                return;
+            }
+            try {
+                const allMethods = await paymentService.getAllMethods(true);
+                const hasMethod = allMethods.some(m => m.name === 'ТРАНСГРАН');
+                if (!hasMethod) {
+                    try {
+                        await paymentService.createMethod('ТРАНСГРАН', 'TRANSGRAN', 'card');
+                    } catch (e) {
+                        if (!/UNIQUE constraint/i.test(e.message)) throw e;
+                    }
+                }
+                await cardAccountService.create('ТРАНСГРАН', cardNumber);
+                transgranAddMode.delete(ctx.from.id);
+                await ctx.reply(`✅ Счет ТРАНСГРАН создан с картой: ${cardNumber}`);
+                await showCardsAdmin(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при добавлении ТРАНСГРАН:', error);
+                await ctx.reply('❌ Ошибка: ' + error.message);
             }
             return;
         }
