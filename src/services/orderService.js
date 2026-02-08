@@ -77,6 +77,24 @@ export class OrderService {
     }
 
     /**
+     * Переводит в статус expired все заказы со статусом pending,
+     * у которых время создания + время на оплату уже прошло.
+     * Вызывается фоновым монитором, чтобы заказы отменялись даже без действий пользователя.
+     * @param {number} paymentTimeMinutes - Время на оплату в минутах (из настроек)
+     * @returns {Promise<number>} Количество обновлённых заказов
+     */
+    async expireOldPendingOrders(paymentTimeMinutes) {
+        const minutes = Math.max(1, parseInt(paymentTimeMinutes, 10) || 30);
+        const result = await database.run(
+            `UPDATE orders SET status = 'expired' 
+             WHERE status = 'pending' 
+             AND datetime(created_at, '+' || ? || ' minutes') <= datetime('now')`,
+            [minutes]
+        );
+        return result?.changes ?? 0;
+    }
+
+    /**
      * Получает неоплаченные заказы пользователя старше указанного времени (в минутах)
      * Возвращает только заказы, для которых еще не было отправлено уведомление
      */

@@ -1,4 +1,6 @@
 import { database } from '../database/db.js';
+import { getOrdersByUser } from '../utils/dataHelpers.js';
+import { formatOrderDate } from '../utils/textFormatters.js';
 
 export class ProductService {
     async getByDistrictId(districtId) {
@@ -127,4 +129,115 @@ export class ProductService {
 }
 
 export const productService = new ProductService();
+/**
+ * Показ списка заказов
+ */
+
+export async function showMyOrders(ctx) {
+    try {
+        const orders = await getOrdersByUser(ctx.from.id);
+
+        if (orders.length === 0) {
+            const text = `📄 Список заказов:\n\nУ вас пока нет заказов.`;
+
+            if (ctx.callbackQuery) {
+                try {
+                    await ctx.answerCbQuery();
+                    await ctx.editMessageText(text, {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                            ]
+                        }
+                    });
+                } catch (error) {
+                    await ctx.reply(text, {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                            ]
+                        }
+                    });
+                }
+            } else {
+                await ctx.reply(text, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '◀️ Назад', callback_data: 'cabinet_menu' }]
+                        ]
+                    }
+                });
+            }
+            return;
+        }
+
+        // Собираем все кнопки заказов
+        const orderButtons = [];
+        for (const order of orders) {
+            const formattedDate = formatOrderDate(order.created_at);
+
+            const orderText = `Заказ #95${order.order_number ?? order.id}73 | ${formattedDate}`;
+
+           
+            const isCancelledOrUnpaid = order.status === 'cancelled' ||
+                order.status === 'pending' ||
+                (order.status !== 'completed' && order.status !== 'paid');
+
+            // Красная кнопка для неоплаченных/отмененных, зеленая для оплаченных
+            const buttonText = isCancelledOrUnpaid
+                ? `🔴 ${orderText}`
+                : `🟢 ${orderText}`;
+
+            // Каждая кнопка на отдельной строке (100% ширины)
+            orderButtons.push([{
+                text: buttonText,
+                callback_data: `view_order_${order.id}`
+            }]);
+        }
+
+        // Отправляем заголовок со всеми кнопками
+        const headerText = `📄 Список заказов:`;
+
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.answerCbQuery();
+                await ctx.editMessageText(headerText, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: orderButtons
+                    }
+                });
+            } catch (error) {
+                await ctx.reply(headerText, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: orderButtons
+                    }
+                });
+            }
+        } else {
+            await ctx.reply(headerText, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: orderButtons
+                }
+            });
+        }
+    } catch (error) {
+        console.error('[CabinetHandler] ОШИБКА в showMyOrders:', error);
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.answerCbQuery();
+                await ctx.editMessageText('Произошла ошибка. Попробуйте позже.');
+            } catch (e) {
+                await ctx.reply('Произошла ошибка. Попробуйте позже.');
+            }
+        } else {
+            await ctx.reply('Произошла ошибка. Попробуйте позже.');
+        }
+    }
+}
 

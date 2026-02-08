@@ -7,7 +7,7 @@ export class UnpaidOrderMonitorService {
     constructor(bot) {
         this.bot = bot;
         this.intervalId = null;
-        this.checkInterval = 5 * 60 * 1000; // 5 минут
+        this.checkInterval = 2 * 60 * 1000; // 2 минуты — чтобы истечение по 30 мин срабатывало вовремя
     }
 
     /**
@@ -50,6 +50,12 @@ export class UnpaidOrderMonitorService {
             const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes() || 30;
             const blockTimeHours = await settingsService.getBlockTimeHours() || 0.5;
             const blockTimeMinutes = Math.round(blockTimeHours * 60);
+
+            // Сначала переводим все просроченные pending-заказы в expired (чтобы отмена работала даже без действий пользователя)
+            const expiredCount = await orderService.expireOldPendingOrders(paymentTimeMinutes);
+            if (expiredCount > 0) {
+                console.log(`[UnpaidOrderMonitor] Переведено в expired: ${expiredCount} заказ(ов)`);
+            }
 
             // Получаем всех пользователей
             const allUsers = await userService.getAllUsers();
@@ -140,25 +146,24 @@ export class UnpaidOrderMonitorService {
                     const chatId = order.user_chat_id;
                     if (!chatId) continue;
 
-                    // Помечаем заказ как обработанный в БД (чтобы уведомление не отправлялось повторно)
-                    await orderService.markExpiredNotificationAsSent(order.id);
-
                     const orderNumber = await orderService.getOrderNumber(order.id);
 
-                    // Отправляем уведомление об истечении заказа
+                    // Сначала отправляем уведомление, потом помечаем — так сообщение не теряется при сбое
                     try {
                         await this.bot.telegram.sendMessage(
                             chatId,
-                            `🥲 Ваш заказ №${orderNumber} не была вовремя оплачен. \n\n<b>Внимание!</b> Запрещено создавать заказы и не оплачивать их. За это Вы будете заблокированы на ${blockTimeMinutes} минут.`,
+                            `🥲 Ваш заказ №${orderNumber} не был вовремя оплачен.\n\n<b>Внимание!</b> Запрещено создавать заказы и не оплачивать их. За это Вы будете заблокированы на ${blockTimeMinutes} минут.`,
                             { parse_mode: 'HTML' }
                         );
 
                         notificationCount++;
                         console.log(`[UnpaidOrderMonitor] Уведомление об истечении заказа отправлено пользователю ${chatId} (заказ #${orderNumber})`);
+
+                        // Помечаем только после успешной отправки
+                        await orderService.markExpiredNotificationAsSent(order.id);
                     } catch (error) {
                         console.error(`[UnpaidOrderMonitor] Ошибка отправки уведомления об истечении заказа пользователю ${chatId}:`, error.message);
-                        // Если не удалось отправить, откатываем пометку в БД
-                        await database.run('UPDATE orders SET expired_notification_sent = 0 WHERE id = ?', [order.id]);
+                        // Не помечаем — в следующем цикле повторим отправку
                     }
                 } catch (error) {
                     console.error(`[UnpaidOrderMonitor] Ошибка при обработке истекшего заказа #${order.id}:`, error);

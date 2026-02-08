@@ -424,9 +424,6 @@ export async function showCityProductsMenu(ctx, cityId) {
     // Показываем только товары, у которых есть хотя бы один существующий район (не удалённый)
     const products = allProducts.filter(p => districtIds.has(p.district_id));
 
-    const markupPercent = await settingsService.getGlobalMarkupPercent();
-    const markupFactor = 1 + (markupPercent > 0 ? markupPercent : 0) / 100;
-
     if (products.length === 0) {
         await ctx.reply(
             `В городе ${city.name} пока нет товаров.`,
@@ -465,12 +462,12 @@ export async function showCityProductsMenu(ctx, cityId) {
             packagingLabel = ` ${formatPackaging(sample.packaging_value, sample.packaging_unit)}${decorPart}`;
         }
 
-        // Можно взять минимальную цену по городским вариантам (с учетом наценки)
+        // В кнопках показываем оригинальную цену товара (без наценки)
         const minBasePrice = Math.min(...group.map(g => g.price));
-        const minPriceWithMarkup = Math.round(minBasePrice * markupFactor);
+        const displayPrice = Math.round(minBasePrice);
 
         keyboard.push([{
-            text: `${sample.name}${packagingLabel} - ${minPriceWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}`,
+            text: `${sample.name}${packagingLabel} - ${displayPrice.toLocaleString('ru-RU')} ${currencySymbol}`,
             callback_data: `cityproduct_${cityId}_${sample.id}`
         }]);
     }
