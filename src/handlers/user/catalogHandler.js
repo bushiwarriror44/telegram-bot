@@ -628,16 +628,14 @@ export async function showProductDetails(ctx, productId) {
         packagingLabel = ` ${formatPackaging(product.packaging_value, product.packaging_unit)}${decorPart}`;
     }
 
-    // Формируем текст в новом формате
+    // Формируем текст: в карточке товара показываем оригинальную цену (без наценки)
     const currencySymbol = await getCurrencySymbol();
-    const markupPercent = await settingsService.getGlobalMarkupPercent();
-    const markupFactor = 1 + (markupPercent > 0 ? markupPercent : 0) / 100;
-    const priceWithMarkup = Math.round(product.price * markupFactor);
+    const displayPrice = Math.round(product.price);
 
     const text = `Вы выбрали: ${product.name}${packagingLabel}
 
 
-<b>Цена:</b> ${priceWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}
+<b>Цена:</b> ${displayPrice.toLocaleString('ru-RU')} ${currencySymbol}
 <b>Описание:</b> ${product.description || 'Описание отсутствует'}
 
 ❔ У вас есть промо-код ❔`;
