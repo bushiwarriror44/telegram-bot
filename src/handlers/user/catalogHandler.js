@@ -888,6 +888,7 @@ export async function showOrderDetails(ctx, orderId) {
 <b>Промокод:</b> ${promocodeText} 
 <b>Скидка:</b> ${discountText} 
 <b>Финальная сумма:</b> Сумма с комиссией будет указана после получения реквизитов;
+`;
 
         // Отправляем детали заказа без кнопок
         await ctx.reply(text, {
