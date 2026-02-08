@@ -195,12 +195,16 @@ async function startBot() {
 
     const bots = await Promise.all(botPromises);
     const successfulBots = bots.filter(bot => bot !== null);
-    
+    const failedCount = config.botTokens.length - successfulBots.length;
+
     if (successfulBots.length === 0) {
       throw new Error('Не удалось запустить ни одного бота! Проверьте токены в .env файле.');
     }
 
     console.log(`[START] Успешно запущено ботов: ${successfulBots.length} из ${config.botTokens.length}`);
+    if (failedCount > 0) {
+      console.warn(`[START] Не запустилось ботов: ${failedCount} (токен заблокирован/удалён или неверный — остальные боты работают)`);
+    }
     
     // Сохраняем успешно запущенные боты для graceful shutdown
     runningBots.push(...successfulBots);
