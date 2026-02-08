@@ -30,7 +30,6 @@ import { productImageUploadMode, productPackagingEditMode, predefinedProductSele
 import { mockProducts } from '../../utils/mockData.js';
 import { cardAddMode, showCardDetails } from './cardsHandler.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
-import { config } from '../../config/index.js';
 import { hasActiveCaptcha } from '../../utils/captchaHelper.js';
 import { setPackagingIcon } from '../../utils/packagingIconHelper.js';
 
@@ -90,7 +89,8 @@ export function registerTextHandlers(bot) {
 
         // ВАЖНО: Проверяем капчу ДО проверки админа, чтобы капча обрабатывалась для всех пользователей
         // Если у пользователя активна капча, передаем управление дальше в userHandlers
-        if (config.captchaEnabled && hasActiveCaptcha(ctx.from.id)) {
+        const captchaEnabled = await settingsService.getCaptchaEnabled();
+        if (captchaEnabled && hasActiveCaptcha(ctx.from.id)) {
             console.log('[AdminHandlers] У пользователя активна капча, передаем управление дальше для обработки капчи');
             return next();
         }

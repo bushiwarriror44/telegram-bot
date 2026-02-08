@@ -9,7 +9,12 @@ import { database } from '../database/db.js';
 export async function getOrdersByUser(chatId, limit = 20) {
     try {
         return await database.all(
-            'SELECT * FROM orders WHERE user_chat_id = ? ORDER BY created_at DESC LIMIT ?',
+            `SELECT o.*,
+                    (SELECT COUNT(*) FROM orders o2 WHERE o2.id <= o.id) AS order_number
+             FROM orders o
+             WHERE o.user_chat_id = ?
+             ORDER BY o.created_at DESC
+             LIMIT ?`,
             [chatId, limit]
         );
     } catch (error) {

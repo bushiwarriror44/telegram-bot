@@ -34,6 +34,17 @@ export class OrderService {
         );
     }
 
+    /**
+     * Возвращает общий порядковый номер заказа в системе (1, 2, 3, …)
+     */
+    async getOrderNumber(orderId) {
+        const row = await database.get(
+            'SELECT COUNT(*) AS n FROM orders WHERE id <= ?',
+            [orderId]
+        );
+        return row?.n ?? orderId;
+    }
+
     async getByUserId(userChatId) {
         return await database.all(
             `SELECT o.*, 

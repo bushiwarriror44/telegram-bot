@@ -299,6 +299,15 @@ class Database {
       );
     }
 
+    // Капча при входе: по умолчанию включена (управляется из админки)
+    const existingCaptcha = await this.get('SELECT * FROM settings WHERE key = ?', ['captcha_enabled']);
+    if (!existingCaptcha) {
+      await this.run(
+        'INSERT INTO settings (key, value) VALUES (?, ?)',
+        ['captcha_enabled', '1']
+      );
+    }
+
     // Таблица карточных счетов
     await this.run(`
       CREATE TABLE IF NOT EXISTS card_accounts (

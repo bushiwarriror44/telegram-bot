@@ -48,6 +48,19 @@ export function registerSettingsHandlers(bot) {
         await showWelcomeSettings(ctx);
     });
 
+    bot.action('admin_settings_captcha', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showCaptchaSettings(ctx);
+    });
+
+    bot.action('admin_captcha_toggle', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const current = await settingsService.getCaptchaEnabled();
+        await settingsService.setCaptchaEnabled(!current);
+        await ctx.answerCbQuery(current ? 'Капча выключена' : 'Капча включена');
+        await showCaptchaSettings(ctx);
+    });
+
     bot.action('admin_settings_icons', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
         await showIconsSettings(ctx);
@@ -274,6 +287,7 @@ export async function showSettingsMenu(ctx) {
         inline_keyboard: [
             [{ text: '👋 Приветственное сообщение', callback_data: 'admin_settings_welcome' }],
             [{ text: '🔘 Настройка кнопок', callback_data: 'admin_menu_buttons' }],
+            [{ text: '🔐 Капча', callback_data: 'admin_settings_captcha' }],
             [{ text: '🎨 Иконки', callback_data: 'admin_settings_icons' }],
             [{ text: '🎁 Бонусы и промокоды', callback_data: 'admin_promocodes' }],
             [{ text: '👥 Реферальная система', callback_data: 'admin_settings_referral' }],
@@ -340,6 +354,60 @@ export async function showWelcomeSettings(ctx) {
         inline_keyboard: [
             [{ text: '✏️ Редактировать сообщение', callback_data: 'edit_welcome' }],
             [{ text: '👁️ Просмотреть полный текст', callback_data: 'view_welcome' }],
+            [{ text: '◀️ Назад', callback_data: 'admin_settings' }]
+        ]
+    };
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        } catch (error) {
+            await ctx.reply(text, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
+    } else {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: keyboard
+        });
+    }
+}
+
+/**
+ * Показ настроек капчи (вкл/выкл)
+ */
+export async function showCaptchaSettings(ctx) {
+    if (!isAdmin(ctx.from.id)) {
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
+        } else {
+            await ctx.reply('❌ У вас нет доступа к админ-панели.');
+        }
+        return;
+    }
+
+    const enabled = await settingsService.getCaptchaEnabled();
+    const statusText = enabled ? '✅ Включена' : '❌ Выключена';
+    const toggleText = enabled ? '🔴 Выключить капчу' : '🟢 Включить капчу';
+
+    const text = `
+🔐 <b>Капча</b>
+
+При входе в бота пользователи могут проходить проверку капчей.
+
+Текущее состояние: <b>${statusText}</b>
+
+Выберите действие:
+    `.trim();
+
+    const keyboard = {
+        inline_keyboard: [
+            [{ text: toggleText, callback_data: 'admin_captcha_toggle' }],
             [{ text: '◀️ Назад', callback_data: 'admin_settings' }]
         ]
     };

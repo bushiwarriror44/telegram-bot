@@ -151,7 +151,7 @@ export async function showMyOrders(ctx) {
         const orderButtons = [];
         for (const order of orders) {
             const formattedDate = formatOrderDate(order.created_at);
-            const orderText = `Заказ #${order.id} | ${formattedDate}`;
+            const orderText = `Заказ #${order.order_number ?? order.id} | ${formattedDate}`;
 
             // Определяем, является ли заказ отмененным или неоплаченным
             const isCancelledOrUnpaid = order.status === 'cancelled' ||

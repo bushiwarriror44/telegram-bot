@@ -203,6 +203,18 @@ export class SettingsService {
     const value = Math.max(0, parseInt(String(num), 10) || 561);
     return await this.set('reviews_display_count', value.toString());
   }
+
+  /**
+   * Капча при входе: по умолчанию включена (настройка из админки, .env игнорируется)
+   */
+  async getCaptchaEnabled() {
+    const raw = await this.get('captcha_enabled', '1');
+    return raw === '1' || raw === 'true' || raw === 'yes';
+  }
+
+  async setCaptchaEnabled(enabled) {
+    return await this.set('captcha_enabled', enabled ? '1' : '0');
+  }
 }
 
 export const settingsService = new SettingsService();

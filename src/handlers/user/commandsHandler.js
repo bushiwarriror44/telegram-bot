@@ -2,7 +2,6 @@ import { userService } from '../../services/userService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { referralService } from '../../services/referralService.js';
 import { showMenuKeyboard } from '../../utils/keyboardHelpers.js';
-import { config } from '../../config/index.js';
 import { generateCaptcha, saveCaptcha, getStartParam, validateCaptcha, hasActiveCaptcha } from '../../utils/captchaHelper.js';
 
 /**
@@ -69,8 +68,9 @@ export async function registerCommands(bot, isAdmin) {
         console.log('[UserHandlers] Username:', ctx.from.username);
         console.log('[UserHandlers] Имя:', ctx.from.first_name);
         try {
-            // Проверяем, включена ли капча
-            if (config.captchaEnabled) {
+            // Проверяем, включена ли капча (настройка из админки)
+            const captchaEnabled = await settingsService.getCaptchaEnabled();
+            if (captchaEnabled) {
                 // Проверяем, не проходил ли пользователь капчу недавно (в течение 15 минут)
                 const { isCaptchaRecentlyPassed } = await import('../../utils/captchaHelper.js');
                 if (isCaptchaRecentlyPassed(ctx.from.id)) {

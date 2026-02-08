@@ -12,7 +12,7 @@ import { showCitiesMenu } from './catalogHandler.js';
 import { showCabinetMenu } from './cabinetHandler.js';
 import { showHelpMenu, showSupportInput } from './supportHandler.js';
 import { showReviews } from './reviewsHandler.js';
-import { config } from '../../config/index.js';
+import { settingsService } from '../../services/settingsService.js';
 import { validateCaptcha, hasActiveCaptcha, generateCaptcha, saveCaptcha, getStartParam } from '../../utils/captchaHelper.js';
 
 /**
@@ -32,8 +32,9 @@ export function registerTextHandlers(bot) {
             return next(); // позволяем другим middleware (командам) обработать
         }
 
-        // Обработка ответа на капчу (если капча включена)
-        if (config.captchaEnabled && hasActiveCaptcha(ctx.from.id)) {
+        // Обработка ответа на капчу (если капча включена в админке)
+        const captchaEnabled = await settingsService.getCaptchaEnabled();
+        if (captchaEnabled && hasActiveCaptcha(ctx.from.id)) {
             const userAnswer = ctx.message.text.trim();
             const isValid = validateCaptcha(ctx.from.id, userAnswer);
 
