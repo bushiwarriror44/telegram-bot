@@ -105,7 +105,7 @@ async function startSingleBot(botToken, botIndex) {
     console.log(`[BOT-${botIndex}] adminSessions переданы в userHandlers`);
     
     console.log(`[BOT-${botIndex}] Настройка пользовательских обработчиков...`);
-    setupUserHandlers(bot, botUsername);
+    await setupUserHandlers(bot, botUsername);
     console.log(`[BOT-${botIndex}] Пользовательские обработчики настроены`);
 
     // Настройка меню команд для пользователей

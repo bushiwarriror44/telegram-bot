@@ -23,19 +23,39 @@ export class NotificationService {
      */
     async sendToChannel(message, parseMode = 'HTML') {
         try {
+            console.log('[NotificationService] sendToChannel: Начало отправки уведомления');
+            console.log('[NotificationService] sendToChannel: Bot username:', this.botUsername);
+            console.log('[NotificationService] sendToChannel: Bot instance:', this.bot ? 'exists' : 'missing');
+            
             const channelId = await settingsService.getNotificationChannelId();
+            console.log('[NotificationService] sendToChannel: Channel ID из настроек:', channelId);
+            
             if (!channelId) {
-                console.log('[NotificationService] Канал не привязан, уведомление не отправлено');
+                console.log('[NotificationService] sendToChannel: Канал не привязан, уведомление не отправлено');
                 return false;
             }
 
+            if (!this.bot || !this.bot.telegram) {
+                console.error('[NotificationService] sendToChannel: Bot instance или bot.telegram отсутствует!');
+                return false;
+            }
+
+            console.log('[NotificationService] sendToChannel: Отправка сообщения в канал', channelId);
+            console.log('[NotificationService] sendToChannel: Длина сообщения:', message.length, 'символов');
+            
             await this.bot.telegram.sendMessage(channelId, message, {
                 parse_mode: parseMode
             });
-            console.log('[NotificationService] Уведомление отправлено в канал:', channelId);
+            
+            console.log('[NotificationService] sendToChannel: ✅ Уведомление успешно отправлено в канал:', channelId);
             return true;
         } catch (error) {
-            console.error('[NotificationService] Ошибка при отправке уведомления в канал:', error);
+            console.error('[NotificationService] sendToChannel: ❌ Ошибка при отправке уведомления в канал:', error);
+            console.error('[NotificationService] sendToChannel: Тип ошибки:', error.constructor.name);
+            console.error('[NotificationService] sendToChannel: Сообщение об ошибке:', error.message);
+            if (error.stack) {
+                console.error('[NotificationService] sendToChannel: Stack trace:', error.stack);
+            }
             return false;
         }
     }
@@ -45,18 +65,26 @@ export class NotificationService {
      */
     async notifyOrderCreated(orderId) {
         try {
+            console.log('[NotificationService] notifyOrderCreated: Начало обработки заказа', orderId);
+            console.log('[NotificationService] notifyOrderCreated: Bot username:', this.botUsername);
+            
             const order = await orderService.getById(orderId);
-            if (!order) return;
+            if (!order) {
+                console.log('[NotificationService] notifyOrderCreated: Заказ не найден, ID:', orderId);
+                return;
+            }
+            console.log('[NotificationService] notifyOrderCreated: Заказ найден:', order.id);
 
             const user = await userService.getByChatId(order.user_chat_id);
             const username = user?.username ? `@${user.username}` : `ID: ${order.user_chat_id}`;
             const name = user?.first_name || 'Неизвестно';
+            console.log('[NotificationService] notifyOrderCreated: Пользователь:', name, username);
 
             // Получаем время на оплату из настроек
             const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes();
-
             const currencySymbol = await settingsService.getCurrencySymbol();
             const botInfo = this.getBotInfo();
+            console.log('[NotificationService] notifyOrderCreated: Bot info:', botInfo || 'empty');
             
             // Формируем строку с фасовкой товара
             const packagingText = order.packaging_value 
@@ -64,7 +92,7 @@ export class NotificationService {
                 : '';
             
             const message = `🛒 <b>Новый заказ</b>${botInfo}\n\n` +
-                `📦 Заказ #95${order.id}73\n` +
+                `📦 Заказ #${order.id}\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `📦 Товар: ${order.product_name}${packagingText}\n` +
                 `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ${currencySymbol}\n` +
@@ -73,9 +101,11 @@ export class NotificationService {
                 `📅 Дата: ${new Date(order.created_at).toLocaleString('ru-RU')}\n\n` +
                 `📊 Статус: <b>Ожидает оплаты</b>`;
 
+            console.log('[NotificationService] notifyOrderCreated: Сообщение сформировано, длина:', message.length);
             await this.sendToChannel(message);
         } catch (error) {
-            console.error('[NotificationService] Ошибка при отправке уведомления о заказе:', error);
+            console.error('[NotificationService] notifyOrderCreated: ❌ Ошибка при отправке уведомления о заказе:', error);
+            console.error('[NotificationService] notifyOrderCreated: Stack:', error.stack);
         }
     }
 

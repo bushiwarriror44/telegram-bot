@@ -147,14 +147,16 @@ export class OrderService {
         const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes() || 30;
         console.log('[OrderService] getActiveOrder: Время на оплату (минут):', paymentTimeMinutes);
 
-        // Получаем заказ со статусом pending или paid
+        // Используем SQLite функции для проверки времени, чтобы избежать проблем с часовыми поясами
+        // Проверяем, что заказ создан не более paymentTimeMinutes минут назад
         const result = await database.get(
             `SELECT * FROM orders 
              WHERE user_chat_id = ? 
              AND (status = 'pending' OR status = 'paid')
+             AND datetime(created_at, '+' || ? || ' minutes') >= datetime('now')
              ORDER BY created_at DESC 
              LIMIT 1`,
-            [userChatId]
+            [userChatId, paymentTimeMinutes]
         );
 
         console.log('[OrderService] getActiveOrder: SQL запрос выполнен');
@@ -169,35 +171,34 @@ export class OrderService {
                 product_id: result.product_id
             });
 
-            // Проверяем, не истекло ли время на оплату
-            const orderDate = new Date(result.created_at);
-            const now = new Date();
-            const diffMinutes = (now - orderDate) / (1000 * 60);
-            console.log('[OrderService] getActiveOrder: Время с момента создания заказа (минут):', diffMinutes.toFixed(2));
-            console.log('[OrderService] getActiveOrder: Лимит времени (минут):', paymentTimeMinutes);
-
-            if (diffMinutes > paymentTimeMinutes) {
-                console.log('[OrderService] getActiveOrder: Время на оплату истекло, заказ не считается активным');
-
-                // Автоматически обновляем статус просроченного заказа на 'expired'
-                if (result.status === 'pending') {
-                    console.log('[OrderService] getActiveOrder: Обновление статуса заказа на expired');
-                    await this.updateStatus(result.id, 'expired');
+            // Вычисляем разницу для логирования
+            // SQLite возвращает даты в локальном времени сервера, парсим их как локальное время
+            try {
+                const orderDateStr = result.created_at;
+                // Парсим дату из SQLite формата (YYYY-MM-DD HH:MM:SS) как локальное время
+                // Заменяем пробел на 'T' для правильного парсинга ISO формата
+                const orderDate = new Date(orderDateStr.replace(' ', 'T'));
+                const now = new Date();
+                const diffMinutes = (now - orderDate) / (1000 * 60);
+                console.log('[OrderService] getActiveOrder: Время с момента создания заказа (минут):', diffMinutes.toFixed(2));
+                console.log('[OrderService] getActiveOrder: Лимит времени (минут):', paymentTimeMinutes);
+                
+                // Дополнительная проверка на случай, если SQL запрос не сработал правильно
+                // (основная проверка уже выполнена в SQL запросе выше)
+                if (diffMinutes > paymentTimeMinutes) {
+                    console.log('[OrderService] getActiveOrder: Время на оплату истекло, заказ не считается активным');
+                    // Автоматически обновляем статус просроченного заказа на 'expired'
+                    if (result.status === 'pending') {
+                        console.log('[OrderService] getActiveOrder: Обновление статуса заказа на expired');
+                        await this.updateStatus(result.id, 'expired');
+                    }
+                    return null; // Заказ просрочен, не считается активным
+                } else {
+                    console.log('[OrderService] getActiveOrder: Заказ еще активен, время не истекло');
                 }
-
-                // Проверяем все заказы пользователя для отладки
-                const allOrders = await database.all(
-                    `SELECT id, status, created_at FROM orders 
-                     WHERE user_chat_id = ? 
-                     ORDER BY created_at DESC 
-                     LIMIT 10`,
-                    [userChatId]
-                );
-                console.log('[OrderService] getActiveOrder: Все заказы пользователя (последние 10):', allOrders);
-
-                return null; // Заказ просрочен, не считается активным
-            } else {
-                console.log('[OrderService] getActiveOrder: Заказ еще активен, время не истекло');
+            } catch (dateError) {
+                console.error('[OrderService] getActiveOrder: Ошибка при вычислении времени:', dateError);
+                // Если ошибка парсинга даты, полагаемся на SQL запрос (он уже отфильтровал заказы)
             }
         } else {
             // Проверяем все заказы пользователя для отладки

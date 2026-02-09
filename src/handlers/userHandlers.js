@@ -19,7 +19,7 @@ export function getIsAdminFunction() {
     return isAdmin;
 }
 
-export function setupUserHandlers(bot, botUsername = null) {
+export async function setupUserHandlers(bot, botUsername = null) {
     console.log('[UserHandlers] Настройка пользовательских обработчиков...');
 
     // Middleware для проверки блокировки пользователя
@@ -47,23 +47,31 @@ export function setupUserHandlers(bot, botUsername = null) {
     });
 
     // Инициализируем notificationService для этого конкретного бота и сохраняем в объекте bot
-    // Делаем это синхронно, чтобы notificationService был доступен сразу
-    (async () => {
-        try {
-            const { NotificationService } = await import('../services/notificationService.js');
-            const notificationService = new NotificationService(bot, botUsername);
-            
-            // Сохраняем notificationService в объекте bot, чтобы каждый бот имел свой экземпляр
-            bot.notificationService = notificationService;
-            
-            console.log(`[UserHandlers] NotificationService создан для бота @${botUsername || 'unknown'}`);
-        } catch (error) {
-            console.error(`[UserHandlers] Ошибка при создании NotificationService для бота @${botUsername || 'unknown'}:`, error);
-        }
-    })();
+    // Делаем это СИНХРОННО перед регистрацией обработчиков, чтобы notificationService был доступен сразу
+    try {
+        console.log(`[UserHandlers] Инициализация NotificationService для бота @${botUsername || 'unknown'}`);
+        console.log(`[UserHandlers] Bot instance exists:`, !!bot);
+        console.log(`[UserHandlers] Bot username:`, botUsername);
+        
+        const { NotificationService } = await import('../services/notificationService.js');
+        console.log(`[UserHandlers] NotificationService класс импортирован`);
+        
+        const notificationService = new NotificationService(bot, botUsername);
+        console.log(`[UserHandlers] NotificationService экземпляр создан`);
+        
+        // Сохраняем notificationService в объекте bot, чтобы каждый бот имел свой экземпляр
+        bot.notificationService = notificationService;
+        console.log(`[UserHandlers] ✅ NotificationService сохранен в bot.notificationService`);
+        console.log(`[UserHandlers] Проверка: bot.notificationService exists:`, !!bot.notificationService);
+        console.log(`[UserHandlers] NotificationService создан для бота @${botUsername || 'unknown'}`);
+    } catch (error) {
+        console.error(`[UserHandlers] ❌ Ошибка при создании NotificationService для бота @${botUsername || 'unknown'}:`, error);
+        console.error(`[UserHandlers] Stack trace:`, error.stack);
+        // Продолжаем работу даже если NotificationService не создан
+    }
 
-    // Регистрируем все обработчики из модулей
-    (async () => {
+    // Регистрируем все обработчики из модулей (после инициализации NotificationService)
+    await (async () => {
         // Команды
         const { registerCommands } = await import('./user/commandsHandler.js');
         await registerCommands(bot, isAdmin);
@@ -98,4 +106,5 @@ export function setupUserHandlers(bot, botUsername = null) {
     })();
 
     console.log('[UserHandlers] Все обработчики зарегистрированы');
+    console.log('[UserHandlers] Финальная проверка: bot.notificationService exists:', !!bot.notificationService);
 }

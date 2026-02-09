@@ -15,7 +15,22 @@ export const topupAmountMode = new Map();
  * @returns {Object|null} - Экземпляр NotificationService или null
  */
 function getNotificationService(bot) {
-    return bot?.notificationService || null;
+    console.log('[TopupHandler] getNotificationService: Проверка bot instance');
+    console.log('[TopupHandler] getNotificationService: Bot exists:', !!bot);
+    console.log('[TopupHandler] getNotificationService: Bot.notificationService exists:', !!bot?.notificationService);
+    
+    if (!bot) {
+        console.warn('[TopupHandler] getNotificationService: Bot instance отсутствует!');
+        return null;
+    }
+    
+    if (!bot.notificationService) {
+        console.warn('[TopupHandler] getNotificationService: bot.notificationService не установлен!');
+        return null;
+    }
+    
+    console.log('[TopupHandler] getNotificationService: ✅ NotificationService найден');
+    return bot.notificationService;
 }
 
 /**
@@ -417,9 +432,13 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
         };
 
         // Отправляем уведомление о выборе реквизита для пополнения баланса
+        console.log('[TopupHandler] handleTopupMethodSelection: Попытка получить NotificationService');
         const notificationService = getNotificationService(ctx.bot);
         if (notificationService) {
+            console.log('[TopupHandler] handleTopupMethodSelection: NotificationService получен, отправка уведомления');
             await notificationService.notifyTopupRequest(ctx.from.id, method.name);
+        } else {
+            console.warn('[TopupHandler] handleTopupMethodSelection: ⚠️ NotificationService не найден, уведомление не отправлено');
         }
 
         if (ctx.callbackQuery) {

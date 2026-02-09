@@ -33,7 +33,23 @@ export const orderCancelBlock = new Map();
  * @returns {Object|null} - Экземпляр NotificationService или null
  */
 function getNotificationService(bot) {
-    return bot?.notificationService || null;
+    console.log('[CatalogHandler] getNotificationService: Проверка bot instance');
+    console.log('[CatalogHandler] getNotificationService: Bot exists:', !!bot);
+    console.log('[CatalogHandler] getNotificationService: Bot.notificationService exists:', !!bot?.notificationService);
+    
+    if (!bot) {
+        console.warn('[CatalogHandler] getNotificationService: Bot instance отсутствует!');
+        return null;
+    }
+    
+    if (!bot.notificationService) {
+        console.warn('[CatalogHandler] getNotificationService: bot.notificationService не установлен!');
+        console.log('[CatalogHandler] getNotificationService: Доступные свойства bot:', Object.keys(bot || {}));
+        return null;
+    }
+    
+    console.log('[CatalogHandler] getNotificationService: ✅ NotificationService найден');
+    return bot.notificationService;
 }
 
 /**
@@ -837,9 +853,14 @@ export async function createOrder(ctx, productId, promocodeId = null) {
         );
 
         // Отправляем уведомление о создании заказа
+        console.log('[CatalogHandler] createOrder: Попытка получить NotificationService');
+        console.log('[CatalogHandler] createOrder: ctx.bot exists:', !!ctx.bot);
         const notificationService = getNotificationService(ctx.bot);
         if (notificationService) {
+            console.log('[CatalogHandler] createOrder: NotificationService получен, отправка уведомления для заказа', order.id);
             await notificationService.notifyOrderCreated(order.id);
+        } else {
+            console.warn('[CatalogHandler] createOrder: ⚠️ NotificationService не найден, уведомление не отправлено');
         }
 
         // Ждем 5 секунд перед показом заказа
@@ -949,9 +970,13 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     }
 
     // Отправляем уведомление о выборе способа оплаты
+    console.log('[CatalogHandler] handlePaymentMethodSelection: Попытка получить NotificationService');
     const notificationService = getNotificationService(ctx.bot);
     if (notificationService) {
+        console.log('[CatalogHandler] handlePaymentMethodSelection: NotificationService получен, отправка уведомления');
         await notificationService.notifyPaymentMethodSelected(orderId, method.name);
+    } else {
+        console.warn('[CatalogHandler] handlePaymentMethodSelection: ⚠️ NotificationService не найден, уведомление не отправлено');
     }
 
     // Обновляем активность пользователя
