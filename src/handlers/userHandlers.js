@@ -19,6 +19,31 @@ export function getIsAdminFunction() {
     return isAdmin;
 }
 
+// Map для хранения соответствия между bot.telegram и NotificationService
+// Ключ: bot.telegram (экземпляр Telegram API)
+// Значение: NotificationService
+const botNotificationServiceMap = new Map();
+
+/**
+ * Получает NotificationService для данного контекста
+ * @param {Object} ctx - Контекст Telegraf
+ * @returns {Object|null} - NotificationService или null
+ */
+export function getNotificationServiceFromContext(ctx) {
+    if (!ctx || !ctx.telegram) {
+        console.warn('[UserHandlers] getNotificationServiceFromContext: ctx или ctx.telegram отсутствует');
+        return null;
+    }
+    
+    const notificationService = botNotificationServiceMap.get(ctx.telegram);
+    if (!notificationService) {
+        console.warn('[UserHandlers] getNotificationServiceFromContext: NotificationService не найден для ctx.telegram');
+        console.log('[UserHandlers] getNotificationServiceFromContext: Доступные ключи в Map:', botNotificationServiceMap.size);
+    }
+    
+    return notificationService || null;
+}
+
 export async function setupUserHandlers(bot, botUsername = null) {
     console.log('[UserHandlers] Настройка пользовательских обработчиков...');
 
@@ -61,8 +86,12 @@ export async function setupUserHandlers(bot, botUsername = null) {
         
         // Сохраняем notificationService в объекте bot, чтобы каждый бот имел свой экземпляр
         bot.notificationService = notificationService;
-        console.log(`[UserHandlers] ✅ NotificationService сохранен в bot.notificationService`);
+        
+        // Также сохраняем в Map для доступа через ctx.telegram
+        botNotificationServiceMap.set(bot.telegram, notificationService);
+        console.log(`[UserHandlers] ✅ NotificationService сохранен в bot.notificationService и в Map`);
         console.log(`[UserHandlers] Проверка: bot.notificationService exists:`, !!bot.notificationService);
+        console.log(`[UserHandlers] Проверка: Map содержит bot.telegram:`, botNotificationServiceMap.has(bot.telegram));
         console.log(`[UserHandlers] NotificationService создан для бота @${botUsername || 'unknown'}`);
     } catch (error) {
         console.error(`[UserHandlers] ❌ Ошибка при создании NotificationService для бота @${botUsername || 'unknown'}:`, error);

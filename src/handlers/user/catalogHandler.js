@@ -16,6 +16,7 @@ import { generateTXID, generatePaymentRequestText } from '../../utils/textFormat
 import { cardAccountService } from '../../services/cardAccountService.js';
 import { cryptoExchangeService } from '../../services/cryptoExchangeService.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
+import { getNotificationServiceFromContext } from '../userHandlers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,28 +29,30 @@ export const promocodeInputMode = new Map();
 export const orderCancelBlock = new Map();
 
 /**
- * Получает notificationService из объекта bot
- * @param {Object} bot - Экземпляр Telegraf бота
+ * Получает notificationService из контекста
+ * @param {Object} ctx - Контекст Telegraf
  * @returns {Object|null} - Экземпляр NotificationService или null
  */
-function getNotificationService(bot) {
-    console.log('[CatalogHandler] getNotificationService: Проверка bot instance');
-    console.log('[CatalogHandler] getNotificationService: Bot exists:', !!bot);
-    console.log('[CatalogHandler] getNotificationService: Bot.notificationService exists:', !!bot?.notificationService);
+function getNotificationService(ctx) {
+    console.log('[CatalogHandler] getNotificationService: Проверка ctx');
+    console.log('[CatalogHandler] getNotificationService: ctx exists:', !!ctx);
+    console.log('[CatalogHandler] getNotificationService: ctx.telegram exists:', !!ctx?.telegram);
     
-    if (!bot) {
-        console.warn('[CatalogHandler] getNotificationService: Bot instance отсутствует!');
+    if (!ctx || !ctx.telegram) {
+        console.warn('[CatalogHandler] getNotificationService: ctx или ctx.telegram отсутствует!');
         return null;
     }
     
-    if (!bot.notificationService) {
-        console.warn('[CatalogHandler] getNotificationService: bot.notificationService не установлен!');
-        console.log('[CatalogHandler] getNotificationService: Доступные свойства bot:', Object.keys(bot || {}));
-        return null;
+    // Используем функцию из userHandlers
+    const notificationService = getNotificationServiceFromContext(ctx);
+    
+    if (notificationService) {
+        console.log('[CatalogHandler] getNotificationService: ✅ NotificationService найден');
+    } else {
+        console.warn('[CatalogHandler] getNotificationService: ⚠️ NotificationService не найден');
     }
     
-    console.log('[CatalogHandler] getNotificationService: ✅ NotificationService найден');
-    return bot.notificationService;
+    return notificationService;
 }
 
 /**
@@ -854,8 +857,9 @@ export async function createOrder(ctx, productId, promocodeId = null) {
 
         // Отправляем уведомление о создании заказа
         console.log('[CatalogHandler] createOrder: Попытка получить NotificationService');
-        console.log('[CatalogHandler] createOrder: ctx.bot exists:', !!ctx.bot);
-        const notificationService = getNotificationService(ctx.bot);
+        console.log('[CatalogHandler] createOrder: ctx exists:', !!ctx);
+        console.log('[CatalogHandler] createOrder: ctx.telegram exists:', !!ctx?.telegram);
+        const notificationService = getNotificationService(ctx);
         if (notificationService) {
             console.log('[CatalogHandler] createOrder: NotificationService получен, отправка уведомления для заказа', order.id);
             await notificationService.notifyOrderCreated(order.id);
@@ -971,7 +975,7 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
 
     // Отправляем уведомление о выборе способа оплаты
     console.log('[CatalogHandler] handlePaymentMethodSelection: Попытка получить NotificationService');
-    const notificationService = getNotificationService(ctx.bot);
+    const notificationService = getNotificationService(ctx);
     if (notificationService) {
         console.log('[CatalogHandler] handlePaymentMethodSelection: NotificationService получен, отправка уведомления');
         await notificationService.notifyPaymentMethodSelected(orderId, method.name);

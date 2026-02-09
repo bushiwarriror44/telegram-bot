@@ -5,32 +5,36 @@ import { cryptoExchangeService } from '../../services/cryptoExchangeService.js';
 import { getCurrencySymbol } from '../../utils/currencyHelper.js';
 import { generateTXID, generatePaymentRequestText } from '../../utils/textFormatters.js';
 import { getMenuKeyboard } from '../../utils/keyboardHelpers.js';
+import { getNotificationServiceFromContext } from '../userHandlers.js';
 
 // Хранит пользователей, которые вводят сумму пополнения (userId -> methodId)
 export const topupAmountMode = new Map();
 
 /**
- * Получает notificationService из объекта bot
- * @param {Object} bot - Экземпляр Telegraf бота
+ * Получает notificationService из контекста
+ * @param {Object} ctx - Контекст Telegraf
  * @returns {Object|null} - Экземпляр NotificationService или null
  */
-function getNotificationService(bot) {
-    console.log('[TopupHandler] getNotificationService: Проверка bot instance');
-    console.log('[TopupHandler] getNotificationService: Bot exists:', !!bot);
-    console.log('[TopupHandler] getNotificationService: Bot.notificationService exists:', !!bot?.notificationService);
+function getNotificationService(ctx) {
+    console.log('[TopupHandler] getNotificationService: Проверка ctx');
+    console.log('[TopupHandler] getNotificationService: ctx exists:', !!ctx);
+    console.log('[TopupHandler] getNotificationService: ctx.telegram exists:', !!ctx?.telegram);
     
-    if (!bot) {
-        console.warn('[TopupHandler] getNotificationService: Bot instance отсутствует!');
+    if (!ctx || !ctx.telegram) {
+        console.warn('[TopupHandler] getNotificationService: ctx или ctx.telegram отсутствует!');
         return null;
     }
     
-    if (!bot.notificationService) {
-        console.warn('[TopupHandler] getNotificationService: bot.notificationService не установлен!');
-        return null;
+    // Используем функцию из userHandlers
+    const notificationService = getNotificationServiceFromContext(ctx);
+    
+    if (notificationService) {
+        console.log('[TopupHandler] getNotificationService: ✅ NotificationService найден');
+    } else {
+        console.warn('[TopupHandler] getNotificationService: ⚠️ NotificationService не найден');
     }
     
-    console.log('[TopupHandler] getNotificationService: ✅ NotificationService найден');
-    return bot.notificationService;
+    return notificationService;
 }
 
 /**
@@ -433,7 +437,7 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
 
         // Отправляем уведомление о выборе реквизита для пополнения баланса
         console.log('[TopupHandler] handleTopupMethodSelection: Попытка получить NotificationService');
-        const notificationService = getNotificationService(ctx.bot);
+        const notificationService = getNotificationService(ctx);
         if (notificationService) {
             console.log('[TopupHandler] handleTopupMethodSelection: NotificationService получен, отправка уведомления');
             await notificationService.notifyTopupRequest(ctx.from.id, method.name);
