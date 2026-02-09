@@ -92,7 +92,7 @@ export class NotificationService {
                 : '';
             
             const message = `🛒 <b>Новый заказ</b>${botInfo}\n\n` +
-                `📦 Заказ #${order.id}\n` +
+                `📦 Заказ #95${order.id}73\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `📦 Товар: ${order.product_name}${packagingText}\n` +
                 `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ${currencySymbol}\n` +
@@ -183,6 +183,46 @@ export class NotificationService {
             await this.sendToChannel(message);
         } catch (error) {
             console.error('[NotificationService] Ошибка при отправке уведомления о запросе пополнения:', error);
+        }
+    }
+
+    /**
+     * Уведомление о сообщении в поддержку
+     */
+    async notifySupportMessage(userId, messageText, messageType) {
+        try {
+            console.log('[NotificationService] notifySupportMessage: Начало обработки сообщения поддержки');
+            console.log('[NotificationService] notifySupportMessage: User ID:', userId);
+            console.log('[NotificationService] notifySupportMessage: Message type:', messageType);
+            
+            const user = await userService.getByChatId(userId);
+            if (!user) {
+                console.log('[NotificationService] notifySupportMessage: Пользователь не найден');
+                return;
+            }
+
+            const username = user.username ? `@${user.username}` : `ID: ${userId}`;
+            const name = user.first_name || 'Неизвестно';
+
+            const typeNames = {
+                'question': '💬 Вопрос',
+                'problem': '🚨 Проблема',
+                'payment_problem': '❗ Проблема с платежом'
+            };
+
+            const typeName = typeNames[messageType] || '💬 Вопрос';
+            const botInfo = this.getBotInfo();
+            
+            const message = `${typeName} <b>Сообщение в поддержку</b>${botInfo}\n\n` +
+                `👤 Пользователь: ${name} (${username})\n` +
+                `📝 Сообщение: ${messageText}\n` +
+                `📅 Дата: ${new Date().toLocaleString('ru-RU')}`;
+
+            console.log('[NotificationService] notifySupportMessage: Сообщение сформировано, длина:', message.length);
+            await this.sendToChannel(message);
+        } catch (error) {
+            console.error('[NotificationService] notifySupportMessage: ❌ Ошибка при отправке уведомления о сообщении поддержки:', error);
+            console.error('[NotificationService] notifySupportMessage: Stack:', error.stack);
         }
     }
 }

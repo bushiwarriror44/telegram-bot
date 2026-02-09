@@ -98,6 +98,18 @@ export function registerTextHandlers(bot) {
 
             const supportType = supportMode.get(ctx.from.id);
             await supportService.saveUserMessage(ctx.from.id, ctx.message.text, supportType);
+            
+            // Отправляем уведомление в канал
+            console.log('[TextHandler] Отправка уведомления о сообщении поддержки');
+            const { getNotificationServiceFromContext } = await import('../userHandlers.js');
+            const notificationService = getNotificationServiceFromContext(ctx);
+            if (notificationService) {
+                console.log('[TextHandler] NotificationService найден, отправка уведомления');
+                await notificationService.notifySupportMessage(ctx.from.id, ctx.message.text, supportType);
+            } else {
+                console.warn('[TextHandler] ⚠️ NotificationService не найден, уведомление не отправлено');
+            }
+            
             supportMode.delete(ctx.from.id);
 
             // Восстанавливаем обычную клавиатуру меню
