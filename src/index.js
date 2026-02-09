@@ -77,6 +77,23 @@ async function startSingleBot(botToken, botIndex) {
     });
     console.log(`[BOT-${botIndex}] Обработчик ошибок настроен`);
 
+    // Проверка подключения к Telegram API и получение информации о боте (ДО настройки handlers, чтобы передать username)
+    console.log(`[BOT-${botIndex}] Проверка подключения к Telegram API...`);
+    let botUsername = null;
+    try {
+      const testResult = await bot.telegram.getMe();
+      botUsername = testResult.username || null;
+      console.log(`[BOT-${botIndex}] Подключение к Telegram API успешно!`);
+      console.log(`[BOT-${botIndex}] Информация о боте:`, JSON.stringify(testResult));
+      if (botUsername) {
+        console.log(`[BOT-${botIndex}] Username бота: @${botUsername}`);
+      }
+    } catch (testError) {
+      console.error(`[BOT-${botIndex}] ОШИБКА при проверке подключения к Telegram API!`);
+      console.error(`[BOT-${botIndex}] Ошибка:`, testError.message);
+      throw new Error(`Не удалось подключиться к Telegram API для бота #${botIndex}: ${testError.message}`);
+    }
+
     // Настройка обработчиков
     console.log(`[BOT-${botIndex}] Настройка обработчиков...`);
     console.log(`[BOT-${botIndex}] Настройка админ-обработчиков...`);
@@ -88,7 +105,7 @@ async function startSingleBot(botToken, botIndex) {
     console.log(`[BOT-${botIndex}] adminSessions переданы в userHandlers`);
     
     console.log(`[BOT-${botIndex}] Настройка пользовательских обработчиков...`);
-    setupUserHandlers(bot, botIndex);
+    setupUserHandlers(bot, botUsername);
     console.log(`[BOT-${botIndex}] Пользовательские обработчики настроены`);
 
     // Настройка меню команд для пользователей
@@ -102,18 +119,6 @@ async function startSingleBot(botToken, botIndex) {
       console.log(`[BOT-${botIndex}] Меню команд успешно настроено`);
     } catch (commandsError) {
       console.error(`[BOT-${botIndex}] Ошибка при настройке меню команд:`, commandsError);
-    }
-
-    // Проверка подключения к Telegram API
-    console.log(`[BOT-${botIndex}] Проверка подключения к Telegram API...`);
-    try {
-      const testResult = await bot.telegram.getMe();
-      console.log(`[BOT-${botIndex}] Подключение к Telegram API успешно!`);
-      console.log(`[BOT-${botIndex}] Информация о боте:`, JSON.stringify(testResult));
-    } catch (testError) {
-      console.error(`[BOT-${botIndex}] ОШИБКА при проверке подключения к Telegram API!`);
-      console.error(`[BOT-${botIndex}] Ошибка:`, testError.message);
-      throw new Error(`Не удалось подключиться к Telegram API для бота #${botIndex}: ${testError.message}`);
     }
 
     // Запуск бота

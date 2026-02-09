@@ -3,9 +3,18 @@ import { userService } from './userService.js';
 import { orderService } from './orderService.js';
 
 export class NotificationService {
-    constructor(bot, botIndex = null) {
+    constructor(bot, botUsername = null) {
         this.bot = bot;
-        this.botIndex = botIndex;
+        this.botUsername = botUsername;
+    }
+
+    /**
+     * Формирует строку с информацией о боте (username или ссылка)
+     */
+    getBotInfo() {
+        if (!this.botUsername) return '';
+        // Формируем ссылку на бота: @username или ссылка t.me/username
+        return `\n🤖 Бот: <a href="https://t.me/${this.botUsername}">@${this.botUsername}</a>`;
     }
 
     /**
@@ -46,7 +55,7 @@ export class NotificationService {
             const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes();
 
             const currencySymbol = await settingsService.getCurrencySymbol();
-            const botInfo = this.botIndex ? `\n🤖 Бот: #${this.botIndex}` : '';
+            const botInfo = this.getBotInfo();
             const message = `🛒 <b>Новый заказ</b>${botInfo}\n\n` +
                 `📦 Заказ #${order.id}\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
@@ -76,7 +85,7 @@ export class NotificationService {
             const name = user?.first_name || 'Неизвестно';
 
             const currencySymbol = await settingsService.getCurrencySymbol();
-            const botInfo = this.botIndex ? `\n🤖 Бот: #${this.botIndex}` : '';
+            const botInfo = this.getBotInfo();
             const message = `💳 <b>Выбран способ оплаты</b>${botInfo}\n\n` +
                 `📦 Заказ #${order.id}\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
@@ -102,7 +111,7 @@ export class NotificationService {
             const name = user.first_name || 'Неизвестно';
 
             const currencySymbol = await settingsService.getCurrencySymbol();
-            const botInfo = this.botIndex ? `\n🤖 Бот: #${this.botIndex}` : '';
+            const botInfo = this.getBotInfo();
             const message = `💰 <b>Пополнение баланса</b>${botInfo}\n\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `💳 Способ: ${paymentMethodName}\n` +
@@ -127,7 +136,7 @@ export class NotificationService {
             const username = user.username ? `@${user.username}` : `ID: ${userId}`;
             const name = user.first_name || 'Неизвестно';
 
-            const botInfo = this.botIndex ? `\n🤖 Бот: #${this.botIndex}` : '';
+            const botInfo = this.getBotInfo();
             const message = `💰 <b>Пополнение баланса</b>${botInfo}\n\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `💳 Способ: ${paymentMethodName}\n` +
