@@ -148,7 +148,7 @@ export class UnpaidOrderMonitorService {
 
                     const orderNumber = await orderService.getOrderNumber(order.id);
 
-                    // Сначала отправляем уведомление, потом помечаем — так сообщение не теряется при сбое
+                    // Сначала отправляем уведомление, потом помечаем — так сообщение не теряется при временных сбоях
                     try {
                         await this.bot.telegram.sendMessage(
                             chatId,
@@ -162,8 +162,25 @@ export class UnpaidOrderMonitorService {
                         // Помечаем только после успешной отправки
                         await orderService.markExpiredNotificationAsSent(order.id);
                     } catch (error) {
-                        console.error(`[UnpaidOrderMonitor] Ошибка отправки уведомления об истечении заказа пользователю ${chatId}:`, error.message);
-                        // Не помечаем — в следующем цикле повторим отправку
+                        const msg = error?.message || '';
+
+                        // Если ошибка постоянная (чат не найден, бот заблокирован и т.п.),
+                        // логируем как предупреждение и помечаем уведомление как отправленное,
+                        // чтобы не спамить логами бесконечно
+                        if (/400: Bad Request: chat not found/i.test(msg) ||
+                            /403: Forbidden/i.test(msg) ||
+                            /user is deactivated/i.test(msg)) {
+                            console.warn(`[UnpaidOrderMonitor] Постоянная ошибка доставки (chat not found/forbidden) для пользователя ${chatId}. Помечаем уведомление как отправленное для заказа #${order.id}.`);
+                            try {
+                                await orderService.markExpiredNotificationAsSent(order.id);
+                            } catch (markError) {
+                                console.error('[UnpaidOrderMonitor] Ошибка при пометке уведомления как отправленного:', markError.message);
+                            }
+                        } else {
+                            // Для временных ошибок (ECONNRESET и т.п.) логируем как ошибку
+                            // и НЕ помечаем — в следующем цикле повторим отправку
+                            console.error(`[UnpaidOrderMonitor] Ошибка отправки уведомления об истечении заказа пользователю ${chatId}:`, msg);
+                        }
                     }
                 } catch (error) {
                     console.error(`[UnpaidOrderMonitor] Ошибка при обработке истекшего заказа #${order.id}:`, error);
