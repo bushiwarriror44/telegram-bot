@@ -21,7 +21,7 @@ export function getIsAdminFunction() {
 
 let notificationService = null;
 
-export function setupUserHandlers(bot) {
+export function setupUserHandlers(bot, botIndex = null) {
     console.log('[UserHandlers] Настройка пользовательских обработчиков...');
 
     // Middleware для проверки блокировки пользователя
@@ -48,10 +48,10 @@ export function setupUserHandlers(bot) {
         return next();
     });
 
-    // Инициализируем notificationService с bot
+    // Инициализируем notificationService с bot и botIndex
     (async () => {
         const { NotificationService } = await import('../services/notificationService.js');
-        notificationService = new NotificationService(bot);
+        notificationService = new NotificationService(bot, botIndex);
 
         // Устанавливаем notificationService в модули, которые его используют
         const { setNotificationService: setCatalogNotification } = await import('./user/catalogHandler.js');

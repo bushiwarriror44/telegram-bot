@@ -1143,8 +1143,56 @@ export function registerTextHandlers(bot) {
             return;
         }
 
+        // Обработка привязки канала: если админ в режиме привязки и ввёл ID канала напрямую (не переслал сообщение)
+        if (channelBindMode.has(ctx.from.id) && ctx.message.text && !ctx.message.forward_from_chat) {
+            const { settingsService } = await import('../../services/settingsService.js');
+            const channelIdText = ctx.message.text.trim();
+            
+            // Проверяем, что это похоже на ID канала (число, возможно с минусом для супергрупп)
+            const channelIdMatch = channelIdText.match(/^-?\d+$/);
+            if (channelIdMatch) {
+                try {
+                    const channelId = channelIdMatch[0];
+                    await settingsService.setNotificationChannelId(channelId);
+                    channelBindMode.delete(ctx.from.id);
+
+                    // Проверяем, что бот может отправлять сообщения в канал
+                    try {
+                        await bot.telegram.sendMessage(channelId, '✅ Канал успешно привязан! Уведомления будут приходить сюда.');
+                        await ctx.reply(`✅ Канал успешно привязан!\n\nID канала: <code>${channelId}</code>`, {
+                            parse_mode: 'HTML',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                                ]
+                            }
+                        });
+                    } catch (error) {
+                        console.error('[AdminHandlers] Ошибка при проверке доступа к каналу:', error);
+                        await ctx.reply(
+                            `⚠️ Канал привязан, но бот не может отправлять сообщения.\n\n` +
+                            `Убедитесь, что бот добавлен в канал как администратор.\n\n` +
+                            `ID канала: <code>${channelId}</code>`,
+                            {
+                                parse_mode: 'HTML',
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
+                                    ]
+                                }
+                            }
+                        );
+                    }
+                } catch (error) {
+                    console.error('[AdminHandlers] Ошибка при привязке канала по ID:', error);
+                    await ctx.reply(`❌ Ошибка при привязке канала: ${error.message}`);
+                }
+                return;
+            }
+        }
+
         // Если ни один админский режим не сработал — передаем сообщение дальше.
-        // Это важно, чтобы могли отработать другие обработчики сообщений (например, привязка канала в mediaHandler).
+        // Это важно, чтобы могли отработать другие обработчики сообщений (например, привязка канала через пересылку в mediaHandler).
         return next();
     });
 }
