@@ -27,11 +27,13 @@ export const promocodeInputMode = new Map();
 // Блокировка длится 30 минут
 export const orderCancelBlock = new Map();
 
-// Переменная для notificationService (будет установлена извне)
-let notificationService = null;
-
-export function setNotificationService(service) {
-    notificationService = service;
+/**
+ * Получает notificationService из объекта bot
+ * @param {Object} bot - Экземпляр Telegraf бота
+ * @returns {Object|null} - Экземпляр NotificationService или null
+ */
+function getNotificationService(bot) {
+    return bot?.notificationService || null;
 }
 
 /**
@@ -835,6 +837,7 @@ export async function createOrder(ctx, productId, promocodeId = null) {
         );
 
         // Отправляем уведомление о создании заказа
+        const notificationService = getNotificationService(ctx.bot);
         if (notificationService) {
             await notificationService.notifyOrderCreated(order.id);
         }
@@ -946,6 +949,7 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     }
 
     // Отправляем уведомление о выборе способа оплаты
+    const notificationService = getNotificationService(ctx.bot);
     if (notificationService) {
         await notificationService.notifyPaymentMethodSelected(orderId, method.name);
     }

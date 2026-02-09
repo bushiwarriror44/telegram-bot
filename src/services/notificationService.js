@@ -1,6 +1,7 @@
 import { settingsService } from './settingsService.js';
 import { userService } from './userService.js';
 import { orderService } from './orderService.js';
+import { formatPackaging } from '../utils/packagingHelper.js';
 
 export class NotificationService {
     constructor(bot, botUsername = null) {
@@ -56,10 +57,16 @@ export class NotificationService {
 
             const currencySymbol = await settingsService.getCurrencySymbol();
             const botInfo = this.getBotInfo();
+            
+            // Формируем строку с фасовкой товара
+            const packagingText = order.packaging_value 
+                ? ` (${formatPackaging(order.packaging_value, order.packaging_unit || 'g')})` 
+                : '';
+            
             const message = `🛒 <b>Новый заказ</b>${botInfo}\n\n` +
-                `📦 Заказ #${order.id}\n` +
+                `📦 Заказ #95${order.id}73\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
-                `📦 Товар: ${order.product_name}\n` +
+                `📦 Товар: ${order.product_name}${packagingText}\n` +
                 `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ${currencySymbol}\n` +
                 `📍 Город: ${order.city_name}, Район: ${order.district_name}\n` +
                 `⏰ Время на оплату: ${paymentTimeMinutes} минут\n` +

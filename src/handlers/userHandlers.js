@@ -19,8 +19,6 @@ export function getIsAdminFunction() {
     return isAdmin;
 }
 
-let notificationService = null;
-
 export function setupUserHandlers(bot, botUsername = null) {
     console.log('[UserHandlers] Настройка пользовательских обработчиков...');
 
@@ -48,16 +46,20 @@ export function setupUserHandlers(bot, botUsername = null) {
         return next();
     });
 
-    // Инициализируем notificationService с bot и botUsername
+    // Инициализируем notificationService для этого конкретного бота и сохраняем в объекте bot
+    // Делаем это синхронно, чтобы notificationService был доступен сразу
     (async () => {
-        const { NotificationService } = await import('../services/notificationService.js');
-        notificationService = new NotificationService(bot, botUsername);
-
-        // Устанавливаем notificationService в модули, которые его используют
-        const { setNotificationService: setCatalogNotification } = await import('./user/catalogHandler.js');
-        const { setNotificationService: setTopupNotification } = await import('./user/topupHandler.js');
-        setCatalogNotification(notificationService);
-        setTopupNotification(notificationService);
+        try {
+            const { NotificationService } = await import('../services/notificationService.js');
+            const notificationService = new NotificationService(bot, botUsername);
+            
+            // Сохраняем notificationService в объекте bot, чтобы каждый бот имел свой экземпляр
+            bot.notificationService = notificationService;
+            
+            console.log(`[UserHandlers] NotificationService создан для бота @${botUsername || 'unknown'}`);
+        } catch (error) {
+            console.error(`[UserHandlers] Ошибка при создании NotificationService для бота @${botUsername || 'unknown'}:`, error);
+        }
     })();
 
     // Регистрируем все обработчики из модулей

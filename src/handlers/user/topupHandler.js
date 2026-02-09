@@ -9,11 +9,13 @@ import { getMenuKeyboard } from '../../utils/keyboardHelpers.js';
 // Хранит пользователей, которые вводят сумму пополнения (userId -> methodId)
 export const topupAmountMode = new Map();
 
-// Переменная для notificationService (будет установлена извне)
-let notificationService = null;
-
-export function setNotificationService(service) {
-    notificationService = service;
+/**
+ * Получает notificationService из объекта bot
+ * @param {Object} bot - Экземпляр Telegraf бота
+ * @returns {Object|null} - Экземпляр NotificationService или null
+ */
+function getNotificationService(bot) {
+    return bot?.notificationService || null;
 }
 
 /**
@@ -415,6 +417,7 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
         };
 
         // Отправляем уведомление о выборе реквизита для пополнения баланса
+        const notificationService = getNotificationService(ctx.bot);
         if (notificationService) {
             await notificationService.notifyTopupRequest(ctx.from.id, method.name);
         }
