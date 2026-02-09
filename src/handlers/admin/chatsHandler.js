@@ -188,7 +188,7 @@ export async function showConversation(ctx, userChatId) {
         }
     }
 
-    await ctx.editMessageText(conversationText, {
+    const replyMarkup = {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
@@ -196,5 +196,15 @@ export async function showConversation(ctx, userChatId) {
                 [{ text: '◀️ Назад к чатам', callback_data: 'admin_chats' }]
             ]
         }
-    });
+    };
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(conversationText, replyMarkup);
+        } catch (error) {
+            await ctx.reply(conversationText, replyMarkup);
+        }
+    } else {
+        await ctx.reply(conversationText, replyMarkup);
+    }
 }
