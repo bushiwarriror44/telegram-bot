@@ -30,22 +30,44 @@ const botNotificationServiceMap = new Map();
  * @returns {Object|null} - NotificationService или null
  */
 export function getNotificationServiceFromContext(ctx) {
-    if (!ctx || !ctx.telegram) {
-        console.warn('[UserHandlers] getNotificationServiceFromContext: ctx или ctx.telegram отсутствует');
+    if (!ctx) {
+        console.warn('[UserHandlers] getNotificationServiceFromContext: ctx отсутствует');
         return null;
     }
     
-    const notificationService = botNotificationServiceMap.get(ctx.telegram);
-    if (!notificationService) {
-        console.warn('[UserHandlers] getNotificationServiceFromContext: NotificationService не найден для ctx.telegram');
-        console.log('[UserHandlers] getNotificationServiceFromContext: Доступные ключи в Map:', botNotificationServiceMap.size);
+    // Сначала пробуем получить через ctx.bot (добавлен через middleware)
+    if (ctx.bot && ctx.bot.notificationService) {
+        console.log('[UserHandlers] getNotificationServiceFromContext: ✅ NotificationService найден через ctx.bot');
+        return ctx.bot.notificationService;
     }
     
-    return notificationService || null;
+    // Fallback: пробуем через Map по ctx.telegram
+    if (ctx.telegram) {
+        const notificationService = botNotificationServiceMap.get(ctx.telegram);
+        if (notificationService) {
+            console.log('[UserHandlers] getNotificationServiceFromContext: ✅ NotificationService найден через Map');
+            return notificationService;
+        }
+    }
+    
+    console.warn('[UserHandlers] getNotificationServiceFromContext: ⚠️ NotificationService не найден');
+    console.log('[UserHandlers] getNotificationServiceFromContext: ctx.bot exists:', !!ctx.bot);
+    console.log('[UserHandlers] getNotificationServiceFromContext: ctx.bot.notificationService exists:', !!ctx.bot?.notificationService);
+    console.log('[UserHandlers] getNotificationServiceFromContext: ctx.telegram exists:', !!ctx.telegram);
+    console.log('[UserHandlers] getNotificationServiceFromContext: Доступные ключи в Map:', botNotificationServiceMap.size);
+    
+    return null;
 }
 
 export async function setupUserHandlers(bot, botUsername = null) {
     console.log('[UserHandlers] Настройка пользовательских обработчиков...');
+
+    // Middleware для добавления bot в контекст (чтобы можно было получить bot.notificationService)
+    bot.use(async (ctx, next) => {
+        // Сохраняем bot в контекст для доступа к notificationService
+        ctx.bot = bot;
+        return next();
+    });
 
     // Middleware для проверки блокировки пользователя
     bot.use(async (ctx, next) => {
