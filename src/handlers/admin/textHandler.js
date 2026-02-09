@@ -46,6 +46,7 @@ export function registerTextHandlers(bot) {
         console.log('[AdminHandlers] bot.on(text) вызван для текста:', ctx.message.text, 'User ID:', ctx.from.id, 'Is Admin:', isAdmin(ctx.from.id));
 
         // ВАЖНО: Пропускаем команды для ВСЕХ пользователей, чтобы они обрабатывались через bot.command()
+        // ИСКЛЮЧЕНИЕ: когда админ в режиме ответа (adminReplyMode) и вводит /reply ..., обрабатываем это здесь.
         if (ctx.message.text && ctx.message.text.startsWith('/')) {
             // Обрабатываем только /cancel для админов
             if (ctx.message.text === '/cancel' && isAdmin(ctx.from.id)) {
@@ -84,9 +85,17 @@ export function registerTextHandlers(bot) {
                 await showAdminPanel(ctx);
                 return; // Не передаем дальше, так как команда обработана
             }
-            // Для всех остальных команд передаем управление дальше через next()
-            console.log('[AdminHandlers] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
-            return next(); // Позволяем другим обработчикам (bot.command()) обработать команду
+
+            // Если админ находится в режиме ответа пользователю и ввёл /reply ...,
+            // НЕ передаём команду дальше, а даём обработать её ниже в блоке adminReplyMode.
+            if (isAdmin(ctx.from.id) && adminReplyMode.has(ctx.from.id) && ctx.message.text.startsWith('/reply ')) {
+                console.log('[AdminHandlers] Команда /reply в режиме ответа — обрабатываем в adminReplyMode.');
+                // просто продолжаем выполнение handler'а (НЕ вызываем next здесь)
+            } else {
+                // Для всех остальных команд передаем управление дальше через next()
+                console.log('[AdminHandlers] bot.on(text): Пропуск команды (передаем дальше):', ctx.message.text);
+                return next(); // Позволяем другим обработчикам (bot.command()) обработать команду
+            }
         }
 
         // ВАЖНО: Проверяем капчу ДО проверки админа, чтобы капча обрабатывалась для всех пользователей
