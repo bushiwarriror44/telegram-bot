@@ -276,11 +276,47 @@ export function registerMediaHandlers(bot) {
                     .filter(line => !line.trim().startsWith('--'))
                     .join('\n');
 
-                // Разбиваем на отдельные SQL-команды и выполняем
-                const statements = withoutCommentLines
-                    .split(';')
-                    .map(s => s.trim())
-                    .filter(s => s.length > 0);
+                /**
+                 * Разбивает SQL на команды по ';', не разрывая строковые литералы.
+                 * В SQLite строки в одинарных кавычках, '' — экранированная кавычка.
+                 */
+                function splitSqlStatements(sql) {
+                    const statements = [];
+                    let current = '';
+                    let inSingleQuote = false;
+                    let i = 0;
+                    while (i < sql.length) {
+                        const c = sql[i];
+                        if (inSingleQuote) {
+                            if (c === "'" && sql[i + 1] === "'") {
+                                current += "''";
+                                i += 1;
+                            } else if (c === "'") {
+                                inSingleQuote = false;
+                                current += c;
+                            } else {
+                                current += c;
+                            }
+                        } else {
+                            if (c === "'") {
+                                inSingleQuote = true;
+                                current += c;
+                            } else if (c === ';') {
+                                const st = current.trim();
+                                if (st.length > 0) statements.push(st);
+                                current = '';
+                            } else {
+                                current += c;
+                            }
+                        }
+                        i += 1;
+                    }
+                    const st = current.trim();
+                    if (st.length > 0) statements.push(st);
+                    return statements;
+                }
+
+                const statements = splitSqlStatements(withoutCommentLines);
 
                 let failedCount = 0;
                 const totalStatements = statements.length;
@@ -348,14 +384,25 @@ export function registerMediaHandlers(bot) {
 
                 newDb.close();
 
-                // Переподключаемся к БД
+                // Переподключаемся к БД (тот же файл)
+                console.log('[AdminHandlers] Путь к файлу БД при импорте:', dbPath);
                 await database.reconnect();
+
+                // Проверка: что видит приложение после переподключения
+                try {
+                    const checkCities = await database.get('SELECT COUNT(*) as c FROM cities');
+                    const checkProducts = await database.get('SELECT COUNT(*) as c FROM products');
+                    console.log('[AdminHandlers] После reconnect: городов в БД:', checkCities?.c);
+                    console.log('[AdminHandlers] После reconnect: товаров в БД:', checkProducts?.c);
+                } catch (e) {
+                    console.warn('[AdminHandlers] Проверка после reconnect:', e.message);
+                }
 
                 databaseImportMode.delete(ctx.from.id);
                 await ctx.reply(
                     '✅ <b>База данных успешно загружена!</b>\n\n' +
                     `Резервная копия сохранена: ${backupPath}\n\n` +
-                    '⚠️ Рекомендуется перезапустить бота для применения изменений.',
+                    '⚠️ <b>Обязательно перезапустите всех ботов</b> (например: pm2 restart all), иначе данные могут не отображаться.',
                     { parse_mode: 'HTML' }
                 );
                 await showDataMenu(ctx);
