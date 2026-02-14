@@ -283,6 +283,9 @@ export function registerMediaHandlers(bot) {
                     .filter(s => s.length > 0);
 
                 let failedCount = 0;
+                const totalStatements = statements.length;
+                console.log('[AdminHandlers] Импорт БД: всего SQL-команд к выполнению:', totalStatements);
+
                 for (const statement of statements) {
                     await new Promise((resolve, reject) => {
                         newDb.run(statement, (err) => {
@@ -299,6 +302,49 @@ export function registerMediaHandlers(bot) {
                 if (failedCount > 0) {
                     console.warn('[AdminHandlers] Количество неудачных SQL-команд при импорте:', failedCount);
                 }
+
+                // Подсчёт импортированных записей по основным таблицам
+                const countTable = (tableName) => {
+                    return new Promise((resolve) => {
+                        newDb.get(`SELECT COUNT(*) as c FROM ${tableName}`, (err, row) => {
+                            if (err) {
+                                console.warn('[AdminHandlers] Не удалось подсчитать', tableName, err.message);
+                                resolve(null);
+                            } else {
+                                resolve(row?.c ?? 0);
+                            }
+                        });
+                    });
+                };
+
+                const citiesCount = await countTable('cities');
+                const districtsCount = await countTable('districts');
+                const productsCount = await countTable('products');
+                const packagingsCount = await countTable('packagings');
+                const usersCount = await countTable('users');
+                const ordersCount = await countTable('orders');
+                const paymentMethodsCount = await countTable('payment_methods');
+                const cardAccountsCount = await countTable('card_accounts');
+                const reviewsCount = await countTable('reviews');
+                const settingsCount = await countTable('settings');
+                const promocodesCount = await countTable('promocodes');
+                const supportMessagesCount = await countTable('support_messages');
+
+                console.log('[AdminHandlers] ========== Импорт БД завершён ==========');
+                console.log('[AdminHandlers] Выполнено команд:', totalStatements - failedCount, 'из', totalStatements);
+                console.log('[AdminHandlers] Городов (cities):', citiesCount ?? '—');
+                console.log('[AdminHandlers] Районов (districts):', districtsCount ?? '—');
+                console.log('[AdminHandlers] Товаров (products):', productsCount ?? '—');
+                console.log('[AdminHandlers] Фасовок (packagings):', packagingsCount ?? '—');
+                console.log('[AdminHandlers] Пользователей (users):', usersCount ?? '—');
+                console.log('[AdminHandlers] Заказов (orders):', ordersCount ?? '—');
+                console.log('[AdminHandlers] Способов оплаты (payment_methods):', paymentMethodsCount ?? '—');
+                console.log('[AdminHandlers] Карточных счетов (card_accounts):', cardAccountsCount ?? '—');
+                console.log('[AdminHandlers] Отзывов (reviews):', reviewsCount ?? '—');
+                console.log('[AdminHandlers] Настроек (settings):', settingsCount ?? '—');
+                console.log('[AdminHandlers] Промокодов (promocodes):', promocodesCount ?? '—');
+                console.log('[AdminHandlers] Сообщений поддержки (support_messages):', supportMessagesCount ?? '—');
+                console.log('[AdminHandlers] ==========================================');
 
                 newDb.close();
 
