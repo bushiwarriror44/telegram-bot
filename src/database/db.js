@@ -8,6 +8,16 @@ import { existsSync, mkdirSync } from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * Возвращает абсолютный путь к файлу БД (тот же, что использует Database).
+ * Использовать при импорте БД, чтобы писать в тот же файл, что и приложение.
+ */
+export function getDatabasePath() {
+  return config.dbPath.startsWith('./') || config.dbPath.startsWith('../')
+    ? join(__dirname, '../..', config.dbPath)
+    : config.dbPath;
+}
+
 class Database {
   constructor() {
     console.log('[DB] Конструктор Database: начало');
@@ -19,9 +29,7 @@ class Database {
     }
 
     // Используем абсолютный путь к базе данных
-    const dbPath = config.dbPath.startsWith('./') || config.dbPath.startsWith('../')
-      ? join(__dirname, '../..', config.dbPath)
-      : config.dbPath;
+    const dbPath = getDatabasePath();
     console.log('[DB] Путь к файлу БД:', dbPath);
 
     this.db = new sqlite3.Database(dbPath);
@@ -701,9 +709,7 @@ class Database {
       }
     }
 
-    const dbPath = config.dbPath.startsWith('./') || config.dbPath.startsWith('../')
-      ? join(__dirname, '../..', config.dbPath)
-      : config.dbPath;
+    const dbPath = getDatabasePath();
 
     this.db = new sqlite3.Database(dbPath);
     this.db.get = promisify(this.db.get.bind(this.db));

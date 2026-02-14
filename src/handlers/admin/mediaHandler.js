@@ -3,7 +3,7 @@ import { productService } from '../../services/productService.js';
 import { districtService } from '../../services/districtService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { reviewService } from '../../services/reviewService.js';
-import { database } from '../../database/db.js';
+import { database, getDatabasePath } from '../../database/db.js';
 import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
@@ -245,12 +245,8 @@ export function registerMediaHandlers(bot) {
 
                 await ctx.reply('💾 Создание резервной копии текущей БД...');
 
-                // Создаем резервную копию текущей БД
-                const __filename = fileURLToPath(import.meta.url);
-                const __dirname = dirname(__filename);
-                const dbPath = config.dbPath.startsWith('./') || config.dbPath.startsWith('../')
-                    ? join(__dirname, '../..', config.dbPath)
-                    : config.dbPath;
+                // Путь к БД должен совпадать с путём в db.js, иначе импорт попадёт в другой файл
+                const dbPath = getDatabasePath();
 
                 const backupPath = `${dbPath}.backup_${Date.now()}`;
                 if (existsSync(dbPath)) {
