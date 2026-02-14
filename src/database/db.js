@@ -672,19 +672,35 @@ class Database {
   }
 
   async close() {
+    if (!this.db) {
+      return Promise.resolve();
+    }
     return new Promise((resolve, reject) => {
-      this.db.close((err) => {
-        if (err) reject(err);
-        else resolve();
+      const db = this.db;
+      this.db = null;
+      db.close((err) => {
+        if (err) {
+          if (err.code === 'SQLITE_MISUSE' || (err.message && err.message.includes('closed'))) {
+            resolve();
+          } else {
+            reject(err);
+          }
+        } else {
+          resolve();
+        }
       });
     });
   }
 
   async reconnect() {
-    // Закрываем текущее подключение
-    await this.close();
+    try {
+      await this.close();
+    } catch (err) {
+      if (err.code !== 'SQLITE_MISUSE' && (!err.message || !err.message.includes('closed'))) {
+        throw err;
+      }
+    }
 
-    // Пересоздаем подключение
     const dbPath = config.dbPath.startsWith('./') || config.dbPath.startsWith('../')
       ? join(__dirname, '../..', config.dbPath)
       : config.dbPath;
@@ -693,7 +709,6 @@ class Database {
     this.db.get = promisify(this.db.get.bind(this.db));
     this.db.all = promisify(this.db.all.bind(this.db));
 
-    // Инициализируем БД (создаем таблицы если их нет)
     await this.init();
   }
 }
