@@ -4,7 +4,7 @@ import { districtService } from '../../services/districtService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { reviewService } from '../../services/reviewService.js';
 import { database } from '../../database/db.js';
-import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import sqlite3 from 'sqlite3';
@@ -262,25 +262,42 @@ export function registerMediaHandlers(bot) {
                 // Закрываем текущее подключение к БД
                 await database.close();
 
+                // Удаляем старый файл БД, чтобы импорт создал чистую БД из дампа
+                if (existsSync(dbPath)) {
+                    unlinkSync(dbPath);
+                }
+
                 // Создаем новую БД из SQL файла
                 const newDb = new sqlite3.Database(dbPath);
 
-                // Выполняем SQL команды из файла
-                const statements = sqlContent
+                // Убираем строки-комментарии (-- ...), чтобы блоки с CREATE TABLE не отфильтровывались
+                const lines = sqlContent.split('\n');
+                const withoutCommentLines = lines
+                    .filter(line => !line.trim().startsWith('--'))
+                    .join('\n');
+
+                // Разбиваем на отдельные SQL-команды и выполняем
+                const statements = withoutCommentLines
                     .split(';')
                     .map(s => s.trim())
-                    .filter(s => s.length > 0 && !s.startsWith('--'));
+                    .filter(s => s.length > 0);
 
+                let failedCount = 0;
                 for (const statement of statements) {
                     await new Promise((resolve, reject) => {
                         newDb.run(statement, (err) => {
                             if (err) {
-                                console.error('[AdminHandlers] Ошибка при выполнении SQL:', err);
-                                console.error('[AdminHandlers] SQL:', statement.substring(0, 100));
+                                failedCount++;
+                                console.error('[AdminHandlers] Ошибка при выполнении SQL:', err.message);
+                                console.error('[AdminHandlers] SQL (начало):', statement.substring(0, 120));
                             }
                             resolve();
                         });
                     });
+                }
+
+                if (failedCount > 0) {
+                    console.warn('[AdminHandlers] Количество неудачных SQL-команд при импорте:', failedCount);
                 }
 
                 newDb.close();
