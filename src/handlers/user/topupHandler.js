@@ -3,7 +3,8 @@ import { cardAccountService } from '../../services/cardAccountService.js';
 import { userService } from '../../services/userService.js';
 import { cryptoExchangeService } from '../../services/cryptoExchangeService.js';
 import { getCurrencySymbol } from '../../utils/currencyHelper.js';
-import { generateTXID, generatePaymentRequestText } from '../../utils/textFormatters.js';
+import { generateTXID, generateTopupRequestText } from '../../utils/textFormatters.js';
+import { settingsService } from '../../services/settingsService.js';
 import { getMenuKeyboard } from '../../utils/keyboardHelpers.js';
 import { getNotificationServiceFromContext } from '../userHandlers.js';
 
@@ -370,6 +371,11 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
             console.error('[TopupHandler] Ошибка при обновлении/создании записи о пополнении:', error);
         }
 
+        const markupPercent = await settingsService.getGlobalMarkupPercent();
+        const amountToTransfer = Math.round(amount * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
+        const currencySymbol = await getCurrencySymbol();
+        const amountCreditedText = `${amount.toLocaleString('ru-RU')} ${currencySymbol}`;
+
         let text = '';
         let cryptoAmount = null;
         let cryptoSymbol = '';
@@ -398,13 +404,12 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
                 ? cards[Math.floor(Math.random() * cards.length)]
                 : cardAccount.account_number;
 
-            const currencySymbol = await getCurrencySymbol();
             const txid = topupId ? generateTXID(topupId) : 'None';
-            const amountText = `${amount.toLocaleString('ru-RU')} ${currencySymbol}`;
-            text = generatePaymentRequestText(topupId || 'N/A', txid, amountText, randomCard);
+            const amountToTransferText = `${amountToTransfer.toLocaleString('ru-RU')} ${currencySymbol}`;
+            text = generateTopupRequestText(topupId || 'N/A', txid, amountCreditedText, amountToTransferText, randomCard);
         } else {
-            // Для криптовалюты конвертируем рубли в криптовалюту
-            const conversion = await cryptoExchangeService.convertRublesToCrypto(amount, method.network);
+            // Для криптовалюты конвертируем сумму к переводу (рубли с наценкой) в криптовалюту
+            const conversion = await cryptoExchangeService.convertRublesToCrypto(amountToTransfer, method.network);
 
             if (conversion.error) {
                 await ctx.reply(`❌ Ошибка при конвертации: ${conversion.error}`);
@@ -422,8 +427,8 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
             }
 
             const txid = topupId ? generateTXID(topupId) : 'None';
-            const amountText = `${formattedCryptoAmount} ${cryptoSymbol}`;
-            text = generatePaymentRequestText(topupId || 'N/A', txid, amountText, address.address);
+            const amountToTransferText = `${formattedCryptoAmount} ${cryptoSymbol}`;
+            text = generateTopupRequestText(topupId || 'N/A', txid, amountCreditedText, amountToTransferText, address.address);
         }
 
         // Создаем кнопки согласно изображению

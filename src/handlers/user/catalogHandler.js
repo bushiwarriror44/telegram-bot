@@ -961,10 +961,10 @@ export async function showOrderDetails(ctx, orderId) {
         });
 
         const paymentMethods = await paymentService.getAllMethods();
-        const finalAmount = await getOrderFinalAmount(order);
+        const finalAmountForBalance = Math.round(order.total_price);
         const user = await userService.getByChatId(ctx.from.id);
         const balance = user?.balance ?? 0;
-        const canPayWithBalance = balance >= finalAmount;
+        const canPayWithBalance = balance >= finalAmountForBalance;
 
         if (paymentMethods.length === 0 && !canPayWithBalance) {
             await ctx.reply(
@@ -984,7 +984,7 @@ export async function showOrderDetails(ctx, orderId) {
             { text: method.name, callback_data: `pay_order_${order.id}_${encodeURIComponent(method.id)}` }
         ]);
         if (canPayWithBalance) {
-            keyboard.push([{ text: 'Оплатить с баланса', callback_data: `pay_order_${order.id}_balance_${finalAmount}` }]);
+            keyboard.push([{ text: 'Оплатить с баланса', callback_data: `pay_order_${order.id}_balance_${finalAmountForBalance}` }]);
         }
 
         // Отправляем отдельный блок с выбором способа оплаты

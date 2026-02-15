@@ -125,7 +125,9 @@ export class NotificationService {
 
             const currencySymbol = await settingsService.getCurrencySymbol();
             const markupPercent = await settingsService.getGlobalMarkupPercent();
-            const amountWithMarkup = Math.round(order.total_price * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
+            const amountWithMarkup = paymentMethodName === 'Оплата с баланса'
+                ? Math.round(order.total_price)
+                : Math.round(order.total_price * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
             const botInfo = this.getBotInfo();
             const message = `💳 <b>Выбран способ оплаты</b>${botInfo}\n\n` +
                 `📦 Заказ #95${order.id}73\n` +
