@@ -12,7 +12,7 @@ import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getCurrencySymbol } from '../../utils/currencyHelper.js';
-import { generateTXID, generatePaymentRequestText } from '../../utils/textFormatters.js';
+import { generateTXID, generatePaymentRequestText, generateBalanceDeductionConfirmText } from '../../utils/textFormatters.js';
 import { cardAccountService } from '../../services/cardAccountService.js';
 import { cryptoExchangeService } from '../../services/cryptoExchangeService.js';
 import { formatPackaging } from '../../utils/packagingHelper.js';
@@ -216,13 +216,24 @@ export function registerCatalogHandlers(bot) {
         if (methodId.startsWith('balance_')) {
             const amount = parseInt(methodId.replace('balance_', ''), 10);
             if (!Number.isNaN(amount)) {
-                await handlePayWithBalance(ctx, orderId, amount);
+                await showBalancePaymentConfirmation(ctx, orderId, amount);
             } else {
                 await ctx.reply('Ошибка: неверная сумма.');
             }
         } else {
             await showPaymentAddressForOrder(ctx, orderId, methodId);
         }
+    });
+
+    bot.action(/^confirm_balance_pay_(\d+)_(\d+)$/, async (ctx) => {
+        const orderId = parseInt(ctx.match[1]);
+        const amount = parseInt(ctx.match[2], 10);
+        await handlePayWithBalance(ctx, orderId, amount);
+    });
+
+    bot.action(/^cancel_balance_pay_(\d+)$/, async (ctx) => {
+        const orderId = parseInt(ctx.match[1]);
+        await handleCancelBalancePay(ctx, orderId);
     });
 
     // Обработка просмотра заказа
@@ -908,6 +919,18 @@ export async function showOrderDetails(ctx, orderId) {
             return;
         }
 
+        if (order.status === 'paid' || order.status === 'completed') {
+            await ctx.reply(`Заказ #95${order.id}73 оплачен.`, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад', callback_data: 'my_orders' }]
+                    ]
+                }
+            });
+            return;
+        }
+
         const packagingLabel = order.packaging_value ? ` ${formatPackaging(order.packaging_value, order.packaging_unit)}` : '';
         const promocodeText = order.promocode_code ? order.promocode_code : 'Нет';
         const currencySymbol = await getCurrencySymbol();
@@ -980,7 +1003,46 @@ export async function showOrderDetails(ctx, orderId) {
 }
 
 /**
- * Оплата заказа с баланса
+ * Показ подтверждения списания с баланса (сумма и кнопки ДА/НЕТ)
+ */
+async function showBalancePaymentConfirmation(ctx, orderId, amount) {
+    await ctx.answerCbQuery();
+    const order = await orderService.getById(orderId);
+    if (!order) {
+        await ctx.reply('Заказ не найден.');
+        return;
+    }
+    if (order.user_chat_id !== ctx.from.id) {
+        await ctx.reply('Это не ваш заказ.');
+        return;
+    }
+    const user = await userService.getByChatId(ctx.from.id);
+    const balance = user?.balance ?? 0;
+    if (balance < amount) {
+        const currencySymbol = await getCurrencySymbol();
+        await ctx.reply(
+            `Недостаточно средств на балансе. Требуется ${amount.toLocaleString('ru-RU')} ${currencySymbol}, у вас ${balance.toLocaleString('ru-RU')} ${currencySymbol}.`
+        );
+        return;
+    }
+    const currencySymbol = await getCurrencySymbol();
+    const amountText = `${amount.toLocaleString('ru-RU')} ${currencySymbol}`;
+    const text = generateBalanceDeductionConfirmText(orderId, amountText);
+    await ctx.reply(text, {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [
+                    { text: 'ДА', callback_data: `confirm_balance_pay_${orderId}_${amount}` },
+                    { text: 'НЕТ', callback_data: `cancel_balance_pay_${orderId}` }
+                ]
+            ]
+        }
+    });
+}
+
+/**
+ * Оплата заказа с баланса (после подтверждения ДА)
  */
 async function handlePayWithBalance(ctx, orderId, amount) {
     await ctx.answerCbQuery();
@@ -1008,11 +1070,25 @@ async function handlePayWithBalance(ctx, orderId, amount) {
         return;
     }
     await orderService.updateStatus(orderId, 'paid');
-    await ctx.reply('Спасибо за покупку, один момент ...');
+    await ctx.reply('♻️ Спасибо за покупку, обрабатываем ваш заказ, это может занять немного времени. Один момент ...');
     const notificationService = getNotificationService(ctx);
     if (notificationService) {
         await notificationService.notifyPaymentMethodSelected(orderId, 'Оплата с баланса');
     }
+}
+
+/**
+ * Отмена списания с баланса (кнопка НЕТ)
+ */
+async function handleCancelBalancePay(ctx, orderId) {
+    await ctx.answerCbQuery();
+    await ctx.reply('Списание с баланса отменено.', {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '◀️ Назад', callback_data: 'back_to_cities' }]
+            ]
+        }
+    });
 }
 
 /**

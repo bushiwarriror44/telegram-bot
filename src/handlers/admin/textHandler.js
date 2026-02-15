@@ -718,7 +718,7 @@ export function registerTextHandlers(bot) {
                 try {
                     await bot.telegram.sendMessage(
                         userChatId,
-                        `Новое поступление ${amountStr} рублей, спасибо, что вы с нами!`,
+                        `💸Новое пополнение ${amountStr} рублей, спасибо, что вы с нами!`,
                         { parse_mode: 'HTML' }
                     );
                 } catch (sendErr) {

@@ -45,6 +45,18 @@ export function generatePaymentRequestText(orderId, txid, amountText, paymentDet
 }
 
 /**
+ * Генерирует текст подтверждения списания с баланса (без реквизитов)
+ * @param {number|string} orderId - ID заказа
+ * @param {string} amountText - Текст с суммой (уже отформатированный, например "5 500 ₽")
+ * @returns {string} Отформатированный текст для экрана подтверждения
+ */
+export function generateBalanceDeductionConfirmText(orderId, amountText) {
+    return `<b>Создана заявка #95${orderId}73</b>\n\n` +
+        `С вашего баланса будет списано: <code>${amountText}</code>\n\n` +
+        `Подтверждаете ли вы списание с баланса?`;
+}
+
+/**
  * Форматирует дату в формат "17:42 08.01.2026"
  * @param {string|Date} dateString - Дата для форматирования
  * @returns {string} Отформатированная дата

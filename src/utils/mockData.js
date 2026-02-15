@@ -139,38 +139,8 @@ async function initializeDefaultMenuButtons() {
     return;
   }
 
-  console.log('[MOCK] Инициализация предустановленных кнопок меню...');
-
-  const existingButtons = await menuButtonService.getAll(false);
-
-  // Начальный order_index — максимум из существующих + 1
-  let currentMaxOrder =
-    existingButtons.length > 0
-      ? Math.max(...existingButtons.map((b) => b.order_index || 0))
-      : -1;
-
-  for (const defaultBtn of defaultMenuButtons) {
-    const existing = existingButtons.find((b) => b.name === defaultBtn.name);
-    if (!existing) {
-      currentMaxOrder += 1;
-      await menuButtonService.create(
-        defaultBtn.name,
-        defaultBtn.message,
-        currentMaxOrder
-      );
-      console.log(`[MOCK] Создана кнопка меню: ${defaultBtn.name}`);
-      existingButtons.push({
-        name: defaultBtn.name,
-        message: defaultBtn.message,
-        order_index: currentMaxOrder
-      });
-    } else {
-      console.log(`[MOCK] Кнопка меню уже существует: ${defaultBtn.name}`);
-    }
-  }
-
   await settingsService.set(DEFAULT_MENU_BUTTONS_SEEDED_KEY, '1');
-  console.log('[MOCK] Начальная инициализация кнопок меню выполнена.');
+  console.log('[MOCK] Дефолтные кнопки меню отключены, создание не выполняется.');
 }
 
 export async function initializeMockData() {
