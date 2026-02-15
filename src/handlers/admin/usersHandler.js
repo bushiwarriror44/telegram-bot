@@ -7,6 +7,9 @@ export const adminMessageUserMode = new Map();
 // Хранит режим зачисления средств на баланс (adminId -> userChatId)
 export const adminAddBalanceMode = new Map();
 
+const USERS_PER_PAGE_LIST = 15;
+const USERS_PER_PAGE_SELECT = 10;
+
 /**
  * Регистрирует обработчики управления пользователями
  * @param {Object} bot - Экземпляр Telegraf бота
@@ -24,12 +27,24 @@ export function registerUsersHandlers(bot) {
 
     bot.action('admin_user_block', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
-        await showBlockUserMenu(ctx);
+        await showBlockUserMenu(ctx, 0);
+    });
+
+    bot.action(/^admin_user_block_page_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const page = parseInt(ctx.match[1], 10);
+        await showBlockUserMenu(ctx, page);
     });
 
     bot.action('admin_user_unblock', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
-        await showUnblockUserMenu(ctx);
+        await showUnblockUserMenu(ctx, 0);
+    });
+
+    bot.action(/^admin_user_unblock_page_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const page = parseInt(ctx.match[1], 10);
+        await showUnblockUserMenu(ctx, page);
     });
 
     bot.action(/^admin_user_block_(\d+)$/, async (ctx) => {
@@ -46,12 +61,24 @@ export function registerUsersHandlers(bot) {
 
     bot.action('admin_users_list', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
-        await showUsersList(ctx);
+        await showUsersList(ctx, 0);
+    });
+
+    bot.action(/^admin_users_list_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const page = parseInt(ctx.match[1], 10);
+        await showUsersList(ctx, page);
     });
 
     bot.action('admin_user_message', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
-        await showMessageUserMenu(ctx);
+        await showMessageUserMenu(ctx, 0);
+    });
+
+    bot.action(/^admin_user_message_page_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const page = parseInt(ctx.match[1], 10);
+        await showMessageUserMenu(ctx, page);
     });
 
     bot.action(/^admin_message_user_(\d+)$/, async (ctx) => {
@@ -62,7 +89,13 @@ export function registerUsersHandlers(bot) {
 
     bot.action('admin_add_balance', async (ctx) => {
         if (!isAdmin(ctx.from.id)) return;
-        await showAddBalanceUserList(ctx);
+        await showAddBalanceUserList(ctx, 0);
+    });
+
+    bot.action(/^admin_add_balance_page_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const page = parseInt(ctx.match[1], 10);
+        await showAddBalanceUserList(ctx, page);
     });
 
     bot.action(/^admin_add_balance_(\d+)$/, async (ctx) => {
@@ -133,9 +166,9 @@ export async function showUsersAdmin(ctx) {
 }
 
 /**
- * Показ списка всех пользователей
+ * Показ списка всех пользователей (с пагинацией)
  */
-export async function showUsersList(ctx) {
+export async function showUsersList(ctx, page = 0) {
     if (!isAdmin(ctx.from.id)) return;
 
     const users = await userService.getAllUsersWithInfo();
@@ -145,8 +178,11 @@ export async function showUsersList(ctx) {
         return;
     }
 
-    // Показываем первые 50 пользователей
-    const usersList = users.slice(0, 50);
+    const totalPages = Math.max(1, Math.ceil(users.length / USERS_PER_PAGE_LIST));
+    const safePage = Math.max(0, Math.min(page, totalPages - 1));
+    const start = safePage * USERS_PER_PAGE_LIST;
+    const usersList = users.slice(start, start + USERS_PER_PAGE_LIST);
+
     let text = `📋 <b>Список пользователей (${users.length})</b>\n\n`;
 
     usersList.forEach((user, index) => {
@@ -155,16 +191,22 @@ export async function showUsersList(ctx) {
         const lastActive = user.last_active
             ? new Date(user.last_active).toLocaleDateString('ru-RU')
             : 'Никогда';
-        text += `${index + 1}. ${userName} (${user.chat_id}) - ${status}\n`;
+        text += `${start + index + 1}. ${userName} (${user.chat_id}) - ${status}\n`;
         text += `   Последняя активность: ${lastActive}\n\n`;
     });
 
-    if (users.length > 50) {
-        text += `\n<i>Показано 50 из ${users.length} пользователей</i>`;
-    }
+    text += `\n<i>Стр. ${safePage + 1} из ${totalPages}</i>`;
 
+    const navRow = [];
+    if (safePage > 0) {
+        navRow.push({ text: '◀ Пред', callback_data: `admin_users_list_${safePage - 1}` });
+    }
+    if (safePage < totalPages - 1) {
+        navRow.push({ text: 'След ▶', callback_data: `admin_users_list_${safePage + 1}` });
+    }
     const keyboard = {
         inline_keyboard: [
+            ...(navRow.length > 0 ? [navRow] : []),
             [{ text: '◀️ Назад', callback_data: 'admin_users' }]
         ]
     };
@@ -183,9 +225,9 @@ export async function showUsersList(ctx) {
 }
 
 /**
- * Показ меню блокировки пользователя
+ * Показ меню блокировки пользователя (с пагинацией)
  */
-export async function showBlockUserMenu(ctx) {
+export async function showBlockUserMenu(ctx, page = 0) {
     if (!isAdmin(ctx.from.id)) {
         if (ctx.callbackQuery) {
             await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
@@ -203,17 +245,29 @@ export async function showBlockUserMenu(ctx) {
         return;
     }
 
-    // Показываем первые 50 активных пользователей
-    const usersList = activeUsers.slice(0, 50);
+    const totalPages = Math.max(1, Math.ceil(activeUsers.length / USERS_PER_PAGE_SELECT));
+    const safePage = Math.max(0, Math.min(page, totalPages - 1));
+    const usersList = activeUsers.slice(safePage * USERS_PER_PAGE_SELECT, (safePage + 1) * USERS_PER_PAGE_SELECT);
+
     const keyboard = usersList.map(user => {
         const userName = user.first_name || user.username || `ID: ${user.chat_id}`;
         return [{ text: `🚫 ${userName} (${user.chat_id})`, callback_data: `admin_user_block_${user.chat_id}` }];
     });
+
+    const navRow = [];
+    if (safePage > 0) {
+        navRow.push({ text: '◀ Пред', callback_data: `admin_user_block_page_${safePage - 1}` });
+    }
+    if (safePage < totalPages - 1) {
+        navRow.push({ text: 'След ▶', callback_data: `admin_user_block_page_${safePage + 1}` });
+    }
+    if (navRow.length > 0) {
+        keyboard.push(navRow);
+    }
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_users' }]);
 
     const text = `🚫 <b>Заблокировать пользователя</b>\n\n` +
-        `Выберите пользователя для блокировки:\n` +
-        `(Показано ${usersList.length} из ${activeUsers.length} активных пользователей)`;
+        `Выберите пользователя для блокировки (стр. ${safePage + 1} из ${totalPages}):`;
 
     try {
         await ctx.editMessageText(text, {
@@ -229,9 +283,9 @@ export async function showBlockUserMenu(ctx) {
 }
 
 /**
- * Показ меню разблокировки пользователя
+ * Показ меню разблокировки пользователя (с пагинацией)
  */
-export async function showUnblockUserMenu(ctx) {
+export async function showUnblockUserMenu(ctx, page = 0) {
     if (!isAdmin(ctx.from.id)) {
         if (ctx.callbackQuery) {
             await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
@@ -249,17 +303,29 @@ export async function showUnblockUserMenu(ctx) {
         return;
     }
 
-    // Показываем первые 50 заблокированных пользователей
-    const usersList = blockedUsers.slice(0, 50);
+    const totalPages = Math.max(1, Math.ceil(blockedUsers.length / USERS_PER_PAGE_SELECT));
+    const safePage = Math.max(0, Math.min(page, totalPages - 1));
+    const usersList = blockedUsers.slice(safePage * USERS_PER_PAGE_SELECT, (safePage + 1) * USERS_PER_PAGE_SELECT);
+
     const keyboard = usersList.map(user => {
         const userName = user.first_name || user.username || `ID: ${user.chat_id}`;
         return [{ text: `✅ ${userName} (${user.chat_id})`, callback_data: `admin_user_unblock_${user.chat_id}` }];
     });
+
+    const navRow = [];
+    if (safePage > 0) {
+        navRow.push({ text: '◀ Пред', callback_data: `admin_user_unblock_page_${safePage - 1}` });
+    }
+    if (safePage < totalPages - 1) {
+        navRow.push({ text: 'След ▶', callback_data: `admin_user_unblock_page_${safePage + 1}` });
+    }
+    if (navRow.length > 0) {
+        keyboard.push(navRow);
+    }
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_users' }]);
 
     const text = `✅ <b>Разблокировать пользователя</b>\n\n` +
-        `Выберите пользователя для разблокировки:\n` +
-        `(Показано ${usersList.length} из ${blockedUsers.length} заблокированных пользователей)`;
+        `Выберите пользователя для разблокировки (стр. ${safePage + 1} из ${totalPages}):`;
 
     try {
         await ctx.editMessageText(text, {
@@ -301,9 +367,9 @@ export async function unblockUser(ctx, userChatId) {
 }
 
 /**
- * Показ меню выбора пользователя для отправки сообщения
+ * Показ меню выбора пользователя для отправки сообщения (с пагинацией)
  */
-export async function showMessageUserMenu(ctx) {
+export async function showMessageUserMenu(ctx, page = 0) {
     if (!isAdmin(ctx.from.id)) {
         if (ctx.callbackQuery) {
             await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
@@ -320,18 +386,30 @@ export async function showMessageUserMenu(ctx) {
         return;
     }
 
-    // Показываем первые 50 пользователей
-    const usersList = users.slice(0, 50);
+    const totalPages = Math.max(1, Math.ceil(users.length / USERS_PER_PAGE_SELECT));
+    const safePage = Math.max(0, Math.min(page, totalPages - 1));
+    const usersList = users.slice(safePage * USERS_PER_PAGE_SELECT, (safePage + 1) * USERS_PER_PAGE_SELECT);
+
     const keyboard = usersList.map(user => {
         const userName = user.first_name || user.username || `ID: ${user.chat_id}`;
         const status = user.blocked === 1 ? '🚫' : '✅';
         return [{ text: `${status} ${userName} (${user.chat_id})`, callback_data: `admin_message_user_${user.chat_id}` }];
     });
+
+    const navRow = [];
+    if (safePage > 0) {
+        navRow.push({ text: '◀ Пред', callback_data: `admin_user_message_page_${safePage - 1}` });
+    }
+    if (safePage < totalPages - 1) {
+        navRow.push({ text: 'След ▶', callback_data: `admin_user_message_page_${safePage + 1}` });
+    }
+    if (navRow.length > 0) {
+        keyboard.push(navRow);
+    }
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_users' }]);
 
     const text = `✉️ <b>Написать пользователю</b>\n\n` +
-        `Выберите пользователя для отправки сообщения:\n` +
-        `(Показано ${usersList.length} из ${users.length} пользователей)`;
+        `Выберите пользователя для отправки сообщения (стр. ${safePage + 1} из ${totalPages}):`;
 
     try {
         await ctx.editMessageText(text, {
@@ -383,9 +461,9 @@ export async function selectUserForMessage(ctx, userChatId) {
 }
 
 /**
- * Показ списка пользователей для зачисления средств
+ * Показ списка пользователей для зачисления средств (с пагинацией)
  */
-export async function showAddBalanceUserList(ctx) {
+export async function showAddBalanceUserList(ctx, page = 0) {
     if (!isAdmin(ctx.from.id)) {
         if (ctx.callbackQuery) {
             await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
@@ -402,18 +480,31 @@ export async function showAddBalanceUserList(ctx) {
         return;
     }
 
-    const usersList = users.slice(0, 50);
+    const totalPages = Math.max(1, Math.ceil(users.length / USERS_PER_PAGE_SELECT));
+    const safePage = Math.max(0, Math.min(page, totalPages - 1));
+    const usersList = users.slice(safePage * USERS_PER_PAGE_SELECT, (safePage + 1) * USERS_PER_PAGE_SELECT);
+
     const keyboard = usersList.map(user => {
         const userName = user.first_name || user.username || `ID: ${user.chat_id}`;
         const status = user.blocked === 1 ? '🚫' : '✅';
         const balance = (user.balance ?? 0).toFixed(2);
         return [{ text: `${status} ${userName} (${user.chat_id}) — ${balance}`, callback_data: `admin_add_balance_${user.chat_id}` }];
     });
+
+    const navRow = [];
+    if (safePage > 0) {
+        navRow.push({ text: '◀ Пред', callback_data: `admin_add_balance_page_${safePage - 1}` });
+    }
+    if (safePage < totalPages - 1) {
+        navRow.push({ text: 'След ▶', callback_data: `admin_add_balance_page_${safePage + 1}` });
+    }
+    if (navRow.length > 0) {
+        keyboard.push(navRow);
+    }
     keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_users' }]);
 
     const text = `💰 <b>Добавить средства</b>\n\n` +
-        `Выберите пользователя для зачисления:\n` +
-        `(Показано ${usersList.length} из ${users.length} пользователей)`;
+        `Выберите пользователя для зачисления (стр. ${safePage + 1} из ${totalPages}):`;
 
     try {
         await ctx.editMessageText(text, {
