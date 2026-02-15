@@ -98,6 +98,27 @@ export class UserService {
     const user = await this.getByChatId(chatId);
     return user?.blocked === 1;
   }
+
+  /**
+   * Добавляет (или вычитает при отрицательном amount) средства на баланс пользователя
+   */
+  async addBalance(chatId, amount) {
+    await database.run(
+      'UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE chat_id = ?',
+      [amount, chatId]
+    );
+  }
+
+  /**
+   * Списывает сумму с баланса. Возвращает true при успехе, false если недостаточно средств.
+   */
+  async deductBalance(chatId, amount) {
+    const result = await database.run(
+      'UPDATE users SET balance = balance - ? WHERE chat_id = ? AND COALESCE(balance, 0) >= ?',
+      [amount, chatId, amount]
+    );
+    return (result?.changes ?? 0) > 0;
+  }
 }
 
 export const userService = new UserService();

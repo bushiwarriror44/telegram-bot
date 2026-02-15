@@ -6,6 +6,7 @@ import { packagingService } from '../services/packagingService.js';
 import { cardAccountService } from '../services/cardAccountService.js';
 import { menuButtonService } from '../services/menuButtonService.js';
 import { reviewService } from '../services/reviewService.js';
+import { settingsService } from '../services/settingsService.js';
 
 const mockCities = [
   'Москва',
@@ -129,7 +130,15 @@ const defaultMenuButtons = [
   { name: 'Инфо-канал', message: 'Наш информационный канал: @info_channel' }
 ];
 
+const DEFAULT_MENU_BUTTONS_SEEDED_KEY = 'default_menu_buttons_seeded';
+
 async function initializeDefaultMenuButtons() {
+  const alreadySeeded = await settingsService.get(DEFAULT_MENU_BUTTONS_SEEDED_KEY);
+  if (alreadySeeded === '1') {
+    console.log('[MOCK] Начальная инициализация кнопок меню уже выполнялась, пропуск.');
+    return;
+  }
+
   console.log('[MOCK] Инициализация предустановленных кнопок меню...');
 
   const existingButtons = await menuButtonService.getAll(false);
@@ -159,6 +168,9 @@ async function initializeDefaultMenuButtons() {
       console.log(`[MOCK] Кнопка меню уже существует: ${defaultBtn.name}`);
     }
   }
+
+  await settingsService.set(DEFAULT_MENU_BUTTONS_SEEDED_KEY, '1');
+  console.log('[MOCK] Начальная инициализация кнопок меню выполнена.');
 }
 
 export async function initializeMockData() {

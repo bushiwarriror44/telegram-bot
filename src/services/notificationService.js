@@ -83,6 +83,8 @@ export class NotificationService {
             // Получаем время на оплату из настроек
             const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes();
             const currencySymbol = await settingsService.getCurrencySymbol();
+            const markupPercent = await settingsService.getGlobalMarkupPercent();
+            const amountWithMarkup = Math.round(order.total_price * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
             const botInfo = this.getBotInfo();
             console.log('[NotificationService] notifyOrderCreated: Bot info:', botInfo || 'empty');
             
@@ -95,7 +97,7 @@ export class NotificationService {
                 `📦 Заказ #95${order.id}73\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `📦 Товар: ${order.product_name}${packagingText}\n` +
-                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ${currencySymbol}\n` +
+                `💰 Сумма: ${amountWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}\n` +
                 `📍 Город: ${order.city_name}, Район: ${order.district_name}\n` +
                 `⏰ Время на оплату: ${paymentTimeMinutes} минут\n` +
                 `📅 Дата: ${new Date(order.created_at).toLocaleString('ru-RU')}\n\n` +
@@ -122,12 +124,14 @@ export class NotificationService {
             const name = user?.first_name || 'Неизвестно';
 
             const currencySymbol = await settingsService.getCurrencySymbol();
+            const markupPercent = await settingsService.getGlobalMarkupPercent();
+            const amountWithMarkup = Math.round(order.total_price * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
             const botInfo = this.getBotInfo();
             const message = `💳 <b>Выбран способ оплаты</b>${botInfo}\n\n` +
-                `📦 Заказ #${order.id}\n` +
+                `📦 Заказ #95${order.id}73\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `💳 Способ оплаты: ${paymentMethodName}\n` +
-                `💰 Сумма: ${order.total_price.toLocaleString('ru-RU')} ${currencySymbol}\n\n` +
+                `💰 Сумма: ${amountWithMarkup.toLocaleString('ru-RU')} ${currencySymbol}\n\n` +
                 `📊 Статус: <b>Переход к оплате</b>`;
 
             await this.sendToChannel(message);

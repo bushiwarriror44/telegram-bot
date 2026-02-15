@@ -823,8 +823,9 @@ export async function showDistrictProductsAdmin(ctx, districtId, page = 0) {
 📦 <b>Товары в районе: ${district.name} (${city.name})</b>${totalPages > 1 ? `\n📄 Страница ${currentPage + 1} из ${totalPages}` : ''}
 
 ${pageItems.map(p => {
-        const packagingLabel = p.packaging_value ? ` (${formatPackaging(p.packaging_value, p.packaging_unit)})` : '';
-        return `• ${p.name}${packagingLabel} - ${p.price} ${currencySymbol}`;
+        const packagingPart = p.packaging_value ? ` (${formatPackaging(p.packaging_value, p.packaging_unit)})` : '';
+        const decorPart = p.packaging_label ? ` ${p.packaging_label}` : '';
+        return `• ${p.name}${packagingPart}${decorPart} - ${p.price} ${currencySymbol}`;
     }).join('\n') || 'Товаров пока нет'}
     `.trim();
 

@@ -213,7 +213,16 @@ export function registerCatalogHandlers(bot) {
     bot.action(/^pay_order_(\d+)_(.+)$/, async (ctx) => {
         const orderId = parseInt(ctx.match[1]);
         const methodId = decodeURIComponent(ctx.match[2]);
-        await showPaymentAddressForOrder(ctx, orderId, methodId);
+        if (methodId.startsWith('balance_')) {
+            const amount = parseInt(methodId.replace('balance_', ''), 10);
+            if (!Number.isNaN(amount)) {
+                await handlePayWithBalance(ctx, orderId, amount);
+            } else {
+                await ctx.reply('Ошибка: неверная сумма.');
+            }
+        } else {
+            await showPaymentAddressForOrder(ctx, orderId, methodId);
+        }
     });
 
     // Обработка просмотра заказа
@@ -879,6 +888,16 @@ export async function createOrder(ctx, productId, promocodeId = null) {
 }
 
 /**
+ * Итоговая сумма заказа с наценкой и случайным отклонением (как при выдаче реквизитов)
+ */
+async function getOrderFinalAmount(order) {
+    const markupPercent = await settingsService.getGlobalMarkupPercent();
+    const exactAmount = Math.round(order.total_price * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
+    const deviation = 1 + Math.floor(Math.random() * 100);
+    return exactAmount + deviation;
+}
+
+/**
  * Показ деталей заказа
  */
 export async function showOrderDetails(ctx, orderId) {
@@ -919,7 +938,12 @@ export async function showOrderDetails(ctx, orderId) {
         });
 
         const paymentMethods = await paymentService.getAllMethods();
-        if (paymentMethods.length === 0) {
+        const finalAmount = await getOrderFinalAmount(order);
+        const user = await userService.getByChatId(ctx.from.id);
+        const balance = user?.balance ?? 0;
+        const canPayWithBalance = balance >= finalAmount;
+
+        if (paymentMethods.length === 0 && !canPayWithBalance) {
             await ctx.reply(
                 '❌ Методы оплаты пока не настроены. Обратитесь к администратору.',
                 {
@@ -936,6 +960,9 @@ export async function showOrderDetails(ctx, orderId) {
         const keyboard = paymentMethods.map(method => [
             { text: method.name, callback_data: `pay_order_${order.id}_${encodeURIComponent(method.id)}` }
         ]);
+        if (canPayWithBalance) {
+            keyboard.push([{ text: 'Оплатить с баланса', callback_data: `pay_order_${order.id}_balance_${finalAmount}` }]);
+        }
 
         // Отправляем отдельный блок с выбором способа оплаты
         await ctx.reply(
@@ -949,6 +976,42 @@ export async function showOrderDetails(ctx, orderId) {
     } catch (error) {
         console.error('[CatalogHandler] Ошибка при показе деталей заказа:', error);
         await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+}
+
+/**
+ * Оплата заказа с баланса
+ */
+async function handlePayWithBalance(ctx, orderId, amount) {
+    await ctx.answerCbQuery();
+    const order = await orderService.getById(orderId);
+    if (!order) {
+        await ctx.reply('Заказ не найден.');
+        return;
+    }
+    if (order.user_chat_id !== ctx.from.id) {
+        await ctx.reply('Это не ваш заказ.');
+        return;
+    }
+    const user = await userService.getByChatId(ctx.from.id);
+    const balance = user?.balance ?? 0;
+    if (balance < amount) {
+        const currencySymbol = await getCurrencySymbol();
+        await ctx.reply(
+            `Недостаточно средств на балансе. Требуется ${amount.toLocaleString('ru-RU')} ${currencySymbol}, у вас ${balance.toLocaleString('ru-RU')} ${currencySymbol}.`
+        );
+        return;
+    }
+    const deducted = await userService.deductBalance(ctx.from.id, amount);
+    if (!deducted) {
+        await ctx.reply('Не удалось списать средства. Попробуйте позже.');
+        return;
+    }
+    await orderService.updateStatus(orderId, 'paid');
+    await ctx.reply('Спасибо за покупку, один момент ...');
+    const notificationService = getNotificationService(ctx);
+    if (notificationService) {
+        await notificationService.notifyPaymentMethodSelected(orderId, 'Оплата с баланса');
     }
 }
 
@@ -999,9 +1062,11 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     // Получаем глобальную наценку (комиссию) в процентах
     const markupPercent = await settingsService.getGlobalMarkupPercent();
 
-    // Итоговая сумма с учетом наценки
+    // Итоговая сумма с учетом наценки + небольшое случайное отклонение (1–100 руб.)
     const baseAmount = order.total_price;
-    const finalAmount = Math.round(baseAmount * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
+    const exactAmount = Math.round(baseAmount * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
+    const deviation = 1 + Math.floor(Math.random() * 100);
+    const finalAmount = exactAmount + deviation;
 
     // Для карточных методов используем карточные счета, для криптовалют - адреса
     let paymentDetails = '';

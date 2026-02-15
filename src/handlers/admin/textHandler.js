@@ -24,7 +24,8 @@ import { reviewCreateMode } from './reviewsHandler.js';
 import { importPaymentMode, importProductMode, databaseImportMode, showDataMenu } from './dataHandler.js';
 import { adminReplyMode } from './chatsHandler.js';
 import { showConversation } from './chatsHandler.js';
-import { adminMessageUserMode } from './usersHandler.js';
+import { adminMessageUserMode, adminAddBalanceMode, showUsersAdmin } from './usersHandler.js';
+import { userService } from '../../services/userService.js';
 import { channelBindMode } from './panelHandler.js';
 import { reviewImportMode, reviewDisplayCountEditMode, showReviewsAdmin } from './reviewsHandler.js';
 import { productImageUploadMode, productPackagingEditMode, predefinedProductSelectMode, predefinedProductCityMode, predefinedProductDistrictMode, predefinedProductAddMode, predefinedProductAddSource, predefinedPlacementMode, predefinedPlacementState, showDistrictsForPredefinedProduct, placePredefinedProduct, showPredefinedProducts, showPredefinedProductsManagement } from './productsHandler.js';
@@ -55,6 +56,7 @@ export function registerTextHandlers(bot) {
                 importProductMode.delete(ctx.from.id);
                 adminReplyMode.delete(ctx.from.id);
                 adminMessageUserMode.delete(ctx.from.id);
+                adminAddBalanceMode.delete(ctx.from.id);
                 welcomeEditMode.delete(ctx.from.id);
                 iconEditMode.delete(ctx.from.id);
                 databaseImportMode.delete(ctx.from.id);
@@ -405,7 +407,7 @@ export function registerTextHandlers(bot) {
                     menuButtonEditMode.delete(ctx.from.id);
                     await ctx.reply(`✅ Кнопка "${name}" успешно добавлена!`);
                 } else if (editData.mode === 'edit' && editData.id) {
-                    await menuButtonService.update(editData.id, name, message);
+                    await menuButtonService.update(editData.id, { name, message });
                     menuButtonEditMode.delete(ctx.from.id);
                     await ctx.reply(`✅ Кнопка "${name}" успешно обновлена!`);
                 }
@@ -689,6 +691,46 @@ export function registerTextHandlers(bot) {
                 await ctx.reply(`❌ Ошибка: ${error.message}`);
             }
             return; // Явно указываем, что сообщение обработано
+        }
+
+        // Режим зачисления средств на баланс пользователя
+        if (adminAddBalanceMode.has(ctx.from.id)) {
+            const userChatId = adminAddBalanceMode.get(ctx.from.id);
+            const text = ctx.message.text?.trim() || '';
+
+            if (text === '/cancel') {
+                adminAddBalanceMode.delete(ctx.from.id);
+                await ctx.reply('❌ Операция отменена.');
+                await showUsersAdmin(ctx);
+                return;
+            }
+
+            const amount = parseFloat(text.replace(/,/, '.'));
+            if (Number.isNaN(amount) || amount <= 0) {
+                await ctx.reply('❌ Введите положительное число (сумму в рублях).');
+                return;
+            }
+
+            try {
+                await userService.addBalance(userChatId, amount);
+                adminAddBalanceMode.delete(ctx.from.id);
+                const amountStr = Math.round(amount) === amount ? String(Math.round(amount)) : amount.toFixed(2);
+                try {
+                    await bot.telegram.sendMessage(
+                        userChatId,
+                        `Новое поступление ${amountStr} рублей, спасибо, что вы с нами!`,
+                        { parse_mode: 'HTML' }
+                    );
+                } catch (sendErr) {
+                    console.error('[AdminHandlers] Ошибка отправки уведомления пользователю:', sendErr);
+                }
+                await ctx.reply('✅ Средства зачислены.');
+                await showUsersAdmin(ctx);
+            } catch (error) {
+                console.error('[AdminHandlers] Ошибка при зачислении средств:', error);
+                await ctx.reply(`❌ Ошибка: ${error.message}`);
+            }
+            return;
         }
 
         // Проверяем, находится ли администратор в режиме ответа

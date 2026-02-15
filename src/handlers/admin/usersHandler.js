@@ -4,6 +4,9 @@ import { isAdmin } from './authHandler.js';
 // Хранит режим отправки сообщения пользователю (adminId -> userChatId)
 export const adminMessageUserMode = new Map();
 
+// Хранит режим зачисления средств на баланс (adminId -> userChatId)
+export const adminAddBalanceMode = new Map();
+
 /**
  * Регистрирует обработчики управления пользователями
  * @param {Object} bot - Экземпляр Telegraf бота
@@ -56,6 +59,17 @@ export function registerUsersHandlers(bot) {
         const userChatId = parseInt(ctx.match[1]);
         await selectUserForMessage(ctx, userChatId);
     });
+
+    bot.action('admin_add_balance', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        await showAddBalanceUserList(ctx);
+    });
+
+    bot.action(/^admin_add_balance_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return;
+        const userChatId = parseInt(ctx.match[1]);
+        await selectUserForAddBalance(ctx, userChatId);
+    });
 }
 
 /**
@@ -91,6 +105,7 @@ export async function showUsersAdmin(ctx) {
         inline_keyboard: [
             [{ text: '📋 Список всех пользователей', callback_data: 'admin_users_list' }],
             [{ text: '✉️ Написать пользователю', callback_data: 'admin_user_message' }],
+            [{ text: '💰 Добавить средства', callback_data: 'admin_add_balance' }],
             [{ text: '🚫 Заблокировать пользователя', callback_data: 'admin_user_block' }],
             [{ text: '✅ Разблокировать пользователя', callback_data: 'admin_user_unblock' }],
             [{ text: '◀️ Назад', callback_data: 'admin_panel' }]
@@ -365,4 +380,92 @@ export async function selectUserForMessage(ctx, userChatId) {
             }
         }
     );
+}
+
+/**
+ * Показ списка пользователей для зачисления средств
+ */
+export async function showAddBalanceUserList(ctx) {
+    if (!isAdmin(ctx.from.id)) {
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText('❌ У вас нет доступа к админ-панели.');
+        } else {
+            await ctx.reply('❌ У вас нет доступа к админ-панели.');
+        }
+        return;
+    }
+
+    const users = await userService.getAllUsersWithInfo();
+
+    if (users.length === 0) {
+        await ctx.editMessageText('Нет зарегистрированных пользователей.');
+        return;
+    }
+
+    const usersList = users.slice(0, 50);
+    const keyboard = usersList.map(user => {
+        const userName = user.first_name || user.username || `ID: ${user.chat_id}`;
+        const status = user.blocked === 1 ? '🚫' : '✅';
+        const balance = (user.balance ?? 0).toFixed(2);
+        return [{ text: `${status} ${userName} (${user.chat_id}) — ${balance}`, callback_data: `admin_add_balance_${user.chat_id}` }];
+    });
+    keyboard.push([{ text: '◀️ Назад', callback_data: 'admin_users' }]);
+
+    const text = `💰 <b>Добавить средства</b>\n\n` +
+        `Выберите пользователя для зачисления:\n` +
+        `(Показано ${usersList.length} из ${users.length} пользователей)`;
+
+    try {
+        await ctx.editMessageText(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    } catch (error) {
+        await ctx.reply(text, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    }
+}
+
+/**
+ * Выбор пользователя для зачисления средств
+ */
+export async function selectUserForAddBalance(ctx, userChatId) {
+    if (!isAdmin(ctx.from.id)) return;
+
+    const user = await userService.getByChatId(userChatId);
+    if (!user) {
+        await ctx.answerCbQuery('Пользователь не найден');
+        return;
+    }
+
+    adminAddBalanceMode.set(ctx.from.id, userChatId);
+
+    const userName = user.first_name || user.username || `ID: ${userChatId}`;
+    const status = user.blocked === 1 ? '🚫 Заблокирован' : '✅ Активен';
+
+    await ctx.answerCbQuery();
+    try {
+        await ctx.editMessageText(
+            `💰 <b>Добавить средства</b>\n\n` +
+            `Пользователь: <b>${userName}</b> (${userChatId})\n` +
+            `Статус: ${status}\n\n` +
+            `Введите сумму в рублях для зачисления:\n\n` +
+            `Или отправьте /cancel для отмены.`,
+            {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '◀️ Назад', callback_data: 'admin_add_balance' }]
+                    ]
+                }
+            }
+        );
+    } catch (error) {
+        await ctx.reply(
+            `💰 Пользователь: <b>${userName}</b> (${userChatId}). Введите сумму в рублях для зачисления или /cancel для отмены.`,
+            { parse_mode: 'HTML' }
+        );
+    }
 }
