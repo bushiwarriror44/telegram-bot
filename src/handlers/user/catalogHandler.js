@@ -273,7 +273,6 @@ export function registerCatalogHandlers(bot) {
         await ctx.answerCbQuery();
         const orderId = parseInt(ctx.match[1]);
         const order = await orderService.getById(orderId);
-
         if (!order) {
             await ctx.reply('❌ Заказ не найден.');
             return;
@@ -291,7 +290,13 @@ export function registerCatalogHandlers(bot) {
             return;
         }
 
-        // Показываем стандартный блок с возможностью оплаты заказа
+        // Если для активного заказа уже выбран способ оплаты, сразу показываем реквизиты
+        if (order.payment_method_id && order.status === 'pending') {
+            await showPaymentAddressForOrder(ctx, orderId, order.payment_method_id);
+            return;
+        }
+
+        // В остальных случаях показываем стандартный блок с возможностью выбора способа оплаты
         await showOrderDetails(ctx, orderId);
     });
 
@@ -959,6 +964,12 @@ export async function showOrderDetails(ctx, orderId) {
         await ctx.reply(text, {
             parse_mode: 'HTML'
         });
+
+        // Если способ оплаты уже был выбран для активного заказа, повторно показываем реквизиты именно по нему
+        if (order.payment_method_id && order.status === 'pending') {
+            await showPaymentAddressForOrder(ctx, order.id, order.payment_method_id);
+            return;
+        }
 
         const paymentMethods = await paymentService.getAllMethods();
         const finalAmountForBalance = Math.round(order.total_price);
