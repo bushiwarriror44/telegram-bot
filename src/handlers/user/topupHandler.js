@@ -39,6 +39,30 @@ function getNotificationService(ctx) {
 }
 
 /**
+ * Получает активную заявку на пополнение для пользователя (pending, с суммой > 0, в пределах времени оплаты)
+ */
+async function getActiveTopup(userChatId) {
+    try {
+        const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes() || 30;
+        const { database } = await import('../../database/db.js');
+        const topup = await database.get(
+            `SELECT * FROM topups
+             WHERE user_chat_id = ?
+             AND status = 'pending'
+             AND amount > 0
+             AND datetime(created_at, '+' || ? || ' minutes') >= datetime('now')
+             ORDER BY created_at DESC
+             LIMIT 1`,
+            [userChatId, paymentTimeMinutes]
+        );
+        return topup || null;
+    } catch (error) {
+        console.error('[TopupHandler] Ошибка при получении активной заявки на пополнение:', error);
+        return null;
+    }
+}
+
+/**
  * Регистрирует обработчики пополнения баланса
  * @param {Object} bot - Экземпляр Telegraf бота
  */
@@ -47,6 +71,27 @@ export function registerTopupHandlers(bot) {
 
     // Обработчик кнопки "Пополнить"
     bot.action('topup_balance', async (ctx) => {
+        const activeTopup = await getActiveTopup(ctx.from.id);
+
+        if (activeTopup) {
+            await ctx.reply(
+                '❌ У вас есть активная заявка на пополнение, сначала завершите или отмените её, чтобы создать новую.',
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: '📋 Перейти к активному пополнению', callback_data: `view_active_topup_${activeTopup.id}` }
+                            ],
+                            [
+                                { text: '❌ Отменить активное пополнение', callback_data: `cancel_active_topup_${activeTopup.id}` }
+                            ]
+                        ]
+                    }
+                }
+            );
+            return;
+        }
+
         await showTopupMenu(ctx);
     });
 
@@ -111,6 +156,72 @@ export function registerTopupHandlers(bot) {
         } catch (error) {
             console.error('[TopupHandler] Ошибка при обработке отмены ТРАНСГРАН:', error);
             await ctx.answerCbQuery('Произошла ошибка. Попробуйте еще раз.');
+        }
+    });
+
+    // Переход к активной заявке на пополнение
+    bot.action(/^view_active_topup_(\d+)$/, async (ctx) => {
+        await ctx.answerCbQuery();
+        const topupId = parseInt(ctx.match[1]);
+
+        const activeTopup = await getActiveTopup(ctx.from.id);
+        if (!activeTopup || activeTopup.id !== topupId) {
+            await ctx.reply('❌ Активная заявка на пополнение не найдена или время на оплату истекло.');
+            return;
+        }
+
+        if (activeTopup.user_chat_id !== ctx.from.id) {
+            await ctx.reply('❌ Это не ваша заявка.');
+            return;
+        }
+
+        if (activeTopup.status !== 'pending' || !activeTopup.payment_method_id || !activeTopup.amount || activeTopup.amount <= 0) {
+            await ctx.reply('❌ Эта заявка уже не активна.');
+            return;
+        }
+
+        // Повторно показываем реквизиты по уже выбранному способу оплаты
+        await showTopupMethod(ctx, activeTopup.payment_method_id, activeTopup.amount, true);
+    });
+
+    // Отмена активной заявки на пополнение
+    bot.action(/^cancel_active_topup_(\d+)$/, async (ctx) => {
+        await ctx.answerCbQuery();
+        const topupId = parseInt(ctx.match[1]);
+        const { database } = await import('../../database/db.js');
+
+        try {
+            const topup = await database.get(
+                'SELECT * FROM topups WHERE id = ?',
+                [topupId]
+            );
+
+            if (!topup || topup.user_chat_id !== ctx.from.id) {
+                await ctx.reply('❌ Заявка не найдена или не принадлежит вам.');
+                return;
+            }
+
+            if (topup.status !== 'pending') {
+                await ctx.reply('❌ Эта заявка уже обработана.');
+                return;
+            }
+
+            await database.run(
+                'UPDATE topups SET status = ? WHERE id = ?',
+                ['cancelled', topupId]
+            );
+
+            await ctx.reply(
+                '❌ Заявка на пополнение отменена.\n\n⚠️ Не спамьте заявками на пополнение, иначе вы будете заблокированы в боте!'
+            );
+
+            const menuKeyboard = await getMenuKeyboard();
+            await ctx.reply('🕹 Главное меню:', {
+                reply_markup: menuKeyboard
+            });
+        } catch (error) {
+            console.error('[TopupHandler] Ошибка при отмене активной заявки:', error);
+            await ctx.reply('❌ Ошибка при отмене заявки.');
         }
     });
 
