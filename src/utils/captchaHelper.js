@@ -140,14 +140,29 @@ export async function generateCaptcha() {
         // Директория уже существует или другая ошибка
     }
 
-    // Генерируем уникальное имя файла (SVG)
+    // Базовое имя файла (используем и для SVG, и для PNG)
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(7);
-    const filename = `captcha_${timestamp}_${random}.svg`;
-    const imagePath = join(TEMP_DIR, filename);
+    const baseName = `captcha_${timestamp}_${random}`;
 
-    // Сохраняем SVG напрямую (не используем sharp, чтобы избежать нативных зависимостей)
-    writeFileSync(imagePath, captcha.data);
+    // Сохраняем SVG в любом случае
+    const svgPath = join(TEMP_DIR, `${baseName}.svg`);
+    writeFileSync(svgPath, captcha.data);
+
+    let imagePath = svgPath;
+    let isSvg = true;
+
+    // Пытаемся сконвертировать в PNG через sharp (если доступен)
+    try {
+        const sharp = (await import('sharp')).default;
+        const svgBuffer = Buffer.from(captcha.data);
+        const pngPath = join(TEMP_DIR, `${baseName}.png`);
+        await sharp(svgBuffer).png().toFile(pngPath);
+        imagePath = pngPath;
+        isSvg = false;
+    } catch (error) {
+        console.warn('[CaptchaHelper] Sharp недоступен, используем SVG как документ. Ошибка:', error?.message || error);
+    }
 
     const correctAnswer = captcha.text.toLowerCase();
     const options = generateSimilarOptions(correctAnswer, 12);
@@ -156,7 +171,7 @@ export async function generateCaptcha() {
         imagePath,
         answer: correctAnswer, // Приводим к нижнему регистру для сравнения
         options: options, // Варианты ответов для кнопок
-        isSvg: true
+        isSvg
     };
 }
 
