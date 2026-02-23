@@ -115,7 +115,7 @@ export async function generateCaptcha() {
     const captcha = svgCaptcha.create({
         size: 5, // Количество символов
         ignoreChars: '0o1il', // Исключаем похожие символы
-        noise: 3, // Количество линий шума
+        noise: 0, // Количество линий шума
         color: true, // Цветной текст
         background: '#f0f0f0', // Светлый фон
         width: 200,
@@ -125,12 +125,12 @@ export async function generateCaptcha() {
     });
 
     // Принудительно делаем символы нужного цвета (#5595A8) и для обводки, и для заливки.
-    // В svg-captcha текст — это <path fill="...">, фон — <rect ...>, линии шума — <path fill="none" ...>.
-    // Поэтому меняем только fill у <path> (не трогая <rect> и fill="none").
+    // В svg-captcha текст и линии шума рисуются через <path ...>, фон — через <rect ...>.
+    // Здесь мы переопределяем любой fill у <path> на #5595A8 и добавляем stroke того же цвета.
     if (typeof captcha.data === 'string') {
         captcha.data = captcha.data.replace(
-            /<path fill="(?!none)[^"]*"/g,
-            '<path fill="#5595A8" stroke="#5595A8"'
+            /<path([^>]*?)fill="[^"]*"([^>]*?)>/g,
+            '<path$1fill="#5595A8" stroke="#5595A8"$2>'
         );
     }
 
