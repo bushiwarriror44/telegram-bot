@@ -11,13 +11,12 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Пытаемся загрузить более плотный системный шрифт для капчи (Arial Bold на Windows),
-// чтобы глифы были залитые, а не «контурные».
+// Пытаемся загрузить системный шрифт для капчи (Arial обычный, не жирный).
 try {
-    svgCaptcha.loadFont('C:\\Windows\\Fonts\\arialbd.ttf');
-    console.log('[CaptchaHelper] Загружен шрифт для капчи: C:\\Windows\\Fonts\\arialbd.ttf');
+    svgCaptcha.loadFont('C:\\Windows\\Fonts\\arial.ttf');
+    console.log('[CaptchaHelper] Загружен шрифт для капчи: C:\\Windows\\Fonts\\arial.ttf');
 } catch (error) {
-    console.warn('[CaptchaHelper] Не удалось загрузить шрифт C:\\Windows\\Fonts\\arialbd.ttf, используется шрифт по умолчанию. Ошибка:', error?.message || error);
+    console.warn('[CaptchaHelper] Не удалось загрузить шрифт C:\\Windows\\Fonts\\arial.ttf, используется шрифт по умолчанию. Ошибка:', error?.message || error);
 }
 
 // Хранилище активных капч для пользователей (userId -> { answer, imagePath, timestamp })
@@ -150,14 +149,14 @@ export async function generateCaptcha() {
             '$1fill="#5595A8"'
         );
 
-        // 3) Текст: добавляем (или обновляем) stroke тем же цветом
+        // 3) Текст: добавляем тонкую обводку или без обводки, чтобы начертание было менее жирным
         captcha.data = captcha.data.replace(
             /(<path\b(?=[^>]*fill="#5595A8")[^>]*?)stroke="[^"]*"/g,
-            '$1stroke="#5595A8"'
+            '$1stroke="#5595A8" stroke-width="0.4"'
         );
         captcha.data = captcha.data.replace(
             /(<path\b(?=[^>]*fill="#5595A8")(?![^>]*\sstroke=)[^>]*?)\/>/g,
-            '$1 stroke="#5595A8"/>'
+            '$1 stroke="#5595A8" stroke-width="0.4"/>'
         );
 
         // 4) Наклон части символов (только текстовые path), угол может быть заметно больше
