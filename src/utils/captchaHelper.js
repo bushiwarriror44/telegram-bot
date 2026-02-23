@@ -160,20 +160,32 @@ export async function generateCaptcha() {
             '$1 stroke="#5595A8"/>'
         );
 
-        // 4) Немного наклоняем часть символов (только текстовые path)
+        // 4) Наклон части символов (только текстовые path), угол может быть заметно больше
         const tiltCenterX = 100;
         const tiltCenterY = 40;
         captcha.data = captcha.data.replace(
             /<path\b([^>]*\sfill="#5595A8"[^>]*)\/>/g,
             (match, attrs) => {
-                // Не трогаем, если уже есть transform
                 if (/\stransform="/.test(attrs)) return match;
-                // Наклоняем примерно треть символов
                 if (Math.random() > 0.35) return match;
-                const angle = (Math.random() * 16 - 8).toFixed(2); // -8..+8 градусов
+                const angle = (Math.random() * 50 - 25).toFixed(2); // -25..+25 градусов
                 return `<path${attrs} transform="rotate(${angle} ${tiltCenterX} ${tiltCenterY})"/>`;
             }
         );
+
+        // 5) Добавляем точки-помехи (круги) того же цвета перед закрывающим </svg>
+        const width = 200;
+        const height = 80;
+        const dotCount = 18 + Math.floor(Math.random() * 10);
+        const dotColor = '#5595A8';
+        let dotsSvg = '';
+        for (let i = 0; i < dotCount; i++) {
+            const cx = 5 + Math.random() * (width - 10);
+            const cy = 5 + Math.random() * (height - 10);
+            const r = 1.2 + Math.random() * 1.8;
+            dotsSvg += `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}" fill="${dotColor}"/>`;
+        }
+        captcha.data = captcha.data.replace('</svg>', `${dotsSvg}</svg>`);
     }
 
     // Создаем временную директорию, если её нет
