@@ -124,7 +124,7 @@ export async function generateCaptcha() {
     const captcha = svgCaptcha.create({
         size: 5, // Количество символов
         ignoreChars: '0o1il', // Исключаем похожие символы
-        noise: 0, // Количество линий шума
+        noise: 3, // Количество линий шума
         color: true, // Цветной текст
         background: '#f0f0f0', // Светлый фон
         width: 200,
@@ -133,13 +133,46 @@ export async function generateCaptcha() {
         charPreset: 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789' // Только читаемые символы
     });
 
-    // Принудительно делаем символы нужного цвета (#5595A8) и для обводки, и для заливки.
-    // В svg-captcha текст и линии шума рисуются через <path ...>, фон — через <rect ...>.
-    // Здесь мы переопределяем любой fill у <path> на #5595A8 и добавляем stroke того же цвета.
+    // Приводим цвета капчи к одному (#5595A8):
+    // - Текст в svg-captcha: <path fill="..."/>
+    // - Линии шума: <path stroke="..." fill="none"/>
+    // Фон (<rect ...>) не трогаем.
     if (typeof captcha.data === 'string') {
+        // 1) Линии шума: меняем stroke, оставляем fill="none"
         captcha.data = captcha.data.replace(
-            /<path([^>]*?)fill="[^"]*"([^>]*?)>/g,
-            '<path$1fill="#5595A8" stroke="#5595A8"$2>'
+            /(<path\b[^>]*?)stroke="[^"]*"(.*?fill="none")/g,
+            '$1stroke="#5595A8"$2'
+        );
+
+        // 2) Текст: меняем fill на #5595A8
+        captcha.data = captcha.data.replace(
+            /(<path\b[^>]*?)fill="(?!none)[^"]*"/g,
+            '$1fill="#5595A8"'
+        );
+
+        // 3) Текст: добавляем (или обновляем) stroke тем же цветом
+        captcha.data = captcha.data.replace(
+            /(<path\b(?=[^>]*fill="#5595A8")[^>]*?)stroke="[^"]*"/g,
+            '$1stroke="#5595A8"'
+        );
+        captcha.data = captcha.data.replace(
+            /(<path\b(?=[^>]*fill="#5595A8")(?![^>]*\sstroke=)[^>]*?)\/>/g,
+            '$1 stroke="#5595A8"/>'
+        );
+
+        // 4) Немного наклоняем часть символов (только текстовые path)
+        const tiltCenterX = 100;
+        const tiltCenterY = 40;
+        captcha.data = captcha.data.replace(
+            /<path\b([^>]*\sfill="#5595A8"[^>]*)\/>/g,
+            (match, attrs) => {
+                // Не трогаем, если уже есть transform
+                if (/\stransform="/.test(attrs)) return match;
+                // Наклоняем примерно треть символов
+                if (Math.random() > 0.35) return match;
+                const angle = (Math.random() * 16 - 8).toFixed(2); // -8..+8 градусов
+                return `<path${attrs} transform="rotate(${angle} ${tiltCenterX} ${tiltCenterY})"/>`;
+            }
         );
     }
 
