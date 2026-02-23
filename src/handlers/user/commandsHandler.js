@@ -88,18 +88,30 @@ export async function registerCommands(bot, isAdmin) {
                 try {
                     const { readFileSync } = await import('fs');
                     const { createCaptchaButtons } = await import('../../utils/captchaHelper.js');
-                    const imageBuffer = readFileSync(captcha.imagePath);
+                    const fileBuffer = readFileSync(captcha.imagePath);
 
                     const buttons = createCaptchaButtons(captcha.options);
 
-                    await ctx.replyWithPhoto(
-                        { source: imageBuffer },
-                        {
-                            caption: `Выберите правильный вариант из кнопок ниже`,
-                            parse_mode: 'HTML',
-                            reply_markup: buttons
-                        }
-                    );
+                    if (captcha.isSvg) {
+                        // Telegram не умеет SVG как фото, отправляем как документ
+                        await ctx.replyWithDocument(
+                            { source: fileBuffer, filename: 'captcha.svg' },
+                            {
+                                caption: `Выберите правильный вариант из кнопок ниже`,
+                                parse_mode: 'HTML',
+                                reply_markup: buttons
+                            }
+                        );
+                    } else {
+                        await ctx.replyWithPhoto(
+                            { source: fileBuffer },
+                            {
+                                caption: `Выберите правильный вариант из кнопок ниже`,
+                                parse_mode: 'HTML',
+                                reply_markup: buttons
+                            }
+                        );
+                    }
                 } catch (error) {
                     console.error('[UserHandlers] Ошибка при отправке изображения капчи:', error);
                     await ctx.reply(

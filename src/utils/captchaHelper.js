@@ -140,35 +140,14 @@ export async function generateCaptcha() {
         // Директория уже существует или другая ошибка
     }
 
-    // Генерируем уникальное имя файла
+    // Генерируем уникальное имя файла (SVG)
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(7);
-    const filename = `captcha_${timestamp}_${random}.png`;
+    const filename = `captcha_${timestamp}_${random}.svg`;
     const imagePath = join(TEMP_DIR, filename);
 
-    // Конвертируем SVG в PNG через canvas (используем sharp для конвертации)
-    try {
-        const sharp = (await import('sharp')).default;
-        const svgBuffer = Buffer.from(captcha.data);
-        await sharp(svgBuffer)
-            .png()
-            .toFile(imagePath);
-    } catch (error) {
-        // Если sharp не установлен, сохраняем как SVG
-        // Telegram может не поддерживать SVG напрямую, поэтому лучше установить sharp
-        console.warn('[CaptchaHelper] Sharp не установлен, сохраняем как SVG. Установите sharp для лучшей совместимости.');
-        const svgPath = imagePath.replace('.png', '.svg');
-        writeFileSync(svgPath, captcha.data);
-        const correctAnswer = captcha.text.toLowerCase();
-        const options = generateSimilarOptions(correctAnswer, 12);
-
-        return {
-            imagePath: svgPath,
-            answer: correctAnswer, // Приводим к нижнему регистру для сравнения
-            options: options, // Варианты ответов для кнопок
-            isSvg: true
-        };
-    }
+    // Сохраняем SVG напрямую (не используем sharp, чтобы избежать нативных зависимостей)
+    writeFileSync(imagePath, captcha.data);
 
     const correctAnswer = captcha.text.toLowerCase();
     const options = generateSimilarOptions(correctAnswer, 12);
@@ -177,7 +156,7 @@ export async function generateCaptcha() {
         imagePath,
         answer: correctAnswer, // Приводим к нижнему регистру для сравнения
         options: options, // Варианты ответов для кнопок
-        isSvg: false
+        isSvg: true
     };
 }
 

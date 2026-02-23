@@ -62,19 +62,31 @@ export function registerTextHandlers(bot) {
 
                     const { readFileSync } = await import('fs');
                     const { createCaptchaButtons } = await import('../../utils/captchaHelper.js');
-                    const imageBuffer = readFileSync(captcha.imagePath);
+                    const fileBuffer = readFileSync(captcha.imagePath);
 
                     const buttons = createCaptchaButtons(captcha.options);
 
-                    await ctx.replyWithPhoto(
-                        { source: imageBuffer },
-                        {
-                            caption: `❌ <b>Неверный ответ</b>\n\n` +
-                                `Попробуйте еще раз. Введите текст с изображения или выберите правильный вариант из кнопок:`,
-                            parse_mode: 'HTML',
-                            reply_markup: buttons
-                        }
-                    );
+                    if (captcha.isSvg) {
+                        await ctx.replyWithDocument(
+                            { source: fileBuffer, filename: 'captcha.svg' },
+                            {
+                                caption: `❌ <b>Неверный ответ</b>\n\n` +
+                                    `Попробуйте еще раз. Введите текст с изображения или выберите правильный вариант из кнопок:`,
+                                parse_mode: 'HTML',
+                                reply_markup: buttons
+                            }
+                        );
+                    } else {
+                        await ctx.replyWithPhoto(
+                            { source: fileBuffer },
+                            {
+                                caption: `❌ <b>Неверный ответ</b>\n\n` +
+                                    `Попробуйте еще раз. Введите текст с изображения или выберите правильный вариант из кнопок:`,
+                                parse_mode: 'HTML',
+                                reply_markup: buttons
+                            }
+                        );
+                    }
                 } catch (error) {
                     console.error('[TextHandler] Ошибка при генерации новой капчи:', error);
                     await ctx.reply(
