@@ -130,7 +130,7 @@ export async function generateCaptcha() {
     if (typeof captcha.data === 'string') {
         captcha.data = captcha.data.replace(
             /<path fill="(?!none)[^"]+"/g,
-            '<path fill="#0000ff"'
+            '<path fill="#5595A8"'
         );
     }
 
