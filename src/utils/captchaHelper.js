@@ -11,6 +11,15 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Пытаемся загрузить более плотный системный шрифт для капчи (Arial Bold на Windows),
+// чтобы глифы были залитые, а не «контурные».
+try {
+    svgCaptcha.loadFont('C:\\Windows\\Fonts\\arialbd.ttf');
+    console.log('[CaptchaHelper] Загружен шрифт для капчи: C:\\Windows\\Fonts\\arialbd.ttf');
+} catch (error) {
+    console.warn('[CaptchaHelper] Не удалось загрузить шрифт C:\\Windows\\Fonts\\arialbd.ttf, используется шрифт по умолчанию. Ошибка:', error?.message || error);
+}
+
 // Хранилище активных капч для пользователей (userId -> { answer, imagePath, timestamp })
 const activeCaptchas = new Map();
 
