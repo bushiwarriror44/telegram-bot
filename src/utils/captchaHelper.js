@@ -124,12 +124,13 @@ export async function generateCaptcha() {
         charPreset: 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789' // Только читаемые символы
     });
 
-    // Принудительно делаем цвет символов синим (svg-captcha: текст — <path fill="...">, фон — <rect fill="...">)
-    // Меняем только fill у <path> (буквы), не трогая <rect> (фон) и path с fill="none" (линии шума)
+    // Принудительно делаем цвет символов синим.
+    // В svg-captcha текст — это <path fill="...">, фон — <rect ...>, линии шума — <path fill="none" ...>.
+    // Поэтому меняем только fill у <path>, не трогая <rect> и fill="none".
     if (typeof captcha.data === 'string') {
         captcha.data = captcha.data.replace(
-            /<path\s([^>]*?)fill="(?!none)([^"]+)"([^>]*)>/g,
-            '<path $1fill="#0000ff"$2>'
+            /<path fill="(?!none)[^"]+"/g,
+            '<path fill="#0000ff"'
         );
     }
 
