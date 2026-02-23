@@ -124,6 +124,14 @@ export async function generateCaptcha() {
         charPreset: 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789' // Только читаемые символы
     });
 
+    // Принудительно делаем цвет символов синим (по умолчанию svg-captcha выбирает случайный цвет)
+    if (typeof captcha.data === 'string') {
+        captcha.data = captcha.data.replace(
+            '</svg>',
+            '<style>text { fill: #0000ff !important; }</style></svg>'
+        );
+    }
+
     // Создаем временную директорию, если её нет
     try {
         mkdirSync(TEMP_DIR, { recursive: true });
