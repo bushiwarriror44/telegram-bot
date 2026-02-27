@@ -101,6 +101,12 @@ export function registerTextHandlers(bot) {
 
         // Проверяем, находится ли пользователь в режиме поддержки
         if (supportMode.has(ctx.from.id)) {
+            // Если пользователь нажал кнопку "Назад", не считаем это сообщением в поддержку
+            const text = (ctx.message.text || '').trim();
+            if (text === '◀️ Назад' || text === 'Назад') {
+                // Дальше эту кнопку обработает bot.hears(['◀️ Назад'], ...)
+                return next();
+            }
             // Сохраняем сообщение пользователя
             await userService.saveOrUpdate(ctx.from.id, {
                 username: ctx.from.username,

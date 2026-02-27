@@ -12,6 +12,7 @@ import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getCurrencySymbol } from '../../utils/currencyHelper.js';
+import { getOrderFinalAmountWithDeviation } from '../../utils/orderAmountHelper.js';
 import { generateTXID, generatePaymentRequestText, generateBalanceDeductionConfirmText } from '../../utils/textFormatters.js';
 import { cardAccountService } from '../../services/cardAccountService.js';
 import { cryptoExchangeService } from '../../services/cryptoExchangeService.js';
@@ -596,8 +597,6 @@ export async function showProductsMenu(ctx, districtId) {
 
     const city = await cityService.getById(district.city_id);
     const products = await productService.getByDistrictId(districtId);
-    const markupPercent = await settingsService.getGlobalMarkupPercent();
-    const markupFactor = 1 + (markupPercent > 0 ? markupPercent : 0) / 100;
 
     if (products.length === 0) {
         await ctx.reply(
@@ -622,7 +621,9 @@ export async function showProductsMenu(ctx, districtId) {
             const decorPart = decor ? ` ${decor}` : '';
             packagingLabel = ` ${formatPackaging(product.packaging_value, product.packaging_unit)}${decorPart}`;
         }
-        const displayPrice = Math.round(product.price * markupFactor);
+        // В списке товаров показываем базовую цену без наценки;
+        // наценка применяется только на этапе оформления и выдачи реквизитов.
+        const displayPrice = Math.round(product.price);
         keyboard.push([
             {
                 text: `${product.name}${packagingLabel} - ${displayPrice.toLocaleString('ru-RU')} ${currencySymbol}`,
@@ -904,16 +905,6 @@ export async function createOrder(ctx, productId, promocodeId = null) {
 }
 
 /**
- * Итоговая сумма заказа с наценкой и случайным отклонением (как при выдаче реквизитов)
- */
-async function getOrderFinalAmount(order) {
-    const markupPercent = await settingsService.getGlobalMarkupPercent();
-    const exactAmount = Math.round(order.total_price * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
-    const deviation = 1 + Math.floor(Math.random() * 100);
-    return exactAmount + deviation;
-}
-
-/**
  * Показ деталей заказа
  */
 export async function showOrderDetails(ctx, orderId) {
@@ -1146,14 +1137,8 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     // Добавляем задержку перед показом блока с реквизитами (7 секунд)
     await new Promise(resolve => setTimeout(resolve, 7000));
 
-    // Получаем глобальную наценку (комиссию) в процентах
-    const markupPercent = await settingsService.getGlobalMarkupPercent();
-
     // Итоговая сумма с учетом наценки + небольшое случайное отклонение (1–100 руб.)
-    const baseAmount = order.total_price;
-    const exactAmount = Math.round(baseAmount * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
-    const deviation = 1 + Math.floor(Math.random() * 100);
-    const finalAmount = exactAmount + deviation;
+    const finalAmount = await getOrderFinalAmountWithDeviation(order);
 
     // Для карточных методов используем карточные счета, для криптовалют - адреса
     let paymentDetails = '';

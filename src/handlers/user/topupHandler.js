@@ -556,7 +556,16 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
         const notificationService = getNotificationService(ctx);
         if (notificationService) {
             console.log('[TopupHandler] handleTopupMethodSelection: NotificationService получен, отправка уведомления');
-            await notificationService.notifyTopupRequest(ctx.from.id, method.name);
+            const amountToTransferText =
+                method.type === 'card'
+                    ? `${amountToTransfer.toLocaleString('ru-RU')} ${currencySymbol}`
+                    : `${formattedCryptoAmount} ${cryptoSymbol}`;
+            await notificationService.notifyTopupRequest(
+                ctx.from.id,
+                method.name,
+                amountCreditedText,
+                amountToTransferText
+            );
         } else {
             console.warn('[TopupHandler] handleTopupMethodSelection: ⚠️ NotificationService не найден, уведомление не отправлено');
         }

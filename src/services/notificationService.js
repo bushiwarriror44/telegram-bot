@@ -2,6 +2,7 @@ import { settingsService } from './settingsService.js';
 import { userService } from './userService.js';
 import { orderService } from './orderService.js';
 import { formatPackaging } from '../utils/packagingHelper.js';
+import { getOrderFinalAmountWithDeviation } from '../utils/orderAmountHelper.js';
 
 export class NotificationService {
     constructor(bot, botUsername = null) {
@@ -83,8 +84,7 @@ export class NotificationService {
             // Получаем время на оплату из настроек
             const paymentTimeMinutes = await settingsService.getPaymentTimeMinutes();
             const currencySymbol = await settingsService.getCurrencySymbol();
-            const markupPercent = await settingsService.getGlobalMarkupPercent();
-            const amountWithMarkup = Math.round(order.total_price * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
+            const amountWithMarkup = await getOrderFinalAmountWithDeviation(order);
             const botInfo = this.getBotInfo();
             console.log('[NotificationService] notifyOrderCreated: Bot info:', botInfo || 'empty');
             
@@ -124,10 +124,9 @@ export class NotificationService {
             const name = user?.first_name || 'Неизвестно';
 
             const currencySymbol = await settingsService.getCurrencySymbol();
-            const markupPercent = await settingsService.getGlobalMarkupPercent();
             const amountWithMarkup = paymentMethodName === 'Оплата с баланса'
                 ? Math.round(order.total_price)
-                : Math.round(order.total_price * (1 + (markupPercent > 0 ? markupPercent : 0) / 100));
+                : await getOrderFinalAmountWithDeviation(order);
             const botInfo = this.getBotInfo();
             const message = `💳 <b>Выбран способ оплаты</b>${botInfo}\n\n` +
                 `📦 Заказ #95${order.id}73\n` +
@@ -145,7 +144,7 @@ export class NotificationService {
     /**
      * Уведомление о пополнении баланса
      */
-    async notifyTopup(userId, amount, paymentMethodName) {
+    async notifyTopup(userId, amountCredited, paymentMethodName, amountToTransferText = null) {
         try {
             const user = await userService.getByChatId(userId);
             if (!user) return;
@@ -155,10 +154,17 @@ export class NotificationService {
 
             const currencySymbol = await settingsService.getCurrencySymbol();
             const botInfo = this.getBotInfo();
+
+            const creditedText = `${amountCredited.toLocaleString('ru-RU')} ${currencySymbol}`;
+            const transferLine = amountToTransferText
+                ? `💸 Сумма к переводу: ${amountToTransferText}\n`
+                : '';
+
             const message = `💰 <b>Пополнение баланса</b>${botInfo}\n\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `💳 Способ: ${paymentMethodName}\n` +
-                `💰 Сумма: ${amount.toLocaleString('ru-RU')} ${currencySymbol}\n` +
+                `💰 Сумма к зачислению: ${creditedText}\n` +
+                transferLine +
                 `📅 Дата: ${new Date().toLocaleString('ru-RU')}\n\n` +
                 `📊 Статус: <b>Ожидает оплаты</b>`;
 
@@ -171,7 +177,7 @@ export class NotificationService {
     /**
      * Уведомление о выборе реквизита для пополнения баланса
      */
-    async notifyTopupRequest(userId, paymentMethodName) {
+    async notifyTopupRequest(userId, paymentMethodName, amountCreditedText = null, amountToTransferText = null) {
         try {
             const user = await userService.getByChatId(userId);
             if (!user) return;
@@ -180,9 +186,22 @@ export class NotificationService {
             const name = user.first_name || 'Неизвестно';
 
             const botInfo = this.getBotInfo();
+
+            let amountsPart = '';
+            if (amountCreditedText || amountToTransferText) {
+                const creditedLine = amountCreditedText
+                    ? `💰 Сумма к зачислению: ${amountCreditedText}\n`
+                    : '';
+                const transferLine = amountToTransferText
+                    ? `💸 Сумма к переводу: ${amountToTransferText}\n`
+                    : '';
+                amountsPart = creditedLine + transferLine;
+            }
+
             const message = `💰 <b>Пополнение баланса</b>${botInfo}\n\n` +
                 `👤 Пользователь: ${name} (${username})\n` +
                 `💳 Способ: ${paymentMethodName}\n` +
+                amountsPart +
                 `📅 Дата: ${new Date().toLocaleString('ru-RU')}\n\n` +
                 `📊 Статус: <b>Ожидает оплаты</b>`;
 
