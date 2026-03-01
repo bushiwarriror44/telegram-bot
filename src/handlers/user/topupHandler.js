@@ -380,7 +380,7 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
 
             // Убираем reply keyboard с методами оплаты при запросе суммы
             await ctx.reply(
-                '💵 Введите сумму пополнения (В рублях):\n\n',
+                '💵 Введите сумму пополнения (В тенге):\n\n',
                 {
                     parse_mode: 'HTML',
                     reply_markup: {
@@ -519,8 +519,8 @@ export async function showTopupMethod(ctx, methodId, amount = null, skipWarning 
             const amountToTransferText = `${amountToTransfer.toLocaleString('ru-RU')} ${currencySymbol}`;
             text = generateTopupRequestText(topupId || 'N/A', txid, amountCreditedText, amountToTransferText, randomCard);
         } else {
-            // Для криптовалюты конвертируем сумму к переводу (рубли с наценкой) в криптовалюту
-            const conversion = await cryptoExchangeService.convertRublesToCrypto(amountToTransfer, method.network);
+            // Для криптовалюты конвертируем сумму к переводу (тенге с наценкой) в криптовалюту
+            const conversion = await cryptoExchangeService.convertTengeToCrypto(amountToTransfer, method.network);
 
             if (conversion.error) {
                 await ctx.reply(`❌ Ошибка при конвертации: ${conversion.error}`);

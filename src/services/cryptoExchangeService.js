@@ -1,7 +1,9 @@
 /**
- * Сервис для конвертации рублей в криптовалюту
- * Использует CoinGecko API (бесплатный, без API ключа)
+ * Сервис для конвертации тенге в криптовалюту
+ * Использует CoinGecko API (курс в USD) и open.er-api.com (USD→KZT)
  */
+
+const USD_TO_KZT_API_URL = 'https://open.er-api.com/v6/latest/USD';
 
 export class CryptoExchangeService {
     // Маппинг названий криптовалют для CoinGecko API
@@ -16,15 +18,15 @@ export class CryptoExchangeService {
     };
 
     /**
-     * Конвертирует рубли в криптовалюту
-     * @param {number} rubles - Сумма в рублях
+     * Конвертирует тенге в криптовалюту
+     * @param {number} tenge - Сумма в тенге
      * @param {string} cryptoNetwork - Сеть криптовалюты (BTC, LTC, ETH, USDT, TRC20)
      * @returns {Promise<{amount: number, rate: number, error: string|null}>}
      */
-    async convertRublesToCrypto(rubles, cryptoNetwork) {
+    async convertTengeToCrypto(tenge, cryptoNetwork) {
         try {
             const cryptoId = this.cryptoIdMap[cryptoNetwork.toUpperCase()];
-            
+
             if (!cryptoId) {
                 return {
                     amount: 0,
@@ -33,19 +35,19 @@ export class CryptoExchangeService {
                 };
             }
 
-            // Получаем курс криптовалюты к рублю через CoinGecko API
-            const response = await fetch(
-                `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoId}&vs_currencies=rub`
+            // Курс криптовалюты в USD через CoinGecko API
+            const coinResponse = await fetch(
+                `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoId}&vs_currencies=usd`
             );
 
-            if (!response.ok) {
-                throw new Error(`CoinGecko API error: ${response.status}`);
+            if (!coinResponse.ok) {
+                throw new Error(`CoinGecko API error: ${coinResponse.status}`);
             }
 
-            const data = await response.json();
-            const rate = data[cryptoId]?.rub;
+            const coinData = await coinResponse.json();
+            const rateUsd = coinData[cryptoId]?.usd;
 
-            if (!rate || rate === 0) {
+            if (!rateUsd || rateUsd === 0) {
                 return {
                     amount: 0,
                     rate: 0,
@@ -53,12 +55,31 @@ export class CryptoExchangeService {
                 };
             }
 
-            // Конвертируем рубли в криптовалюту
-            const cryptoAmount = rubles / rate;
+            // Курс USD → KZT
+            const kztResponse = await fetch(USD_TO_KZT_API_URL);
+            if (!kztResponse.ok) {
+                return {
+                    amount: 0,
+                    rate: 0,
+                    error: 'Не удалось получить курс USD/KZT'
+                };
+            }
+            const kztData = await kztResponse.json();
+            const usdToKzt = kztData?.rates?.KZT;
+            if (!usdToKzt || usdToKzt === 0) {
+                return {
+                    amount: 0,
+                    rate: 0,
+                    error: 'Не удалось получить курс USD/KZT'
+                };
+            }
+
+            const rateKzt = rateUsd * usdToKzt;
+            const cryptoAmount = tenge / rateKzt;
 
             return {
                 amount: cryptoAmount,
-                rate: rate,
+                rate: rateKzt,
                 error: null
             };
         } catch (error) {

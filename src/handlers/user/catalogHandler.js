@@ -1137,7 +1137,7 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
     // Добавляем задержку перед показом блока с реквизитами (7 секунд)
     await new Promise(resolve => setTimeout(resolve, 7000));
 
-    // Итоговая сумма с учетом наценки + небольшое случайное отклонение (1–100 руб.)
+    // Итоговая сумма с учетом наценки + небольшое случайное отклонение (1–100 ₸)
     const finalAmount = await getOrderFinalAmountWithDeviation(order);
 
     // Для карточных методов используем карточные счета, для криптовалют - адреса
@@ -1179,8 +1179,8 @@ export async function showPaymentAddressForOrder(ctx, orderId, methodId) {
             return;
         }
 
-        // Для криптовалюты конвертируем рубли в криптовалюту (с учетом наценки)
-        const conversion = await cryptoExchangeService.convertRublesToCrypto(finalAmount, method.network);
+        // Для криптовалюты конвертируем тенге в криптовалюту (с учетом наценки)
+        const conversion = await cryptoExchangeService.convertTengeToCrypto(finalAmount, method.network);
 
         if (conversion.error) {
             await ctx.reply(`❌ Ошибка при конвертации: ${conversion.error}`);

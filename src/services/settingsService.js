@@ -161,7 +161,7 @@ export class SettingsService {
    * Получает символ валюты
    */
   async getCurrencySymbol() {
-    return await this.get('currency_symbol', '₽');
+    return await this.get('currency_symbol', '₸');
   }
 
   /**

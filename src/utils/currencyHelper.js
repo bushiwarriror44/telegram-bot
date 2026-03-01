@@ -2,14 +2,14 @@ import { settingsService } from '../services/settingsService.js';
 
 /**
  * Получает символ валюты из настроек
- * @returns {Promise<string>} Символ валюты (по умолчанию ₽)
+ * @returns {Promise<string>} Символ валюты (по умолчанию ₸)
  */
 export async function getCurrencySymbol() {
     try {
         return await settingsService.getCurrencySymbol();
     } catch (error) {
         console.error('[CurrencyHelper] Ошибка при получении символа валюты:', error);
-        return '₽'; // Возвращаем рубль по умолчанию при ошибке
+        return '₸'; // Возвращаем тенге по умолчанию при ошибке
     }
 }
 

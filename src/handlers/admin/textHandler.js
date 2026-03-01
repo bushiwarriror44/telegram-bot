@@ -707,7 +707,7 @@ export function registerTextHandlers(bot) {
 
             const amount = parseFloat(text.replace(/,/, '.'));
             if (Number.isNaN(amount) || amount <= 0) {
-                await ctx.reply('❌ Введите положительное число (сумму в рублях).');
+                await ctx.reply('❌ Введите положительное число (сумму в тенге).');
                 return;
             }
 
@@ -718,7 +718,7 @@ export function registerTextHandlers(bot) {
                 try {
                     await bot.telegram.sendMessage(
                         userChatId,
-                        `💸Ваш баланс пополнен на ${amountStr} рублей.`,
+                        `💸Ваш баланс пополнен на ${amountStr} тенге.`,
                         { parse_mode: 'HTML' }
                     );
                 } catch (sendErr) {

@@ -48,8 +48,8 @@ export function generatePaymentRequestText(orderId, txid, amountText, paymentDet
  * Генерирует текст заявки на пополнение баланса (с полями «Будет зачислено» и «Сумма к переводу»)
  * @param {number|string} topupId - ID заявки на пополнение
  * @param {string} txid - TXID
- * @param {string} amountCreditedText - Текст «будет зачислено» (например "2 000 ₽")
- * @param {string} amountToTransferText - Текст «сумма к переводу» (рубли или крипта)
+ * @param {string} amountCreditedText - Текст «будет зачислено» (например "2 000 ₸")
+ * @param {string} amountToTransferText - Текст «сумма к переводу» (тенге или крипта)
  * @param {string} paymentDetails - Реквизиты (карта или адрес)
  * @returns {string} Отформатированный текст заявки
  */
@@ -68,7 +68,7 @@ export function generateTopupRequestText(topupId, txid, amountCreditedText, amou
 /**
  * Генерирует текст подтверждения списания с баланса (без реквизитов)
  * @param {number|string} orderId - ID заказа
- * @param {string} amountText - Текст с суммой (уже отформатированный, например "5 500 ₽")
+ * @param {string} amountText - Текст с суммой (уже отформатированный, например "5 500 ₸")
  * @returns {string} Отформатированный текст для экрана подтверждения
  */
 export function generateBalanceDeductionConfirmText(orderId, amountText) {
